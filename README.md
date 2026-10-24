@@ -437,3 +437,5 @@ Commandes : lecture/pause, recommencer, ×0,5/×1, curseur temporel, **Retour au
 `python tests/test_rival_replay.py` : rival récurrent, changement de tactique, marques, fuite et récompense unique, historique à la reprise ; tampon borné, projectile fatal identifié, lecture/ralenti/retour et comparaison exacte des sauvegardes avant/après lecture. La campagne vérifie désormais les cinq rencontres du Veilleur en plus des 25 vagues, cinq boss et cinq événements.
 
 Régressions exécutées : victoire à l'aube, coopération, laboratoire, charges, Arsenal, apparitions/carnet, transitions sans purge, coffres scellés, bonbons, export/import, jeu sans compte, quotas, six tailles d'écran et tests Node records/butin/vol/passages. Les simulations invulnérables vérifient la progression technique, pas le ressenti de difficulté.
+#   l a - n u i t - a u x - t r o u s s e s  
+ 
