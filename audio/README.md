@@ -21,17 +21,23 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de
 | `sfx-impact-heavy.mp3` | Impact lourd ou élite |
 | `sfx-impact-boss.mp3` | Impact sur un gardien |
 
-## Thème et adaptations
+## Nouvelles ambiances par monde
 
-`nuitsorc-loop.mp3` et `boss-arrival.mp3` ont été fournis par l’auteur du projet. Les cinq mondes reprennent la matière orchestrale du thème d’accueil au lieu d’utiliser les anciennes boucles synthétiques : choix et ordre des phrases de quatre mesures, raccords, filtrage, largeur stéréo, chorus ou réverbération selon l’univers.
+`nuitsorc-loop.mp3` et `boss-arrival.mp3` ont été fournis par l’auteur du projet. Les cinq boucles de monde ont été entièrement recomposées pour avoir une identité propre tout en conservant une finition cinématique cohérente avec le menu :
 
-Les adaptations sont encodées en 192 kbit/s. Leur tempo et leur tonalité varient ensemble dans Web Audio, comme une variation de bande, afin de ne pas déphaser les canaux : forêt 1,00 ; cimetière 0,88 ; château 1,02 ; marais 0,94 ; lanternes 1,08. Pendant un gardien, le thème du monde accélère encore de 8 % et le signal `boss-arrival.mp3` passe par le bus des effets avec une courte atténuation de la musique.
+- **Forêt** : bois murmurants, harpe, cordes graves et clochettes cristallines, avec un motif mystérieux en ré mineur.
+- **Cimetière** : célesta, cloches lointaines, piano feutré et cordes suspendues, dans une couleur élégiaque en mi mineur.
+- **Château** : valse gothique de cordes, clavecin, piano et violon dramatique, en sol mineur.
+- **Marais** : basse liquide, clarinette basse, percussions syncopées et textures de roseaux, en la mineur.
+- **Lanternes** : célesta spectral, pizzicati, marimba, clarinette et carillon, pour une fête inquiétante en do mineur.
+
+Les nouvelles boucles sont encodées en 192 kbit/s, stéréo 44,1 kHz, avec un nettoyage des silences de fin et un fondu très court pour des transitions plus propres. Leur tempo et leur tonalité varient ensemble dans Web Audio, comme une variation de bande, afin de ne pas déphaser les canaux : forêt 1,00 ; cimetière 0,88 ; château 1,02 ; marais 0,94 ; lanternes 1,08. Pendant un gardien, le thème du monde accélère encore de 8 % et le signal `boss-arrival.mp3` passe par le bus des effets avec une courte atténuation de la musique.
 
 ## Attribution des échantillons d’arrivée
 
 Les cinq arrivées ordinaires utilisent des échantillons **FluidR3_GM**, distribués dans le projet [**midi-js-soundfonts**](https://github.com/gleitz/midi-js-soundfonts) sous licence [**Creative Commons Attribution 3.0**](https://creativecommons.org/licenses/by/3.0/). Les adaptations de ces échantillons comprennent la sélection des notes, la transposition, le mixage, la spatialisation, la réverbération et l’encodage MP3.
 
-Cette attribution concerne les arrivées ordinaires ; elle ne s’applique pas aux deux fichiers fournis par l’auteur ni aux adaptations du thème d’accueil.
+Cette attribution concerne les arrivées ordinaires ; elle ne s’applique pas aux deux fichiers fournis par l’auteur ni aux cinq nouvelles compositions de monde.
 
 ## Effets de combat
 
@@ -39,7 +45,7 @@ Les effets de tir sont préchargés dès l’activation du son puis lus via le b
 
 ## Régénération des mondes
 
-Les MP3 finis sont déjà inclus. Pour reconstruire uniquement les cinq adaptations :
+Les MP3 finis sont déjà inclus. Le script historique `tools/generate_music.py` reste disponible pour l’ancienne méthode d’adaptation du thème, mais les cinq fichiers distribués sont désormais les compositions dédiées décrites ci-dessus.
 
 ```bash
 python -m pip install numpy scipy soundfile lameenc

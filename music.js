@@ -6,7 +6,7 @@ const arrivalPaths={forest:'audio/arrival-forest.mp3',cemetery:'audio/arrival-ce
 const bossArrivalPath='audio/boss-arrival.mp3';
 // Longueurs de composition avant encodage. LAME ajoute 1105 échantillons de
 // délai et un bourrage final : ils sont exclus de la lecture et du raccord.
-const samples={menu:4197935,forest:2395000,cemetery:2395000,castle:2395000,marsh:2395000,lanterns:2395000};
+const samples={menu:4197935,forest:2638999,cemetery:2757879,castle:2791095,marsh:2566203,lanterns:2664286};
 const baseRates={menu:1,forest:1,cemetery:.88,castle:1.02,marsh:.94,lanterns:1.08};
 const encoderDelay=1105/44100;
 class MinuitMusicPlayer{

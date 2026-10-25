@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 IDS = ['menu', 'forest', 'cemetery', 'castle', 'marsh', 'lanterns']
-SAMPLES = dict(zip(IDS, [4197935, 2395000, 2395000, 2395000, 2395000, 2395000]))
+SAMPLES = dict(zip(IDS, [4197935, 2638999, 2757879, 2791095, 2566203, 2664286]))
 RATES = {'forest': 1, 'cemetery': .88, 'castle': 1.02, 'marsh': .94, 'lanterns': 1.08}
 
 
@@ -137,4 +137,4 @@ with sync_playwright() as p:
     assert not remote, remote
     offline.close()
     browser.close()
-    print('OK : thème fourni au menu, cinq adaptations et tempos, cinq arrivées + boss dédié, raccords, cache, bus effets et autonome hors ligne.')
+    print('OK : thème fourni au menu, cinq compositions dédiées et tempos, cinq arrivées + boss dédié, raccords, cache, bus effets et autonome hors ligne.')
