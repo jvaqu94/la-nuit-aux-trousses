@@ -171,6 +171,10 @@ with sync_playwright() as p:
     # La page d’arrivée ne dépend pas de l’URL Arena et retire les jetons du fragment.
     function_source = (ROOT / 'supabase/functions/email-confirmation/index.ts').read_text()
     landing_html = re.search(r'const page = `(.*?)`;', function_source, re.DOTALL).group(1)
+    assert landing_html.isascii(), 'Le HTML doit rester lisible même sans charset'
+    assert not any(bad in landing_html for bad in ['â€™', 'Ã©', 'Â·'])
+    assert "'Content-Type': 'text/html; charset=utf-8'" in function_source
+    assert 'new TextEncoder().encode(page)' in function_source
     page.route(BASE + '/functions/v1/email-confirmation*', lambda route: route.fulfill(
         status=200, content_type='text/html', body=landing_html))
     page.goto(BASE + '/functions/v1/email-confirmation#access_token=fragment-prive&type=signup')
