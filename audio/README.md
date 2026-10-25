@@ -1,6 +1,6 @@
 # Musiques, tirs et impacts
 
-Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de combat MP3 locaux. Aucun service musical n’est nécessaire pendant le jeu.
+Le jeu utilise les boucles musicales, les signaux d’arrivée, une musique de défaite et huit effets de combat MP3 locaux. Aucun service musical n’est nécessaire pendant le jeu.
 
 | Fichier | Univers / fonction |
 |---|---|
@@ -15,6 +15,7 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de
 | `boss-castle.mp3` | Arrivée terrifiante de la comtesse, château |
 | `boss-marsh.mp3` | Arrivée terrifiante de la tisseuse, marais |
 | `boss-lanterns.mp3` | Arrivée terrifiante du dévoreur, lanternes |
+| `defeat.mp3` | Cue instrumental de défaite avant le classement |
 | `sfx-player-shot.mp3` | Tir standard |
 | `sfx-player-spread.mp3` | Tir renforcé ou triple tir |
 | `sfx-player-missile.mp3` | Lancement des missiles guidés |
@@ -38,7 +39,7 @@ Les nouvelles boucles sont encodées en 192 kbit/s, stéréo 44,1 kHz, avec un n
 
 ## Attribution des échantillons d’arrivée
 
-Chaque monde possède désormais un stinger de boss dédié : même palette instrumentale que son ambiance, mais avec une montée dissonante, une tension plus sombre et un impact final terrifiant. La musique du monde est brièvement atténuée pendant le stinger. Les sons d’arrivée des créatures ordinaires (`arrival-*.mp3`) restent retirés du gameplay afin de préserver la lisibilité sonore pendant les vagues.
+Chaque monde possède désormais un stinger de boss dédié : même palette instrumentale que son ambiance, mais avec une montée dissonante, une tension plus sombre et un impact final terrifiant. La musique du monde est brièvement atténuée pendant le stinger. Après la dernière vie, la boucle du monde s’arrête et `defeat.mp3` joue une seule fois pendant l’écran « Vous avez perdu », avant l’ouverture du tableau des scores. Les sons d’arrivée des créatures ordinaires (`arrival-*.mp3`) restent retirés du gameplay afin de préserver la lisibilité sonore pendant les vagues.
 
 ## Effets de combat
 

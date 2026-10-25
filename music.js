@@ -1,7 +1,7 @@
 /* Boucles MP3 locales et arrivée du boss. Aucun service distant. */
 (()=>{
 'use strict';
-const paths={menu:'audio/nuitsorc-loop.mp3',forest:'audio/forest.mp3',cemetery:'audio/cemetery.mp3',castle:'audio/castle.mp3',marsh:'audio/marsh.mp3',lanterns:'audio/lanterns.mp3'};
+const paths={menu:'audio/nuitsorc-loop.mp3',forest:'audio/forest.mp3',cemetery:'audio/cemetery.mp3',castle:'audio/castle.mp3',marsh:'audio/marsh.mp3',lanterns:'audio/lanterns.mp3',defeat:'audio/defeat.mp3'};
 const bossArrivalPaths={forest:'audio/boss-forest.mp3',cemetery:'audio/boss-cemetery.mp3',castle:'audio/boss-castle.mp3',marsh:'audio/boss-marsh.mp3',lanterns:'audio/boss-lanterns.mp3'};
 // Longueurs de composition avant encodage. LAME ajoute 1105 échantillons de
 // délai et un bourrage final : ils sont exclus de la lecture et du raccord.
@@ -14,7 +14,7 @@ class MinuitMusicPlayer{
   this.sources={...paths,...Object.fromEntries(Object.entries(bossArrivalPaths).map(([id,url])=>['boss-'+id,url])),...(window.MinuitMusicData||{})};
   this.buffers=new Map();this.pending=new Map();this.failed=new Set();
   this.arrivalBuffers=new Map();this.arrivalPending=new Map();this.arrivalFailed=new Set();this.arrivalVoices=new Set();
-  this.source=null;this.gain=null;this.buffer=null;this.current='';this.key='';this.loading='';this.version=0;this.boss=false;this.rate=1;
+  this.source=null;this.gain=null;this.buffer=null;this.current='';this.key='';this.loading='';this.version=0;this.boss=false;this.rate=1;this.oneShots=new Set();
  }
  // Pendant le chargement, le lecteur garde la main afin que la synthèse de
  // secours ne se superpose pas au MP3. Elle ne reprend qu'après un vrai échec.
@@ -47,7 +47,7 @@ class MinuitMusicPlayer{
    const url=this.sources[id];if(!url)throw Error('Morceau inconnu : '+id);
    const response=await fetch(url);if(!response.ok)throw Error('MP3 indisponible : '+id);
    const bytes=await response.arrayBuffer(),buffer=await this.decode(bytes);
-   if(buffer.numberOfChannels<2||!Number.isFinite(buffer.duration)||buffer.duration<10)throw Error('MP3 stéréo invalide : '+id);
+   if(buffer.numberOfChannels<2||!Number.isFinite(buffer.duration)||buffer.duration<(id==='defeat'?.5:10))throw Error('MP3 stéréo invalide : '+id);
    this.buffers.set(id,buffer);
    // Deux tampons stéréo au maximum : le morceau courant et le suivant.
    while(this.buffers.size>2){
@@ -80,6 +80,16 @@ class MinuitMusicPlayer{
   source.buffer=buffer;gain.gain.setValueAtTime(volume,start);source.connect(gain);gain.connect(this.effectsDestination);
   this.arrivalVoices.add(source);source.onended=()=>{this.arrivalVoices.delete(source);try{source.disconnect();gain.disconnect()}catch{}};
   source.start(start,Math.min(encoderDelay,Math.max(0,buffer.duration-.05)));
+ }
+ async defeat(){
+  if(this.context.state!=='running')return;
+  try{
+   const buffer=await this.load('defeat');if(this.context.state!=='running')return;
+   this.stop();
+   const source=this.context.createBufferSource(),gain=this.context.createGain(),now=this.context.currentTime;
+   source.buffer=buffer;gain.gain.setValueAtTime(.0001,now);gain.gain.linearRampToValueAtTime(.72,now+.08);gain.gain.setValueAtTime(.72,now+Math.max(.1,buffer.duration-.7));gain.gain.linearRampToValueAtTime(.0001,now+buffer.duration);
+   source.connect(gain);gain.connect(this.effectsDestination);this.oneShots.add(source);source.onended=()=>{this.oneShots.delete(source);try{source.disconnect();gain.disconnect()}catch{}};source.start(now);
+  }catch{}
  }
  async bossArrival(id){
   const key=id||'forest';
@@ -127,7 +137,7 @@ class MinuitMusicPlayer{
    source.stop(now+fade+.01);
   }catch{try{source.disconnect();gain?.disconnect()}catch{}}
  }
- stop(){const source=this.source,gain=this.gain;this.source=null;this.gain=null;this.buffer=null;this.current='';this.rate=1;this.retire(source,gain)}
+ stop(){const source=this.source,gain=this.gain;this.source=null;this.gain=null;this.buffer=null;this.current='';this.rate=1;this.retire(source,gain);for(const voice of this.oneShots){try{voice.stop()}catch{}}this.oneShots.clear()}
 }
 window.MinuitMusicPlayer=MinuitMusicPlayer;
 window.MinuitMusicSources=paths;

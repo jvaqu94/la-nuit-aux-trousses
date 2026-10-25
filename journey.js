@@ -68,6 +68,7 @@ if(window.MinuitCloud?.connected&&$('teamEndPanel')){
 function renderResult(r){
  if(r.win)return renderResultNow(r);
  state='end';
+ window.MinuitSoundtrack?.player?.defeat?.();
  overlay('<div class="death-transition" role="alert"><div class="death-transition-mark">✦</div><h2>VOUS AVEZ PERDU</h2><p>La nuit a eu le dernier mot…</p><small>Le classement de votre partie va s’afficher.</small></div>');
  setTimeout(()=>{if(state==='end')renderResultNow(r)},950);
 }
