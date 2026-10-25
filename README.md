@@ -11,7 +11,7 @@ Le jeu fonctionne dans le navigateur, y compris hors ligne, sans compte ni insta
 - [Modes de jeu](#modes-de-jeu)
 - [Contenu et mécaniques](#contenu-et-mécaniques)
 - [Progression et sauvegardes](#progression-et-sauvegardes)
-- [Affichage, son et accessibilité](#affichage-son-et-accessibilité)
+- [Affichage et son](#affichage-et-son)
 - [Structure du projet](#structure-du-projet)
 - [Tests](#tests)
 - [Générer les versions distribuables](#générer-les-versions-distribuables)
@@ -53,14 +53,15 @@ Le tir principal est **automatique**.
 
 | Action | Clavier | Souris / tactile | Manette compatible Gamepad API |
 |---|---|---|---|
-| Se déplacer | Flèches, ZQSD ou WASD | Déplacer le pointeur ou glisser sur le terrain | Stick gauche |
+| Se déplacer | Flèches, ZQSD ou WASD | Pointer à la souris ; glisser sur le terrain au doigt | Stick gauche |
 | Mouvement de précision | Maj | — | Gâchette |
 | Esquive | Espace | Bouton **Esquive** | A / bouton 0 |
-| Sort spécial | F | Bouton du sort | X / bouton 2 |
+| Sort spécial | F | Bouton **Sort spécial** | X / bouton 2 |
 | Pause | P ou Échap | Bouton **Pause** | Start |
 
 - La précision ralentit le déplacement et affiche la zone de collision de la sorcière.
 - L’esquive et le sort spécial possèdent chacun un temps de recharge.
+- Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le son est désactivé par défaut et s’active avec le bouton **Son**.
 
@@ -147,17 +148,16 @@ Le menu **Sauvegarde**, également accessible depuis les réglages, permet d’e
 
 > **Avant de changer de navigateur ou d’appareil, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
 
-## Affichage, son et accessibilité
+## Affichage et son
 
-- Terrain au format 8:9, adapté à la fenêtre et aux changements d’orientation.
-- Interface dédiée sur mobile, avec panneau d’informations séparé et mise en pause.
+- Terrain au format 8:9 sur ordinateur et en paysage. En portrait sur mobile, il peut occuper davantage de hauteur, jusqu’à un rapport hauteur/largeur de 1,45, selon la place disponible.
+- Interface dédiée sur mobile, commandes principales agrandies et panneau d’informations séparé avec mise en pause.
 - Mode plein écran lorsque le navigateur l’autorise.
-- Réglages de volume, musique évolutive et effets sonores synthétisés.
-- Options de réduction des effets, flashs, particules et secousses.
-- Contraste renforcé des projectiles ennemis.
-- Pause automatique lorsque la fenêtre perd le focus, activée par défaut.
+- Volume, musique et ambiance réglables sans modifier la partie.
+- Timbres harmoniques filtrés, bruit rose, vent et réverbération générés localement avec Web Audio.
+- Pause automatique lorsque la fenêtre perd le focus, identique pour toutes les parties.
 
-Les options de confort réduisent certains effets visuels, mais ne constituent pas une garantie médicale contre les risques de photosensibilité.
+Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le challenge. Les secousses ont été supprimées et aucune option ne permet de désactiver les apparitions ou d’alléger les effets et la présentation des dangers. Les anciennes préférences de ce type sont ignorées lors du chargement et retirées lors de la prochaine sauvegarde. Le jeu contient des effets lumineux et ne propose plus de mode visuel allégé.
 
 ## Structure du projet
 
@@ -178,7 +178,7 @@ Les options de confort réduisent certains effets visuels, mais ne constituent p
 | `nemesis.js` | Rencontres avec le Veilleur. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
-| `viewport.js` | Adaptation du terrain à la fenêtre. |
+| `viewport.js` | Adaptation du terrain, des commandes tactiles et de l’affichage à la fenêtre. |
 | `server.py` | Serveur HTTP local et ancien backend SQLite de ligue. |
 | `scenery/` | Images sources des décors. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
@@ -224,6 +224,7 @@ node tests/balance-node.cjs
 ### Tests navigateur principaux
 
 ```bash
+python tests/test_settings_audio.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py
 python tests/test_arsenal_browser.py
@@ -238,6 +239,7 @@ python tests/test_sealed_chest.py
 python tests/test_bonus_art.py
 python tests/test_collectibles_art.py
 python tests/test_charges_sweets.py
+python tests/test_touch_controls.py
 python tests/test_viewport.py
 ```
 
