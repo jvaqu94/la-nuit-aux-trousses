@@ -531,8 +531,8 @@ function renderTeam(){
   const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque vol comptabilisé utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
-  document.getElementById('teamRefresh').onclick=()=>loadTeam(true);
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque vol comptabilisé utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
   const inviteInput=document.getElementById('teamInviteEmail'),inviteLink=document.getElementById('teamEmailInvite');
@@ -566,6 +566,13 @@ function renderTeam(){
   teamStatus('Lien d’invitation détecté : le code est prérempli. Choisis ton pseudo puis rejoins la team.');
  }
 }
+function openTeamBoard(){
+ if(!teamData.team)return;
+ const info=teamData.team,rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
+ overlay(`<div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div>`);
+ $('teamBoardBack').onclick=archives;$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
+}
+async function finishTeamScore(value){if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result}}
 async function submitTeamScore(value){
  if(!enabled||!session)return{skipped:true};
  if(!teamLoaded)await loadTeam(false);
@@ -676,6 +683,8 @@ window.MinuitCloud={
  restore,
  submitFeedback,
  submitTeamScore,
+ finishTeamScore,
+ openTeamBoard,
  renderPanel,
  refreshTeam:()=>loadTeam(true),
  get configured(){return enabled},
