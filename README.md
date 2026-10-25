@@ -11,6 +11,7 @@ Le jeu fonctionne dans le navigateur, y compris hors ligne, sans compte ni insta
 - [Modes de jeu](#modes-de-jeu)
 - [Contenu et mécaniques](#contenu-et-mécaniques)
 - [Progression et sauvegardes](#progression-et-sauvegardes)
+- [Supabase : cloud, teams et avis](#supabase--cloud-teams-et-avis)
 - [Affichage et son](#affichage-et-son)
 - [Structure du projet](#structure-du-projet)
 - [Tests](#tests)
@@ -136,7 +137,7 @@ Cette fonction n’enregistre ni vidéo ni son. Elle ne modifie ni la partie ter
 
 ## Progression et sauvegardes
 
-La progression est enregistrée dans le **`localStorage` du navigateur**, sans compte ni synchronisation entre appareils.
+Par défaut, la progression est enregistrée dans le **`localStorage` du navigateur**, sans compte. Une synchronisation Supabase optionnelle peut être activée dans **Sauvegarde** pour la retrouver sur un autre appareil.
 
 - Un point de reprise est enregistré au début des vagues.
 - Les records sont séparés par difficulté et par date pour les défis.
@@ -146,7 +147,35 @@ La progression est enregistrée dans le **`localStorage` du navigateur**, sans c
 
 Le menu **Sauvegarde**, également accessible depuis les réglages, permet d’exporter un fichier JSON contenant notamment la progression, les records, les réglages et le point de reprise.
 
-> **Avant de changer de navigateur ou d’appareil, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
+> **Avant de changer de navigateur ou d’appareil sans cloud, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
+
+## Supabase : cloud, teams et avis
+
+La configuration publique du projet est déjà renseignée dans `supabase-config.js` et le schéma `supabase/schema.sql` est appliqué avec ses règles RLS. Le menu **Sauvegarde & team** permet de créer un compte e-mail, d’envoyer sa progression et de la récupérer sur un autre appareil. Après un premier envoi manuel, les modifications sont synchronisées automatiquement au maximum toutes les 30 secondes.
+
+La sauvegarde cloud est **optionnelle** : le jeu local et les exports restent disponibles sans compte ou hors ligne. Un compte possède un emplacement, remplacé à chaque envoi. Le mot de passe n’est pas stocké par le jeu et la session Supabase n’est jamais incluse dans les exports.
+
+La confirmation d’adresse reste obligatoire. Les nouveaux liens aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, saisir son adresse dans **Sauvegarde & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
+
+### Teams et highscores
+
+Le menu **Sauvegarde & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Chaque joueur choisit un pseudo : les adresses e-mail ne sont jamais affichées dans le classement.
+
+- Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
+- **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
+- Seul l’administrateur peut modifier ces règles ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
+- Sur smartphone, le code peut être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` préremplit le code dans **Sauvegarde & team**, sans inclure de jeton de session.
+- Après chaque vol, le score est transmis automatiquement. Chaque vol comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
+- La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol reste jouable localement mais ne compte pas pour la team.
+- Seul le **meilleur score de chaque membre** est conservé ; le tableau affiche aussi le total de ces records et les parties restantes.
+- Quitter la team retire le score et les tentatives du joueur de son classement. Une team vide est supprimée.
+- Les tables de teams ne sont pas accessibles directement par l’API : des fonctions authentifiées contrôlent chaque opération et aucune donnée de team n’est publique.
+
+Les fichiers `supabase/teams.sql` et `supabase/team_rules.sql` contiennent le schéma et ces fonctions. Le classement est **amical** : le serveur vérifie le compte, la team et les valeurs transmises, mais ne peut pas prouver le déroulé d’une partie exécutée dans un navigateur modifiable. Une compétition anti-triche nécessiterait une validation serveur ou un système de rejeu signé.
+
+Le bilan de vol conserve toujours localement l’appréciation **Trop difficile / Bien dosé / Trop facile** et un commentaire facultatif. Avec Supabase configuré, une copie privée peut être envoyée pour l’équilibrage, même sans compte. Les avis ne sont pas publiés dans le jeu et aucune lecture publique de leur table n’est autorisée.
+
+La procédure complète et les consignes de sécurité sont dans [`supabase/README.md`](supabase/README.md). **Aucune clé secrète ou `service_role` ne doit être placée dans le navigateur.**
 
 ## Affichage et son
 
@@ -154,7 +183,12 @@ Le menu **Sauvegarde**, également accessible depuis les réglages, permet d’e
 - Interface dédiée sur mobile, commandes principales agrandies et panneau d’informations séparé avec mise en pause.
 - Mode plein écran lorsque le navigateur l’autorise.
 - Volume, musique et ambiance réglables sans modifier la partie.
-- Timbres harmoniques filtrés, bruit rose, vent et réverbération générés localement avec Web Audio.
+- Six boucles **MP3 locales, stéréo, 44,1 kHz** : le thème fourni **`nuitsorc-loop.mp3`** dans le menu, utilisé sans réencodage, et cinq adaptations d’univers encodées en 192 kbit/s. Elles sont décodées par Web Audio, avec fondu entre les mondes et bouclage précis.
+- Cinq adaptations distinctes : **Murmures de bruyère** (forêt), **Cloches de l’oubli** (cimetière), **Valse carmin** (château), **Rondes des limons** (marais) et **Farandole des ombres** (lanternes).
+- Chaque univers reprend des phrases différentes du thème fourni, avec son montage, son tempo, sa largeur stéréo et son ambiance. Pendant les gardiens, le thème MP3 accélère de 8 % avec une transition progressive.
+- Cinq motifs MP3 signalent les créatures ordinaires ; **`boss-arrival.mp3`** est réservé aux gardiens. Ces signaux passent par le bus des effets et restent indépendants du réglage de musique. L’arrivée du boss s’accompagne d’une courte atténuation de sa boucle.
+- Les autres effets, le vent et le bruit rose restent générés localement. Si une boucle est absente ou illisible, l’ancienne partition procédurale du monde prend le relais sans interrompre les effets sonores.
+- Aucun service musical externe n’est utilisé. Le HTML autonome embarque les douze MP3 et fonctionne hors ligne ; seuls deux tampons de musique décodés sont conservés à la fois pour limiter la mémoire. Les crédits et l’attribution FluidR3_GM / CC BY 3.0 des arrivées ordinaires figurent dans [`audio/README.md`](audio/README.md).
 - Pause automatique lorsque la fenêtre perd le focus, identique pour toutes les parties.
 
 Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le challenge. Les secousses ont été supprimées et aucune option ne permet de désactiver les apparitions ou d’alléger les effets et la présentation des dangers. Les anciennes préférences de ce type sont ignorées lors du chargement et retirées lors de la prochaine sauvegarde. Le jeu contient des effets lumineux et ne propose plus de mode visuel allégé.
@@ -165,8 +199,10 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 |---|---|
 | `index.html` | Page d’entrée et chargement des modules JavaScript. |
 | `game.js` | Boucle de jeu, campagne, ennemis, boss, collisions, score et interface principale. |
+| `music.js` | Lecteur local des boucles MP3, fondus, bouclage, intensification et mémoire limitée. |
+| `audio/` | Thème d’accueil, cinq adaptations, six signaux d’arrivée et crédits audio. |
 | `characters.js` | Illustrations SVG des personnages et ressources visuelles intégrées. |
-| `journey.js` | Grimoire, XP, contrats, collection, bilans et export/import. |
+| `journey.js` | Grimoire, XP, contrats, collection, bilans, avis et export/import. |
 | `online.js` | Défis et cumul locaux, sans compte dans l’interface actuelle. |
 | `arsenal.js` | Sorts, balais, compagnons et équipement. |
 | `adventure.js` | Exploits, variantes, Laboratoire et coffres scellés. |
@@ -179,10 +215,14 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
 | `viewport.js` | Adaptation du terrain, des commandes tactiles et de l’affichage à la fenêtre. |
+| `supabase.js` | Client REST Supabase optionnel, authentification, cloud, teams, highscores et avis. |
+| `supabase-config.js` | URL et clé publiable du projet ; des valeurs vides désactivent le cloud pour un fonctionnement local. |
+| `supabase/` | Schéma SQL RLS et guide de configuration. |
 | `server.py` | Serveur HTTP local et ancien backend SQLite de ligue. |
 | `scenery/` | Images sources des décors. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
-| `tools/package.py` | Génération du HTML autonome et des archives. |
+| `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
+| `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |
 | `La-Nuit-aux-Trousses.html` | Version autonome générée, prête à jouer. |
 | `La-Nuit-aux-Trousses.zip` | Archive distribuable générée. |
 
@@ -225,6 +265,10 @@ node tests/balance-node.cjs
 
 ```bash
 python tests/test_settings_audio.py
+python tests/test_soundtrack.py
+python tests/test_music_mp3.py
+python tests/test_supabase.py
+python tests/test_teams.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py
 python tests/test_arsenal_browser.py
@@ -255,7 +299,14 @@ Les tests `tests/test_league_server.py` et `tests/test_league_browser.py` concer
 
 ## Générer les versions distribuables
 
-Après une modification des sources ou de ce README :
+Les MP3 sont déjà fournis et aucune bibliothèque n’est nécessaire pour les écouter. Pour reconstruire les cinq adaptations de monde à l’identique, l’outil facultatif utilise Python, NumPy, SciPy, SoundFile et lameenc. Le thème du menu, l’arrivée du boss et les arrivées ordinaires ne sont pas réencodés :
+
+```bash
+python -m pip install numpy scipy soundfile lameenc
+python tools/generate_music.py
+```
+
+Après une modification des sources, des MP3 ou de ce README :
 
 ```bash
 python tools/package.py
@@ -273,9 +324,9 @@ Les archives sont construites à partir d’une liste explicite de fichiers. Les
 ## Notes techniques
 
 - **Aucun build ni framework** n’est nécessaire pour jouer ou développer.
-- Le jeu n’a pas de dépendance JavaScript ou Python externe à l’exécution.
-- Les ressources de la version autonome sont intégrées au fichier HTML.
-- L’interface actuelle ne propose ni inscription, ni connexion, ni classement partagé.
+- Le jeu n’a pas de dépendance JavaScript ou Python externe à l’exécution. NumPy, SciPy, SoundFile et lameenc ne servent qu’à régénérer les adaptations, déjà fournies en MP3.
+- Les scripts, images et douze MP3 de la version autonome sont intégrés au fichier HTML, ces derniers en data URI.
+- Le parcours local ne demande aucun compte. La sauvegarde cloud et les teams sont optionnelles ; il n’existe aucun classement mondial public.
 - Le serveur conserve d’anciennes routes de ligue et une base SQLite pour des raisons historiques ; elles ne sont pas utilisées par le parcours local actuel.
 - Le stockage local est modifiable par l’utilisateur et ne fournit aucune protection anti-triche.
 - La compatibilité manette dépend du navigateur et du mapping du matériel.
