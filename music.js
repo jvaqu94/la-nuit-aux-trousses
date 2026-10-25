@@ -1,8 +1,7 @@
-/* Boucles MP3 locales, variations de monde et arrivées. Aucun service distant. */
+/* Boucles MP3 locales et arrivée du boss. Aucun service distant. */
 (()=>{
 'use strict';
 const paths={menu:'audio/nuitsorc-loop.mp3',forest:'audio/forest.mp3',cemetery:'audio/cemetery.mp3',castle:'audio/castle.mp3',marsh:'audio/marsh.mp3',lanterns:'audio/lanterns.mp3'};
-const arrivalPaths={forest:'audio/arrival-forest.mp3',cemetery:'audio/arrival-cemetery.mp3',castle:'audio/arrival-castle.mp3',marsh:'audio/arrival-marsh.mp3',lanterns:'audio/arrival-lanterns.mp3'};
 const bossArrivalPath='audio/boss-arrival.mp3';
 // Longueurs de composition avant encodage. LAME ajoute 1105 échantillons de
 // délai et un bourrage final : ils sont exclus de la lecture et du raccord.
@@ -12,9 +11,9 @@ const encoderDelay=1105/44100;
 class MinuitMusicPlayer{
  constructor(context,destination,effectsDestination=destination){
   this.context=context;this.destination=destination;this.effectsDestination=effectsDestination;
-  this.sources={...paths,...Object.fromEntries(Object.entries(arrivalPaths).map(([id,url])=>['arrival-'+id,url])),'boss-arrival':bossArrivalPath,...(window.MinuitMusicData||{})};
+  this.sources={...paths,'boss-arrival':bossArrivalPath,...(window.MinuitMusicData||{})};
   this.buffers=new Map();this.pending=new Map();this.failed=new Set();
-  this.arrivalBuffers=new Map();this.arrivalPending=new Map();this.arrivalFailed=new Set();this.arrivalLast=new Map();this.arrivalVoices=new Set();
+  this.arrivalBuffers=new Map();this.arrivalPending=new Map();this.arrivalFailed=new Set();this.arrivalVoices=new Set();
   this.source=null;this.gain=null;this.buffer=null;this.current='';this.key='';this.loading='';this.version=0;this.boss=false;this.rate=1;
  }
  // Pendant le chargement, le lecteur garde la main afin que la synthèse de
@@ -61,15 +60,14 @@ class MinuitMusicPlayer{
   try{return await promise}finally{this.pending.delete(id)}
  }
  async loadArrival(id){
-  const key=id==='boss'?'boss-arrival':'arrival-'+id;
+  const key='boss-arrival';
   if(this.arrivalBuffers.has(key))return this.arrivalBuffers.get(key);
   if(this.arrivalPending.has(key))return this.arrivalPending.get(key);
   const promise=(async()=>{
    const url=this.sources[key];if(!url)throw Error('Arrivée inconnue : '+id);
    const response=await fetch(url);if(!response.ok)throw Error('Son d’arrivée indisponible : '+id);
    const buffer=await this.decode(await response.arrayBuffer());
-   const maximum=id==='boss'?4:2;
-   if(buffer.numberOfChannels<2||buffer.duration<.2||buffer.duration>maximum)throw Error('Son d’arrivée invalide : '+id);
+   if(buffer.numberOfChannels<2||buffer.duration<.2||buffer.duration>4)throw Error('Son d’arrivée invalide : '+id);
    this.arrivalBuffers.set(key,buffer);return buffer;
   })();
   this.arrivalPending.set(key,promise);
@@ -82,12 +80,6 @@ class MinuitMusicPlayer{
   source.buffer=buffer;gain.gain.setValueAtTime(volume,start);source.connect(gain);gain.connect(this.effectsDestination);
   this.arrivalVoices.add(source);source.onended=()=>{this.arrivalVoices.delete(source);try{source.disconnect();gain.disconnect()}catch{}};
   source.start(start,Math.min(encoderDelay,Math.max(0,buffer.duration-.05)));
- }
- async arrival(id){
-  if(!arrivalPaths[id]||this.arrivalFailed.has(id)||this.context.state!=='running')return;
-  const now=this.context.currentTime,last=this.arrivalLast.get(id)??-10;
-  if(now-last<.24)return;this.arrivalLast.set(id,now);
-  try{const buffer=await this.loadArrival(id);this.playArrival(buffer)}catch{this.arrivalFailed.add(id)}
  }
  async bossArrival(){
   if(this.arrivalFailed.has('boss')||this.context.state!=='running')return;
@@ -138,6 +130,5 @@ class MinuitMusicPlayer{
 }
 window.MinuitMusicPlayer=MinuitMusicPlayer;
 window.MinuitMusicSources=paths;
-window.MinuitArrivalSources=arrivalPaths;
 window.MinuitBossArrivalSource=bossArrivalPath;
 })();

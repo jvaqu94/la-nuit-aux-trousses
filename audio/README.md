@@ -10,7 +10,6 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de
 | `castle.mp3` | Valse carmin — château |
 | `marsh.mp3` | Rondes des limons — marais |
 | `lanterns.mp3` | Farandole des ombres — fête des lanternes |
-| `arrival-*.mp3` | Arrivée des créatures ordinaires dans chaque univers |
 | `boss-arrival.mp3` | Arrivée des gardiens, utilisée sans réencodage |
 | `sfx-player-shot.mp3` | Tir standard |
 | `sfx-player-spread.mp3` | Tir renforcé ou triple tir |
@@ -35,9 +34,7 @@ Les nouvelles boucles sont encodées en 192 kbit/s, stéréo 44,1 kHz, avec un n
 
 ## Attribution des échantillons d’arrivée
 
-Les cinq arrivées ordinaires utilisent des échantillons **FluidR3_GM**, distribués dans le projet [**midi-js-soundfonts**](https://github.com/gleitz/midi-js-soundfonts) sous licence [**Creative Commons Attribution 3.0**](https://creativecommons.org/licenses/by/3.0/). Les adaptations de ces échantillons comprennent la sélection des notes, la transposition, le mixage, la spatialisation, la réverbération et l’encodage MP3.
-
-Cette attribution concerne les arrivées ordinaires ; elle ne s’applique pas aux deux fichiers fournis par l’auteur ni aux cinq nouvelles compositions de monde.
+Le signal `boss-arrival.mp3` est conservé pour souligner l’entrée des gardiens, avec une atténuation temporaire de la musique. Les sons d’arrivée des créatures ordinaires (`arrival-*.mp3`) ont été retirés du gameplay afin de préserver la lisibilité sonore pendant les vagues.
 
 ## Effets de combat
 

@@ -12,7 +12,6 @@ for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'onli
         for track in ['menu', 'forest', 'cemetery', 'castle', 'marsh', 'lanterns']:
             filename = 'nuitsorc-loop' if track == 'menu' else track
             sources[track] = 'data:audio/mpeg;base64,' + base64.b64encode((ROOT / 'audio' / f'{filename}.mp3').read_bytes()).decode('ascii')
-        sources.update({'arrival-' + track: 'data:audio/mpeg;base64,' + base64.b64encode((ROOT / 'audio' / f'arrival-{track}.mp3').read_bytes()).decode('ascii') for track in ['forest', 'cemetery', 'castle', 'marsh', 'lanterns']})
         sources['boss-arrival'] = 'data:audio/mpeg;base64,' + base64.b64encode((ROOT / 'audio' / 'boss-arrival.mp3').read_bytes()).decode('ascii')
         code = 'window.MinuitMusicData=' + json.dumps(sources, separators=(',', ':')) + ';\n' + code
     if name == 'game.js':

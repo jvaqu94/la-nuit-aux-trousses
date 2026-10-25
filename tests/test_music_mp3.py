@@ -25,10 +25,6 @@ for track in IDS:
     header = mpeg_header(data, track)
     # MPEG 1 Layer III, 128 ou 192 kbit/s, 44,1 kHz, stéréo ou joint stéréo.
     assert header[2] >> 4 in (9, 11) and (header[2] >> 2) & 3 == 0, track
-for track in IDS[1:]:
-    data = (ROOT / 'audio' / f'arrival-{track}.mp3').read_bytes()
-    assert len(data) > 10_000, track
-    assert mpeg_header(data, track)[2] >> 4 == 9, track
 boss_data = (ROOT / 'audio' / 'boss-arrival.mp3').read_bytes()
 assert len(boss_data) > 30_000 and mpeg_header(boss_data, 'boss')[2] >> 4 in (9, 11)
 
@@ -61,14 +57,6 @@ with sync_playwright() as p:
         page.evaluate("""index=>{stage=index;world=worlds[index];enemies=[];audioSignature='';syncAudio()}""", index)
         page.wait_for_function("id=>mp3Music?.current===id && !!mp3Music.source", arg=track)
         page.wait_for_function("expected=>mp3Music.current===expected.id && Math.abs(mp3Music.source.playbackRate.value-expected.rate)<.02", arg={'id': track, 'rate': RATES[track]})
-        page.evaluate("spawnEnemy({x:400,kind:world.foes[0],pattern:0,group:0,index:0})")
-        page.wait_for_function("id=>mp3Music.arrivalBuffers.has('arrival-'+id)", arg=track)
-        cue = page.evaluate("""()=>{
-          const buffer=mp3Music.arrivalBuffers.get('arrival-'+musicThemes[stage].id),a=buffer.getChannelData(0);
-          let signature=2166136261;for(let i=0;i<a.length;i+=311)signature=Math.imul(signature^Math.floor((a[i]+1)*1000000),16777619);
-          return {channels:buffer.numberOfChannels,duration:buffer.duration,signature:signature>>>0,effects:mp3Music.effectsDestination===sfxBus};
-        }""")
-        assert cue['channels'] == 2 and .2 < cue['duration'] < 2 and cue['effects'], (track, cue)
         detail = page.evaluate("""()=>{
           const player=mp3Music,buffer=player.buffer,a=buffer.getChannelData(0),b=buffer.getChannelData(1);
           const start=Math.round(player.source.loopStart*buffer.sampleRate),end=Math.min(a.length-1,Math.round(player.source.loopEnd*buffer.sampleRate)-1);
@@ -81,10 +69,8 @@ with sync_playwright() as p:
         assert detail['id'] == track and detail['channels'] == 2 and detail['loop'], detail
         assert abs(detail['duration'] - SAMPLES[track] / 44100) < .002, detail
         assert detail['cache'] <= 2 and detail['seam'] < .15, detail
-        detail['arrivalSignature'] = cue['signature']
         details.append(detail)
     assert len({detail['signature'] for detail in details}) == 5, details
-    assert len({detail['arrivalSignature'] for detail in details}) == 5, details
 
     page.evaluate("stage=0;world=worlds[0];enemies=[];audioSignature='';syncAudio()")
     page.wait_for_function("mp3Music?.current==='forest' && !!mp3Music.source")
@@ -106,9 +92,7 @@ with sync_playwright() as p:
     page.evaluate("prefs.music=false;audioSignature='';syncAudio()")
     page.wait_for_function('mp3Music.source===null')
     page.wait_for_timeout(300)
-    previous_arrival = page.evaluate("mp3Music.arrivalLast.get('forest')")
     page.evaluate("stage=0;world=worlds[0];state='play';enemies=[];spawnEnemy({x:400,kind:'ghost',pattern:0})")
-    page.wait_for_function("before=>mp3Music.arrivalLast.get('forest')>before", arg=previous_arrival)
     assert page.evaluate('mp3Music.source===null && mp3Music.effectsDestination===sfxBus')
 
     assert not errors, errors
@@ -130,11 +114,10 @@ with sync_playwright() as p:
         solo.evaluate("index=>{stage=index;world=worlds[index];enemies=[];audioSignature='';syncAudio()}", index)
         solo.wait_for_function("id=>mp3Music?.current===id && !!mp3Music.source", arg=track)
         solo.evaluate("spawnEnemy({x:400,kind:world.foes[0],pattern:0})")
-        solo.wait_for_function("id=>mp3Music.arrivalBuffers.has('arrival-'+id)", arg=track)
     solo.evaluate("enemies=[];spawnBoss();audioSignature='';syncAudio()")
     solo.wait_for_function("mp3Music.arrivalBuffers.has('boss-arrival')")
     assert not solo_errors, solo_errors
     assert not remote, remote
     offline.close()
     browser.close()
-    print('OK : thème fourni au menu, cinq compositions dédiées et tempos, cinq arrivées + boss dédié, raccords, cache, bus effets et autonome hors ligne.')
+    print('OK : thème fourni au menu, cinq compositions dédiées et tempos, arrivée boss uniquement, raccords, cache, bus effets et autonome hors ligne.')
