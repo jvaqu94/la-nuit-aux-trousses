@@ -1,6 +1,6 @@
-# Musiques et arrivées des monstres
+# Musiques, tirs et impacts
 
-Le jeu utilise douze MP3 locaux, stéréo, 44,1 kHz. Aucun service musical n’est nécessaire pendant le jeu.
+Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de combat MP3 locaux. Aucun service musical n’est nécessaire pendant le jeu.
 
 | Fichier | Univers / fonction |
 |---|---|
@@ -12,6 +12,14 @@ Le jeu utilise douze MP3 locaux, stéréo, 44,1 kHz. Aucun service musical n’e
 | `lanterns.mp3` | Farandole des ombres — fête des lanternes |
 | `arrival-*.mp3` | Arrivée des créatures ordinaires dans chaque univers |
 | `boss-arrival.mp3` | Arrivée des gardiens, utilisée sans réencodage |
+| `sfx-player-shot.mp3` | Tir standard |
+| `sfx-player-spread.mp3` | Tir renforcé ou triple tir |
+| `sfx-player-missile.mp3` | Lancement des missiles guidés |
+| `sfx-player-laser.mp3` | Rayon solaire |
+| `sfx-player-special.mp3` | Sort spécial équipé |
+| `sfx-impact-light.mp3` | Impact léger sur une créature |
+| `sfx-impact-heavy.mp3` | Impact lourd ou élite |
+| `sfx-impact-boss.mp3` | Impact sur un gardien |
 
 ## Thème et adaptations
 
@@ -24,6 +32,10 @@ Les adaptations sont encodées en 192 kbit/s. Leur tempo et leur tonalité varie
 Les cinq arrivées ordinaires utilisent des échantillons **FluidR3_GM**, distribués dans le projet [**midi-js-soundfonts**](https://github.com/gleitz/midi-js-soundfonts) sous licence [**Creative Commons Attribution 3.0**](https://creativecommons.org/licenses/by/3.0/). Les adaptations de ces échantillons comprennent la sélection des notes, la transposition, le mixage, la spatialisation, la réverbération et l’encodage MP3.
 
 Cette attribution concerne les arrivées ordinaires ; elle ne s’applique pas aux deux fichiers fournis par l’auteur ni aux adaptations du thème d’accueil.
+
+## Effets de combat
+
+Les effets de tir sont préchargés dès l’activation du son puis lus via le bus d’effets, avec une limite de voix simultanées pour éviter la saturation. Le tir standard, les salves, les missiles, le rayon et le sort spécial ont chacun leur timbre. Les impacts sont également différenciés selon la puissance du coup et le type d’ennemi ; un verrouillage temporel conserve la lisibilité pendant les salves et les rayons.
 
 ## Régénération des mondes
 
