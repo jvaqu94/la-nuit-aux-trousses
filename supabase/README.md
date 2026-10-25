@@ -33,6 +33,8 @@ https://VOTRE-PROJET.supabase.co/functions/v1/email-confirmation
 
 Pour ce projet, la fonction **`email-confirmation` est déployée et active avec `verify_jwt=false`**. Son code source est dans [`functions/email-confirmation/index.ts`](functions/email-confirmation/index.ts). L’inscription et le bouton **Renvoyer la confirmation** utilisent cette page Supabase comme `redirect_to`, y compris depuis le HTML autonome. Elle ne lit aucune donnée de compte, efface les jetons du fragment d’URL et invite le joueur à revenir se connecter dans le jeu.
 
+La réponse est explicitement servie en **`text/html; charset=utf-8`**, avec longueur de contenu et corps HTML ASCII utilisant des entités pour les accents. Cela évite l’affichage du code source et les séquences corrompues comme `dâ€™e-mail`, même si un client intermédiaire ignore le charset. Après une correction, choisir **Renvoyer la confirmation** et ouvrir le nouveau lien plutôt qu’un ancien lien déjà utilisé ou conservé en cache.
+
 Cette page évite de rediriger l’e-mail vers une URL de prévisualisation Arena/E2B protégée par un **traffic access token**. Ne pas remettre l’origine `*.e2b.app` comme redirection d’inscription. Les anciens liens déjà envoyés conservent leur ancienne destination : utiliser **Renvoyer la confirmation** pour obtenir un lien corrigé. Ne pas utiliser de joker d’URL large.
 
 Pour réinstaller la fonction sur un autre projet, déployer le fichier source avec l’équivalent de `supabase functions deploy email-confirmation --no-verify-jwt`, puis autoriser son URL exacte. Aucun fournisseur anonyme n’est nécessaire. Un avis peut être envoyé sans compte, tandis que la sauvegarde cloud nécessite un compte afin de fonctionner sur plusieurs appareils.

@@ -163,7 +163,7 @@ La configuration publique du projet est déjà renseignée dans `supabase-config
 
 La sauvegarde cloud est **optionnelle** : le jeu local et les exports restent disponibles sans compte ou hors ligne. Un compte possède un emplacement, remplacé à chaque envoi. Le mot de passe n’est pas stocké par le jeu et la session Supabase n’est jamais incluse dans les exports.
 
-La confirmation d’adresse reste obligatoire. Les nouveaux liens aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, saisir son adresse dans **Sauvegarde & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
+La confirmation d’adresse reste obligatoire. Les nouveaux liens aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, du code HTML brut ou des accents corrompus, saisir son adresse dans **Sauvegarde & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
 
 ### Teams et highscores
 
