@@ -8,6 +8,30 @@ html{height:100%;overflow:hidden}body{height:100vh;height:100dvh;min-height:0;ov
 @media(max-height:500px){header{height:34px;min-height:34px}.heading{display:none}main{padding:4px 8px}.layout .touchbar{height:40px;min-height:40px;margin-top:4px}.layout .touchbar button{height:38px;min-height:38px;padding:4px 9px;font-size:10px}.sidebar.infos-open{top:34px}.hud{top:6px;left:7px;right:7px;font-size:6px}.hud b{font-size:13px;margin-top:3px}.hud .hearts{font-size:10px}.highscore-line{font-size:6px;margin:2px 0}.hud #combo{font-size:6px}.local-quests{transform:scale(.72);transform-origin:bottom left;bottom:20px}.journey-tutor{top:66px;width:90%;padding:5px 7px}.journey-tutor span{font-size:8px}.journey-tutor b{font-size:7px}.toast{font-size:7px}.overlay .local-title{font-size:24px!important}}
 `;
 css.textContent+=`header .logo{display:flex;flex-direction:column;gap:1px;flex-shrink:0;line-height:1.05;letter-spacing:1.7px}header .logo .brand-top{color:#f2e9df;font-size:11px;font-weight:700;letter-spacing:3px}header .logo .brand-bottom{color:#e1b38b;font-size:15px;white-space:nowrap}header .logo i{font-style:normal;font-size:12px;margin-left:6px;color:#f1bb7a}.heading>div:first-child{min-width:0}.heading h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}@media(max-width:850px){header .logo .brand-top{font-size:9px;letter-spacing:2px}header .logo .brand-bottom{font-size:12px;letter-spacing:1px}header .logo i{font-size:9px;margin-left:4px}.heading h1{font-size:16px}.heading .tag{max-width:40%}}@media(max-height:500px){header .logo .brand-top{font-size:8px}header .logo .brand-bottom{font-size:11px}}`;
+css.textContent+=`
+/* Lisibilité mobile : le terrain garde ses dimensions, seuls les textes et
+   contrastes d’interface grandissent. */
+@media(max-width:850px){
+ .heading .eyebrow{font-size:9px}.heading .tag{font-size:10px}
+ .hud{font-size:10px;letter-spacing:.5px;text-shadow:0 1px 3px #000}.hud b{font-size:20px}.hud .hearts{font-size:16px}.highscore-line,.hud #combo{font-size:10px}
+ .toast{font-size:14px;line-height:1.4;bottom:12px;text-shadow:0 2px 4px #000,0 0 9px #000}
+ .journey-tutor{top:104px;width:min(420px,91%);padding:11px 12px}.journey-tutor b{font-size:11px}.journey-tutor span{font-size:12px;line-height:1.45}
+ .local-quests{width:168px;padding:8px 9px}.local-quests button{font-size:10px}.local-quest-row .line,.local-quest-row .line span,.local-quest-row b{font-size:10px}.local-quest-note{font-size:9px}
+ .combat-hud{font-size:10px!important;top:92px}
+ .overlay p{font-size:13px}.overlay .journey-small{font-size:12px;line-height:1.55}.overlay small,.overlay .tiny{font-size:11px}
+ .local-card strong{font-size:13px}.local-card span{font-size:11px}.journey-contract>div:first-child,.journey-contract b{font-size:11px}.journey-contract small{font-size:10px}
+ .arsenal-card b{font-size:14px!important}.arsenal-card span{font-size:12px!important}.arsenal-card em,.arsenal-card small{font-size:11px!important}.flight-analysis p{font-size:12px!important}
+ .sidebar.infos-open .tiny,.sidebar.infos-open .journey-small,.sidebar.infos-open .local-note,.sidebar.infos-open .muted,.sidebar.infos-open .item span{font-size:12px!important}.sidebar.infos-open .panel h3{font-size:12px}.sidebar.infos-open .badge{font-size:11px}
+ .touchbar button,.touchbar #specialCast{font-size:12px!important}
+}
+@media(max-width:370px) and (min-height:501px){.hud{font-size:9px}.hud b{font-size:18px}.local-quests{width:152px}.touchbar button,.touchbar #specialCast{font-size:11px!important}}
+@media(max-height:500px){
+ .hud{font-size:8px}.hud b{font-size:15px}.hud .hearts{font-size:12px}.highscore-line,.hud #combo{font-size:8px}.combat-hud{font-size:8px!important;top:60px}
+ .toast{font-size:10px;bottom:7px}.journey-tutor{top:66px;padding:6px 8px}.journey-tutor b{font-size:9px}.journey-tutor span{font-size:10px}
+ .local-quests{width:150px}.local-quests button,.local-quest-row .line,.local-quest-row .line span,.local-quest-row b{font-size:9px}.local-quest-note{font-size:8px}
+ .overlay p{font-size:11px}.overlay .journey-small{font-size:10px}.touchbar button,.touchbar #specialCast{font-size:11px!important}
+}
+`;
 document.head.appendChild(css);
 const holder=document.querySelector('.layout>div:first-child'),arena=document.querySelector('.arena'),aside=document.querySelector('.sidebar'),bar=document.querySelector('.touchbar');
 arena.insertAdjacentHTML('beforeend','<div class="touch-stick hidden" id="touchStick" aria-hidden="true"><i></i></div>');

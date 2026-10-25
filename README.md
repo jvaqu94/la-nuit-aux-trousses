@@ -61,7 +61,8 @@ Le tir principal est **automatique**.
 | Pause | P ou Échap | Bouton **Pause** | Start |
 
 - La précision ralentit le déplacement et affiche la zone de collision de la sorcière.
-- L’esquive et le sort spécial possèdent chacun un temps de recharge.
+- L’esquive et le sort spécial possèdent chacun un temps de recharge. Avec le balai initial, l’esquive protège pendant **0,45 s** et se recharge en **4 s** : il faut l’utiliser au contact du danger, pas trop tôt.
+- Lors du premier apprentissage, un projectile réel est entouré et le bouton s’illumine au bon moment. Une esquive qui traverse effectivement un tir produit un retour distinct et valide ce guide ; **Revoir les conseils** permet de le réactiver.
 - Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le son est désactivé par défaut et s’active avec le bouton **Son**.
@@ -95,7 +96,7 @@ Chaque univers comprend cinq vagues, puis un gardien en trois phases. La difficu
 
 La campagne comprend notamment :
 
-- des formations de créatures, des élites et des petits groupes coopératifs ;
+- des formations de créatures, des élites et des petits groupes coopératifs ; les champions de rang 2 sont présentés comme des mini-boss avec nom, barre de vie et indice sur leurs attaques ;
 - des barrières, des passages, des rochers et des obstacles destructibles ;
 - des charges de boss propres à chaque gardien ;
 - des séquences de terrain propres aux cinq univers ;
@@ -114,7 +115,11 @@ Le menu **Préparer mon vol** permet de choisir :
 
 Ces éléments et leurs variantes se débloquent par objectifs cumulatifs. Les choix sont conservés et figés pour le vol en cours.
 
-Pendant une partie, les reliques ramassées renforcent temporairement l’armement : cadence, projectiles, poison, missiles, familiers, tirs traversants ou rayon. Elles ne remplacent pas le sort actif. La plupart de ces améliorations se déchargent au changement d’univers.
+Pendant une partie, les reliques ramassées renforcent temporairement l’armement : cadence, projectiles, poison, missiles, familiers, tirs traversants ou rayon. Leur effet est résumé sous leur nom et expliqué au ramassage. Elles ne remplacent pas le sort actif. La plupart de ces améliorations se déchargent au changement d’univers.
+
+### Confort de combat
+
+Sur téléphone, les textes essentiels sont agrandis sans réduire le terrain ni les cibles tactiles. Les projectiles ennemis possèdent des couleurs distinctes, un contour sombre et un repère lumineux ; ces ajouts graphiques ne changent pas leur hitbox. Les impacts renforcent le flash et l’impulsion déjà présents, avec au plus un son de dégât toutes les 65 ms pour éviter la saturation. Il n’y a ni secousse d’écran ni option de facilité.
 
 Les bonbons apportent de l’XP, des points ou un bouclier. Des cœurs peuvent restaurer une vie. Les coffres scellés doivent être dégagés de leurs rochers puis ouverts avant de récupérer leur butin.
 
@@ -274,6 +279,7 @@ python tests/test_no_account_browser.py
 python tests/test_arsenal_browser.py
 python tests/test_adventure.py
 python tests/test_encounters.py
+python tests/test_combat_feel.py
 python tests/test_flow.py
 python tests/test_surprise_ui.py
 python tests/test_vertical_drift.py
