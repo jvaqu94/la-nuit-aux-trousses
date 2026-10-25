@@ -172,7 +172,7 @@ Le menu **Sauvegarde & team** permet, après connexion, de créer une team ou de
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
 - **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
 - Seul l’administrateur peut modifier ces règles ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
-- Sur smartphone, le code peut être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` préremplit le code dans **Sauvegarde & team**, sans inclure de jeton de session.
+- Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` préremplit le code dans **Sauvegarde & team**, sans inclure de jeton de session.
 - Après chaque vol, le score est transmis automatiquement. Chaque vol comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
 - La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol reste jouable localement mais ne compte pas pour la team.
 - Seul le **meilleur score de chaque membre** est conservé ; le tableau affiche aussi le total de ces records et les parties restantes.

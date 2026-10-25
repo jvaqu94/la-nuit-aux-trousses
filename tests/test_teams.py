@@ -2,7 +2,7 @@ import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from playwright.sync_api import sync_playwright
 
@@ -291,6 +291,24 @@ with sync_playwright() as p:
     assert parse_qs(urlsplit(messenger_link).query)['team'] == [CODE]
     assert all(secret not in whatsapp + messenger for secret in ['access_token', 'refresh_token', 'traffic_access_token'])
 
+    # L’invitation e-mail prépare le destinataire, l’objet, le code et le même lien sans jeton.
+    assert alice.locator('#teamEmailInvite').is_visible()
+    alice.evaluate("document.getElementById('teamEmailInvite').addEventListener('click',event=>event.preventDefault())")
+    alice.fill('#teamInviteEmail', 'adresse-invalide')
+    alice.click('#teamEmailInvite')
+    assert 'adresse e-mail valide' in alice.locator('#teamStatus').inner_text()
+    alice.fill('#teamInviteEmail', 'friend@example.com')
+    email_invite = alice.locator('#teamEmailInvite').get_attribute('href')
+    parsed_email = urlsplit(email_invite)
+    email_query = parse_qs(parsed_email.query)
+    assert parsed_email.scheme == 'mailto' and unquote(parsed_email.path) == 'friend@example.com'
+    assert 'Les Balais de minuit' in email_query['subject'][0]
+    assert 'ABCDE-23456' in email_query['body'][0]
+    assert invitation in email_query['body'][0]
+    assert all(secret not in email_invite for secret in ['access_token', 'refresh_token', 'traffic_access_token'])
+    alice.click('#teamEmailInvite')
+    assert 'Invitation préparée pour friend@example.com' in alice.locator('#teamStatus').inner_text()
+
     # Bob ouvre une invitation sur mobile : le code est prérempli et les jetons sont retirés de l’URL.
     context_b, bob = make_page('bob@example.com', mobile=True, url='http://localhost:3000/?team=abcde-23456&access_token=secret&refresh_token=secret&traffic_access_token=secret#session_id=secret')
     bob.wait_for_selector('#teamJoin')
@@ -304,6 +322,7 @@ with sync_playwright() as p:
     assert bob.locator('#teamSaveRules').count() == 0
     assert bob.locator('#teamDelete').count() == 0
     assert bob.locator('#teamWhatsApp').is_visible() and bob.locator('#teamMessenger').is_visible()
+    assert bob.locator('#teamEmailInvite').is_visible() and bob.locator('#teamInviteEmail').is_visible()
     assert bob.evaluate('document.documentElement.scrollWidth<=390')
     assert 'bob@example.com' not in bob.locator('#teamCard').inner_text()
 
@@ -402,13 +421,14 @@ with sync_playwright() as p:
 
     stored = alice.evaluate("Object.keys(localStorage).map(key=>localStorage.getItem(key)).join('\\n')")
     assert 'mot-de-passe-jamais-stocke' not in stored
+    assert 'friend@example.com' not in stored
     submissions = [call for call in calls if call['path'].endswith('/minuit_submit_team_score')]
     assert [call['body']['p_score'] for call in submissions] == [1500, 2200, 900, 1800, 1800]
     assert submissions[3]['status'] == 400 and submissions[4]['status'] == 200
     assert all(call['body']['p_mode'] == 'free' and call['body']['p_run_id'] for call in submissions)
     assert len({(call['user_id'], call['body']['p_run_id']) for call in submissions}) == 5
     assert not errors, errors
-    print('OK : admin, règles, limite, invitations préremplies, WhatsApp/Messenger, départ du dernier membre, suppression admin et mobile.')
+    print('OK : admin, règles, limite, invitations préremplies, e-mail/WhatsApp/Messenger, départ du dernier membre, suppression admin et mobile.')
     context_a.close()
     context_b.close()
     browser.close()

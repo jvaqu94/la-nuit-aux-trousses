@@ -73,7 +73,7 @@ Après connexion, le panneau **Team & highscore** permet de :
 
 1. choisir un pseudo de 2 à 24 caractères ;
 2. à la création, définir la limite quotidienne et, si nécessaire, la période de jeu ;
-3. partager sur mobile le lien `?team=CODE` par WhatsApp ou Messenger, ou saisir le code reçu pour rejoindre la team ; le lien ne contient aucun jeton de session et préremplit le code ;
+3. préparer une invitation par e-mail avec destinataire, objet, code et lien préremplis, ou partager sur mobile le lien `?team=CODE` par WhatsApp ou Messenger ; l’e-mail ouvre la messagerie sans enregistrer le destinataire, et le lien ne contient aucun jeton de session ;
 4. terminer un vol pour transmettre automatiquement son score ;
 5. consulter le meilleur score de chaque membre, le total et les parties restantes.
 
