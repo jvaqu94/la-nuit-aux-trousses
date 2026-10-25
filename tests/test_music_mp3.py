@@ -25,8 +25,9 @@ for track in IDS:
     header = mpeg_header(data, track)
     # MPEG 1 Layer III, 128 ou 192 kbit/s, 44,1 kHz, stéréo ou joint stéréo.
     assert header[2] >> 4 in (9, 11) and (header[2] >> 2) & 3 == 0, track
-boss_data = (ROOT / 'audio' / 'boss-arrival.mp3').read_bytes()
-assert len(boss_data) > 30_000 and mpeg_header(boss_data, 'boss')[2] >> 4 in (9, 11)
+for track in IDS[1:]:
+    boss_data = (ROOT / 'audio' / f'boss-{track}.mp3').read_bytes()
+    assert len(boss_data) > 30_000 and mpeg_header(boss_data, f'boss-{track}')[2] >> 4 in (9, 11)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
@@ -75,9 +76,9 @@ with sync_playwright() as p:
     page.evaluate("stage=0;world=worlds[0];enemies=[];audioSignature='';syncAudio()")
     page.wait_for_function("mp3Music?.current==='forest' && !!mp3Music.source")
     page.evaluate("enemies=[];spawnBoss();audioSignature='';syncAudio()")
-    page.wait_for_function("mp3Music.arrivalBuffers.has('boss-arrival')")
-    boss_cue = page.evaluate("""()=>{const b=mp3Music.arrivalBuffers.get('boss-arrival');return {channels:b.numberOfChannels,duration:b.duration,effects:mp3Music.effectsDestination===sfxBus}}""")
-    assert boss_cue['channels'] == 2 and 2 < boss_cue['duration'] < 4 and boss_cue['effects'], boss_cue
+    page.wait_for_function("mp3Music.arrivalBuffers.has('boss-forest')")
+    boss_cue = page.evaluate("""()=>{const b=mp3Music.arrivalBuffers.get('boss-forest');return {channels:b.numberOfChannels,duration:b.duration,effects:mp3Music.effectsDestination===sfxBus}}""")
+    assert boss_cue['channels'] == 2 and 10 < boss_cue['duration'] < 13 and boss_cue['effects'], boss_cue
     page.wait_for_function('mp3Music.source.playbackRate.value>1.06')
     assert page.evaluate('mp3Music.current') == 'forest'
     page.wait_for_timeout(400)
@@ -115,7 +116,7 @@ with sync_playwright() as p:
         solo.wait_for_function("id=>mp3Music?.current===id && !!mp3Music.source", arg=track)
         solo.evaluate("spawnEnemy({x:400,kind:world.foes[0],pattern:0})")
     solo.evaluate("enemies=[];spawnBoss();audioSignature='';syncAudio()")
-    solo.wait_for_function("mp3Music.arrivalBuffers.has('boss-arrival')")
+    solo.wait_for_function("mp3Music.arrivalBuffers.has('boss-forest')")
     assert not solo_errors, solo_errors
     assert not remote, remote
     offline.close()

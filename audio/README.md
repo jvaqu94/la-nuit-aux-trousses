@@ -10,7 +10,11 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de
 | `castle.mp3` | Valse carmin — château |
 | `marsh.mp3` | Rondes des limons — marais |
 | `lanterns.mp3` | Farandole des ombres — fête des lanternes |
-| `boss-arrival.mp3` | Arrivée des gardiens, utilisée sans réencodage |
+| `boss-forest.mp3` | Arrivée terrifiante de Jack, forêt |
+| `boss-cemetery.mp3` | Arrivée terrifiante du fossoyeur, cimetière |
+| `boss-castle.mp3` | Arrivée terrifiante de la comtesse, château |
+| `boss-marsh.mp3` | Arrivée terrifiante de la tisseuse, marais |
+| `boss-lanterns.mp3` | Arrivée terrifiante du dévoreur, lanternes |
 | `sfx-player-shot.mp3` | Tir standard |
 | `sfx-player-spread.mp3` | Tir renforcé ou triple tir |
 | `sfx-player-missile.mp3` | Lancement des missiles guidés |
@@ -22,7 +26,7 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de
 
 ## Nouvelles ambiances par monde
 
-`nuitsorc-loop.mp3` et `boss-arrival.mp3` ont été fournis par l’auteur du projet. Les cinq boucles de monde ont été entièrement recomposées pour avoir une identité propre tout en conservant une finition cinématique cohérente avec le menu :
+`nuitsorc-loop.mp3` a été fourni par l’auteur du projet. Les cinq boucles de monde ont été entièrement recomposées pour avoir une identité propre tout en conservant une finition cinématique cohérente avec le menu :
 
 - **Forêt** : bois murmurants, harpe, cordes graves et clochettes cristallines, avec un motif mystérieux en ré mineur.
 - **Cimetière** : célesta, cloches lointaines, piano feutré et cordes suspendues, dans une couleur élégiaque en mi mineur.
@@ -30,11 +34,11 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée et huit effets de
 - **Marais** : basse liquide, clarinette basse, percussions syncopées et textures de roseaux, en la mineur.
 - **Lanternes** : célesta spectral, pizzicati, marimba, clarinette et carillon, pour une fête inquiétante en do mineur.
 
-Les nouvelles boucles sont encodées en 192 kbit/s, stéréo 44,1 kHz, avec un nettoyage des silences de fin et un fondu très court pour des transitions plus propres. Leur tempo et leur tonalité varient ensemble dans Web Audio, comme une variation de bande, afin de ne pas déphaser les canaux : forêt 1,00 ; cimetière 0,88 ; château 1,02 ; marais 0,94 ; lanternes 1,08. Pendant un gardien, le thème du monde accélère encore de 8 % et le signal `boss-arrival.mp3` passe par le bus des effets avec une courte atténuation de la musique.
+Les nouvelles boucles sont encodées en 192 kbit/s, stéréo 44,1 kHz, avec un nettoyage des silences de fin et un fondu très court pour des transitions plus propres. Leur tempo et leur tonalité varient ensemble dans Web Audio, comme une variation de bande, afin de ne pas déphaser les canaux : forêt 1,00 ; cimetière 0,88 ; château 1,02 ; marais 0,94 ; lanternes 1,08. Pendant un gardien, le thème du monde accélère encore de 8 % et le stinger dédié passe par le bus des effets avec une courte atténuation de la musique.
 
 ## Attribution des échantillons d’arrivée
 
-Le signal `boss-arrival.mp3` est conservé pour souligner l’entrée des gardiens, avec une atténuation temporaire de la musique. Les sons d’arrivée des créatures ordinaires (`arrival-*.mp3`) ont été retirés du gameplay afin de préserver la lisibilité sonore pendant les vagues.
+Chaque monde possède désormais un stinger de boss dédié : même palette instrumentale que son ambiance, mais avec une montée dissonante, une tension plus sombre et un impact final terrifiant. La musique du monde est brièvement atténuée pendant le stinger. Les sons d’arrivée des créatures ordinaires (`arrival-*.mp3`) restent retirés du gameplay afin de préserver la lisibilité sonore pendant les vagues.
 
 ## Effets de combat
 

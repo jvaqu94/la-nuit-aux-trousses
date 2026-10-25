@@ -1,7 +1,7 @@
-"""Adaptations des mondes à partir du thème orchestral fourni par l’auteur.
+"""Ancienne méthode d’adaptation des mondes à partir du thème fourni.
 
-Le menu (nuitsorc-loop.mp3), l’arrivée du boss (boss-arrival.mp3) et les cinq
-arrivées ordinaires sont des ressources fixes : ce script ne les réencode pas.
+Le menu, les cinq compositions dédiées de monde et les cinq stingers de boss
+sont des ressources fixes : ce script historique ne les réencode pas.
 Dépendances de production : pip install numpy scipy soundfile lameenc
 Aucune de ces bibliothèques n’est nécessaire pour jouer les MP3 fournis.
 """

@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const paths={menu:'audio/nuitsorc-loop.mp3',forest:'audio/forest.mp3',cemetery:'audio/cemetery.mp3',castle:'audio/castle.mp3',marsh:'audio/marsh.mp3',lanterns:'audio/lanterns.mp3'};
-const bossArrivalPath='audio/boss-arrival.mp3';
+const bossArrivalPaths={forest:'audio/boss-forest.mp3',cemetery:'audio/boss-cemetery.mp3',castle:'audio/boss-castle.mp3',marsh:'audio/boss-marsh.mp3',lanterns:'audio/boss-lanterns.mp3'};
 // Longueurs de composition avant encodage. LAME ajoute 1105 échantillons de
 // délai et un bourrage final : ils sont exclus de la lecture et du raccord.
 const samples={menu:4197935,forest:2638999,cemetery:2757879,castle:2791095,marsh:2566203,lanterns:2664286};
@@ -11,7 +11,7 @@ const encoderDelay=1105/44100;
 class MinuitMusicPlayer{
  constructor(context,destination,effectsDestination=destination){
   this.context=context;this.destination=destination;this.effectsDestination=effectsDestination;
-  this.sources={...paths,'boss-arrival':bossArrivalPath,...(window.MinuitMusicData||{})};
+  this.sources={...paths,...Object.fromEntries(Object.entries(bossArrivalPaths).map(([id,url])=>['boss-'+id,url])),...(window.MinuitMusicData||{})};
   this.buffers=new Map();this.pending=new Map();this.failed=new Set();
   this.arrivalBuffers=new Map();this.arrivalPending=new Map();this.arrivalFailed=new Set();this.arrivalVoices=new Set();
   this.source=null;this.gain=null;this.buffer=null;this.current='';this.key='';this.loading='';this.version=0;this.boss=false;this.rate=1;
@@ -60,14 +60,14 @@ class MinuitMusicPlayer{
   try{return await promise}finally{this.pending.delete(id)}
  }
  async loadArrival(id){
-  const key='boss-arrival';
+  const key='boss-'+id;
   if(this.arrivalBuffers.has(key))return this.arrivalBuffers.get(key);
   if(this.arrivalPending.has(key))return this.arrivalPending.get(key);
   const promise=(async()=>{
    const url=this.sources[key];if(!url)throw Error('Arrivée inconnue : '+id);
    const response=await fetch(url);if(!response.ok)throw Error('Son d’arrivée indisponible : '+id);
    const buffer=await this.decode(await response.arrayBuffer());
-   if(buffer.numberOfChannels<2||buffer.duration<.2||buffer.duration>4)throw Error('Son d’arrivée invalide : '+id);
+   if(buffer.numberOfChannels<2||buffer.duration<.2||buffer.duration>13)throw Error('Son d’arrivée invalide : '+id);
    this.arrivalBuffers.set(key,buffer);return buffer;
   })();
   this.arrivalPending.set(key,promise);
@@ -81,17 +81,18 @@ class MinuitMusicPlayer{
   this.arrivalVoices.add(source);source.onended=()=>{this.arrivalVoices.delete(source);try{source.disconnect();gain.disconnect()}catch{}};
   source.start(start,Math.min(encoderDelay,Math.max(0,buffer.duration-.05)));
  }
- async bossArrival(){
-  if(this.arrivalFailed.has('boss')||this.context.state!=='running')return;
+ async bossArrival(id){
+  const key=id||'forest';
+  if(this.arrivalFailed.has(key)||this.context.state!=='running')return;
   try{
-   const buffer=await this.loadArrival('boss');if(this.context.state!=='running')return;
+   const buffer=await this.loadArrival(key);if(this.context.state!=='running')return;
    if(this.gain){
     const param=this.gain.gain,now=this.context.currentTime;param.cancelScheduledValues(now);
     param.setValueAtTime(param.value,now);param.linearRampToValueAtTime(.45,now+.08);
     param.setValueAtTime(.45,now+1.9);param.linearRampToValueAtTime(1,now+2.45);
    }
    this.playArrival(buffer,.9);
-  }catch{this.arrivalFailed.add('boss')}
+  }catch{this.arrivalFailed.add(key)}
  }
  decode(bytes){
   return new Promise((resolve,reject)=>{
@@ -130,5 +131,5 @@ class MinuitMusicPlayer{
 }
 window.MinuitMusicPlayer=MinuitMusicPlayer;
 window.MinuitMusicSources=paths;
-window.MinuitBossArrivalSource=bossArrivalPath;
+window.MinuitBossArrivalSources=bossArrivalPaths;
 })();
