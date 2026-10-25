@@ -740,7 +740,7 @@ function abandon(){if(run&&!window.SandboxMode){try{if(checkpoint()?.journey?.id
 function snapshot(){return run?JSON.parse(JSON.stringify(run)):null}
 function canResume(cp){if(cp.journey?.id&&j.seen[cp.journey.id]?.done){say('Cette aventure est terminée. Lance un nouveau vol.',4);LocalLeague.menu();return false}return true}
 function restore(cp){if(cp.journey?.id){run=JSON.parse(JSON.stringify(cp.journey));j.seen[run.id]??={stats:{...run.stats},paid:0,done:false};run.tutorial=!j.tutorialDone}else begin({id:cp.league?.id,day:cp.dailyDate,mode:cp.league?.mode||'free'});timer=0;tutorialStep=-1;renderTutorial()}
-function tip(){if(!run?.tutorial||j.tutorialDone||state!=='play')return null;const t=gameTime;const touch=matchMedia('(pointer:coarse)').matches;return t<7?[0,'PRENDS TON ENVOL',touch?'Glisse d’un doigt pour piloter sans téléportation. L’indicateur suit ton geste ; le tir est automatique.':'Flèches ou ZQSD/WASD pour piloter. Le tir est automatique.']:t<15?[1,'ESQUIVE : TRAVERSER SANS DÉGÂTS',touch?'Au contact d’un tir, touche « Esquive » avec l’autre doigt : 0,45 s sans dégâts, puis 4 s de recharge. Un vrai projectile t’aidera à trouver le bon moment.':'Espace au contact d’un tir : 0,45 s sans dégâts, puis 4 s de recharge. Maj sert à la précision, pas à l’invulnérabilité.']:t<24?[2,'LE BOUCLIER N’EST PAS UNE VIE','Ramasse le bouclier turquoise : sa jauge absorbe les dégâts, pendant 12 secondes.']:t<34?[3,'LES RELIQUES SE RAMASSENT','Les armes tombent sur le terrain à partir des vagues suivantes. Leur effet est indiqué sous leur nom et au ramassage.']:null}
+function tip(){return null/* L’apprentissage se fait dans l’entraînement guidé, jamais pendant un vol normal. */}
 function renderTutorial(){const el=$('journeyTutor');if(!el)return;const v=tip();if(!v){el.classList.add('hidden');if(run?.tutorial&&gameTime>=34){j.tutorialDone=true;write()}return}if(tutorialStep===v[0]&&!el.classList.contains('hidden'))return;tutorialStep=v[0];el.classList.remove('hidden');el.innerHTML=`<div><b>${v[1]} · ${v[0]+1}/4</b><span>${v[2]}</span></div><button id="skipTutor" aria-label="Masquer le tutoriel">×</button>`;$('skipTutor').onclick=()=>{j.tutorialDone=true;el.classList.add('hidden');write()}}
 function completeDodgeGuide(){if(!j.dodgeGuideDone){j.dodgeGuideDone=true;write()}$('dodgeCoach')?.classList.add('hidden')}
 function runGoals(){if(!run||LocalLeague.current||!['play','pause'].includes(state))return;const box=$('questHUD'),d=diary(run.day);box.classList.remove('hidden');box.innerHTML='<button id="toggleCarnet">CARNET DU JOUR · '+d.claimed.length+'/3 '+(goalsOpen?'▾':'▸')+'</button>'+(goalsOpen?contracts.map(c=>'<div class="local-quest-row '+(d.claimed.includes(c.id)?'done':'')+'"><div class="line"><span>'+c.title+'</span><b>'+Math.min(c.target,d.stats[c.metric]||0)+'/'+c.target+'</b></div><div class="local-bar"><i style="width:'+Math.min(100,(d.stats[c.metric]||0)/c.target*100)+'%"></i></div></div>').join('')+'<div class="local-quest-note">Contrats cumulables · récompenses en XP</div>':'');$('toggleCarnet').onclick=()=>{goalsOpen=!goalsOpen;runGoals()}}
@@ -782,7 +782,7 @@ async function importSave(file,status){
 function saveControls(){return '<div class="journey-save-controls"><button class="secondary" id="exportJourney">Exporter ma progression</button><label class="secondary journey-import">Importer une sauvegarde<input id="importJourney" type="file" accept=".json,application/json"></label></div><div class="journey-small" id="saveMessage">Fichier JSON : progression, cosmétiques, records, réglages et point de reprise. La session du compte en ligne n’est jamais incluse.</div><div id="supabaseMount"></div>'}
 function bindSave(){const ex=$('exportJourney'),im=$('importJourney');if(ex)ex.onclick=exportSave;if(im)im.onchange=()=>importSave(im.files[0],$('saveMessage'));window.MinuitCloud?.renderPanel?.($('supabaseMount'))}
 function archives(){if(state==='play')pauseScreen();state='journey-archives';overlay(`<div class="eyebrow">TON HISTOIRE T’APPARTIENT</div><h2 class="local-title">Garde une trace.</h2><p>Exporte ta progression avant de changer de navigateur ou d’appareil. Importe le fichier sur l’autre appareil pour la retrouver. Les sauvegardes se remplacent, elles ne se fusionnent pas.</p>${saveControls()}<button class="secondary" id="rollbackImport">Annuler le dernier import</button><div class="journey-history"><h3>LES DERNIERS VOLS · DONNÉES LOCALES</h3>${j.recent.slice(0,8).map(r=>`<div><span>${safeText(r.day)} · ${safeText(r.world)} · V${r.wave}<br><small>${safeText(r.cause)} · ${r.stats.hits||0} impacts · ${r.feedback?({hard:'trop difficile',fair:'bien dosé',easy:'trop facile'})[r.feedback]:'avis non renseigné'}</small></span><b>${fmt(r.score)} pts</b></div>`).join('')||'<p>Ton prochain vol ouvrira ce journal.</p>'}</div><div class="journey-small">Les avis restent dans ton journal local. Avec le compte en ligne configuré, tu peux aussi en transmettre une copie privée pour l’équilibrage ; ils ne sont jamais affichés sur un mur public.</div><button class="primary" id="archivesBack">Retour →</button>`);bindSave();$('archivesBack').onclick=LocalLeague.menu;$('rollbackImport').onclick=()=>{try{const v=JSON.parse(localStorage.getItem('minuit-import-rollback')||'null');if(!v)throw Error('Aucun import à annuler.');if(!confirm('Restaurer la progression antérieure au dernier import ?'))return;window.MinuitImporting=true;for(const k of exportKeys){if(v[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,v[k])}localStorage.removeItem('minuit-import-rollback');location.reload()}catch(e){$('saveMessage').textContent=e.message}}}
-const originalSettings=settings;settings=function(){if(state==='settings')return;originalSettings();$('save').insertAdjacentHTML('beforebegin',saveControls()+'<button class="secondary" id="restartTutorial">Revoir les conseils au prochain vol</button>');bindSave();$('restartTutorial').onclick=()=>{j.tutorialDone=false;j.dodgeGuideDone=false;write();$('restartTutorial').textContent='Conseils et esquive réactivés pour le prochain vol'}};$('settings').onclick=settings;
+const originalSettings=settings;settings=function(){if(state==='settings')return;originalSettings();$('save').insertAdjacentHTML('beforebegin',saveControls()+'<button class="secondary" id="restartTutorial">Guide illustré des commandes</button>');bindSave();$('restartTutorial').onclick=()=>window.GuidedTraining?.openGuide('settings')};$('settings').onclick=settings;
 const css=document.createElement('style');css.textContent=`
 .journey-level{display:flex;justify-content:space-between;width:100%;max-width:460px;font-size:10px;letter-spacing:1px;color:#d8c3e1;margin:12px 0 7px}.journey-level b{color:#ffcc85}.journey-bar{height:5px;background:#45344f;border-radius:5px;overflow:hidden;max-width:460px;width:100%}.journey-bar i{display:block;height:100%;background:linear-gradient(90deg,#a685d2,#f4bf7c);transition:width .3s}.journey-small{font-size:10px;color:#b7a4c7;line-height:1.7;margin:9px 0;max-width:620px}.journey-small b{color:#ebd2af}.journey-menu-progress{width:min(420px,100%)}.journey-main-actions{margin:14px 0 0}.journey-subactions{margin-top:10px}.journey-contracts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;width:100%;max-width:620px;margin-top:18px}.journey-contract{border:1px solid #6f587c77;background:#2b2038aa;padding:12px;border-radius:9px;text-align:left}.journey-contract>div:first-child{display:flex;justify-content:space-between;gap:7px;font-size:10px;color:#d4bfdc}.journey-contract b{white-space:nowrap;font-size:10px;color:#f3d0a5}.journey-contract small{font-size:9px;color:#caacdb;display:block;margin-top:6px}.journey-contract.done{border-color:#83c7a5aa}.journey-contract.done .journey-bar i{background:#91d6b3}.journey-wide{width:100%;margin:12px 0 4px}.journey-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:620px;margin:12px 0}.journey-result-grid>div{border:1px solid #74587966;border-radius:10px;background:#2a203aaa;padding:13px;text-align:left}.journey-result-grid small{font-size:9px;letter-spacing:1px;margin:0}.journey-result-grid b{display:block;font-size:24px;color:#f7d1a0;margin:6px 0}.journey-result-grid span{font-size:10px;line-height:1.6;color:#b9a7c9;display:block}.journey-unlocked{font-size:12px;color:#aee4c8;border:1px solid #98caac66;border-radius:8px;padding:10px;margin:10px 0}.journey-feedback{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;font-size:10px;color:#baabc6;margin:14px 0}.journey-feedback span{width:100%}.journey-feedback button{background:#30233e;border:1px solid #6e587e;color:#e2cce9;border-radius:20px;font-size:10px;padding:7px 10px}.wardrobe-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:650px;text-align:left;margin:14px 0}.wardrobe-grid>section:last-child{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:5px}.wardrobe-grid>section:last-child h3{grid-column:1/-1}.wardrobe-grid h3{font-size:9px;color:#b7a1c6;letter-spacing:2px;margin:9px 0}.wardrobe-item{width:100%;display:flex;gap:9px;align-items:center;background:#292035;border:1px solid #6c537666;border-radius:8px;text-align:left;color:#d9c6e4;padding:9px;margin-bottom:5px}.wardrobe-item i{width:15px;height:15px;flex-shrink:0;border-radius:50%}.wardrobe-item b{font-size:11px;display:block}.wardrobe-item small{font-size:9px;color:#b5a0c3;letter-spacing:0;display:block;margin:4px 0 0}.wardrobe-item:disabled{opacity:.5;cursor:not-allowed}.wardrobe-item.equipped{border-color:#e5b876;background:#493346}.overlay canvas.wardrobe-preview{position:static;width:180px;height:130px;flex-shrink:0}.journey-save-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:12px 0}.journey-import{cursor:pointer}.journey-import input{display:none}.journey-history{width:100%;max-width:550px;text-align:left;margin:20px 0}.journey-history h3{font-size:10px;letter-spacing:1px;color:#c4a8d2}.journey-history>div{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #70578055;padding:10px 0;font-size:10px;color:#d2bedb}.journey-history small{font-size:9px;line-height:1.6;color:#9e8cab;margin:4px 0 0;letter-spacing:0}.journey-history b{white-space:nowrap;color:#edc593}.journey-tutor{position:absolute;z-index:3;top:105px;left:50%;transform:translateX(-50%);width:min(380px,85%);display:flex;gap:12px;padding:12px 14px;border:1px solid #bfa18177;border-radius:10px;background:#22182cdd;backdrop-filter:blur(4px);pointer-events:none}.journey-tutor b{display:block;color:#f2c891;font-size:9px;letter-spacing:1px}.journey-tutor span{display:block;font-size:11px;line-height:1.6;color:#d6c3e1;margin-top:6px}.journey-tutor button{pointer-events:auto;align-self:start;background:none;border:0;color:#ccafd9;font-size:18px}.overlay:has(.wardrobe-grid),.overlay:has(.journey-history){justify-content:flex-start}.overlay:has(.journey-result-grid)>*{flex-shrink:0}
 @media(max-width:850px){#journeyPanel{grid-column:1/-1}.journey-contracts{gap:5px}.journey-contract{padding:9px 7px}.journey-contract>div:first-child{font-size:9px;flex-direction:column;gap:3px}.journey-small{font-size:9px}.journey-result-grid{gap:6px}.journey-result-grid>div{padding:10px}.journey-result-grid b{font-size:20px}.journey-result-grid span{font-size:9px}.wardrobe-grid{gap:8px}.wardrobe-item{padding:8px 6px;gap:6px}.wardrobe-item b{font-size:10px}.wardrobe-item small{font-size:8px}.journey-tutor{top:98px;padding:9px 11px}.journey-tutor span{font-size:10px}.journey-level{font-size:9px}.journey-main-actions .primary{padding:13px 16px}}
@@ -1054,6 +1054,7 @@ const oldPrepare=Arsenal.prepare; // Les variantes restent accessibles depuis le
 function labMenu(){state='laboratory';overlay(`<div class="eyebrow">ESSAI LIBRE · AUCUNE RÉCOMPENSE</div><h2 class="local-title">Le laboratoire de vol.</h2><p>Teste tous les équipements, même verrouillés. Ta sauvegarde, tes points, tes exploits et tes essais restent inchangés.</p><div class="lab-fields"><label>Exercice<select id="labScene"><option value="targets">Cibles et obstacles destructibles</option><option value="charges">Apprendre une charge de boss</option></select></label><label>Gardien<select id="labBoss">${worlds.map(w=>`<option value="${w.kind}">${w.boss}</option>`).join('')}</select></label>${['spell','broom','pet'].map(k=>`<label>${({spell:'Sort actif',broom:'Balai',pet:'Compagnon'})[k]}<select id="lab-${k}">${Arsenal.catalog.filter(i=>i.kind===k).map(i=>`<option value="${i.id}">${i.name}</option>`).join('')}</select></label>`).join('')}<label>Variante<select id="labVariant"><option value="base">Version de base</option>${variants.map(v=>`<option value="${v.id}">${v.name}</option>`).join('')}</select></label></div><div class="local-actions"><button class="primary" id="startLab">Entrer dans le laboratoire</button><button class="secondary" id="labBack">Retour</button></div><div class="journey-small">F : sort spécial · Espace : esquive · vies restaurées après un impact. Réarmer remet l’exercice et les recharges à zéro. Aucun déblocage n’est accordé ici.</div>`);$('labScene').value=labSetup.scene;$('labBoss').value=labSetup.boss;for(const k of ['spell','broom','pet'])$('lab-'+k).value=labSetup[k];$('labVariant').value=labSetup.variant;$('startLab').onclick=()=>{labSetup={scene:$('labScene').value,boss:$('labBoss').value,spell:$('lab-spell').value,broom:$('lab-broom').value,pet:$('lab-pet').value,variant:$('labVariant').value};startLab()};$('labBack').onclick=LocalLeague.menu}
 const keys=['minuit-settings','minuit-highscores','minuit-v2-scores','minuit-checkpoint','minuit-local-league-v1','minuit-journey-v1'];
 function copy(v){return JSON.parse(JSON.stringify(v))}function replace(target,source){for(const k of Object.keys(target))delete target[k];Object.assign(target,source)}
+function startGuided(){labSetup={scene:'guided',boss:'pumpkin',spell:'pulse',broom:'bruyere',pet:'solo',variant:'base'};startLab()}
 function startLab(){backup={journey:copy(j),league:copy(LocalLeague.data),records:copy(records),high:copy(highScores),dirty:recordDirty,prefs:copy(prefs),storage:{}};for(const k of keys)backup.storage[k]=localStorage.getItem(k);training=true;window.SandboxMode=true;lab={hits:0};LocalLeague.play();Journey.run.tutorial=false;Arsenal.active.spell=labSetup.spell;Arsenal.active.broom=labSetup.broom;Arsenal.active.pet=labSetup.pet;const v=variants.find(v=>v.id===labSetup.variant);Arsenal.active.variant=v&&(v.spell==='all'||v.spell===labSetup.spell)?v.id:'base';document.body.classList.add('training-lab');$('journeyTutor').classList.add('hidden');$('questHUD').classList.add('hidden');resetLab();$('labTools').classList.remove('hidden')}
 function spawnTargets(){enemies=[];for(let i=0;i<3;i++)enemies.push({x:270+i*130,y:340,baseX:270+i*130,hp:100,max:100,r:24,speed:0,kind:'pumpkin',pattern:9,age:0,fire:9999,poison:0,poisonTick:0});obstacles=[];for(let i=0;i<3;i++)spawnObstacle(330+i*65,600,{hp:2,max:2,kind:'crate',breakable:true,age:2,warn:0})}
 function spawnLabBoss(){stage=Math.max(0,worlds.findIndex(w=>w.kind===labSetup.boss));world=worlds[stage];enemies=[{x:400,y:210,baseX:400,hp:9000,max:30000,r:52,boss:true,kind:labSetup.boss,phase:3,phaseShield:0,age:0,fire:99999,adds:99999,damageBudget:100,budgetRate:100,poison:0,poisonTick:0,hit:0,cycle:0,chargeWait:.8,lossStart:0}];obstacles=[]}
@@ -1064,7 +1065,7 @@ menu=function(){if(training)exitLab();else oldGlobalMenu()};LocalLeague.menu=fun
 const style=document.createElement('style');style.textContent=`.mastery-list{width:100%;max-width:600px;margin:14px 0}.mastery-list button{display:block;width:100%;text-align:left;background:#2b2039;border:1px solid #795b85;border-radius:9px;padding:14px;margin-bottom:8px;color:#ead8f1}.mastery-list button:disabled{opacity:.55}.mastery-list b,.mastery-list span,.mastery-list small{display:block}.mastery-list span{font-size:11px;line-height:1.6;margin-top:8px}.mastery-list small{font-size:10px;letter-spacing:0;margin:8px 0 0}.lab-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:570px;margin:12px 0}.lab-fields label{font-size:10px;color:#c8afd8;text-align:left}.lab-fields select{display:block;width:100%;margin-top:6px;padding:10px;border-radius:7px;border:1px solid #785981;color:#ecdcf5;background:#2a2038;font-size:11px}.adventure-status{position:absolute;left:12px;right:12px;top:101px;z-index:2;pointer-events:none;text-align:right;color:#f0ce94;font-size:8px}.lab-tools{position:absolute;top:125px;right:9px;display:flex;flex-direction:column;gap:5px;z-index:4}.lab-tools button{font-size:9px;padding:7px;background:#261d35;color:#e7d4f0;border:1px solid #9774aa;border-radius:7px}.training-lab #settings,.training-lab #panelCollection,.training-lab #infoToggle,.training-lab #pauseArsenal{pointer-events:none;opacity:.35}.overlay:has(.lab-fields),.overlay:has(.mastery-list){justify-content:flex-start}@media(max-width:850px){.lab-fields{grid-template-columns:1fr}.adventure-status{font-size:7px;top:97px}.lab-tools{top:119px}.lab-tools button{font-size:8px;padding:6px}}@media(max-height:500px){.adventure-status{top:68px;font-size:6px}.lab-tools{top:86px}}
 `;
 document.head.appendChild(style);document.querySelector('.arena').insertAdjacentHTML('beforeend','<div class="adventure-status hidden" id="adventureStatus"></div><div class="lab-tools hidden" id="labTools"><button id="resetLab">Réarmer</button><button id="changeLab">Changer l’exercice</button><button id="exitLab">Quitter le labo</button></div>');$('resetLab').onclick=resetLab;$('changeLab').onclick=()=>{exitLab(false);labMenu()};$('exitLab').onclick=()=>exitLab();
-window.Adventure={trainBoss:(kind)=>{labSetup.scene='charges';labSetup.boss=kind;startLab()},validateSave,beforeTick,tick,draw,trail,worldClear,riskActive,collectRisk,drawChest,tuning,createRisk,mastery,labMenu,get training(){return training},variants,get lab(){return lab},get encounter(){return risk}};
+window.Adventure={trainBoss:(kind)=>{labSetup.scene='charges';labSetup.boss=kind;startLab()},startGuided,exitLab,validateSave,beforeTick,tick,draw,trail,worldClear,riskActive,collectRisk,drawChest,tuning,createRisk,mastery,labMenu,get training(){return training},variants,get lab(){return lab},get encounter(){return risk}};
 const info=document.createElement('section');info.className='panel';info.innerHTML='<h3>RELIQUAIRES SCELLÉS · FACULTATIFS</h3><div class="tiny">1. Détruis un rocher pour ouvrir la barricade.<br>2. Tire sur le sceau jusqu’à vider sa jauge.<br>3. Ramasse le butin libéré avant sa sortie de l’écran.<br><br>Points + XP de collection annoncés sur le coffre ; une relique d’arme en plus si le budget du niveau le permet. Les sorts et explosions peuvent aider.<br><br>Le coffre fermé ne se ramasse pas. Aucun gain si tu ne l’ouvres pas ; tu peux ignorer toute la rencontre en passant à côté. Pas de récompense exclusive obligatoire.</div>';document.querySelector('.sidebar').appendChild(info);check();Journey.menu();
 })();
 </script><script>/* Variété des rencontres, choix en mouvement et statistiques de vol. */
@@ -1221,14 +1222,14 @@ function reset(){guideThreat=null;success=null;dashCredit=false;lastChampion=-99
 
 /* Les champions existants deviennent de vraies rencontres annoncées, sans
    toucher à leurs statistiques ni à leur fréquence d’apparition. */
-const spawnBase=spawnEnemy;spawnEnemy=function(d){const count=enemies.length;spawnBase(d);if(enemies.length<=count)return;const e=enemies[enemies.length-1];if(!e||e.tier!==2||e.boss||e.rival)return;const profile=championProfiles[e.kind]||['CHAMPION DES OMBRES','salves renforcées'];e.championName=profile[0];e.championHint=profile[1];if(!e.coop&&gameTime-lastChampion>=2.8){lastChampion=gameTime;say('CHAMPION · '+profile[0]+' · '+profile[1],3);tone(118,.2,'triangle',.055,.55);noiseBurst(.09,.012,260)}};
+const spawnBase=spawnEnemy;spawnEnemy=function(d){const count=enemies.length;spawnBase(d);if(enemies.length<=count)return;const e=enemies[enemies.length-1];if(!e||e.tier!==2||e.boss||e.rival)return;const profile=championProfiles[e.kind]||['CHAMPION DES OMBRES','salves renforcées'];e.championName=profile[0];e.championHint=profile[1];if(!e.coop&&gameTime-lastChampion>=2.8){lastChampion=gameTime;say('CHAMPION · '+profile[0]+' · '+profile[1],3,e.kind);tone(118,.2,'triangle',.055,.55);noiseBurst(.09,.012,260)}};
 
 /* Le nom seul ne suffit pas : l’effet utile est annoncé au ramassage. */
-const collectBase=collectUpgrade;collectUpgrade=function(d){const wasTaken=d?.taken,beforeRank=d?.key?upgrades[d.key]:0,beforeScore=score,result=collectBase(d),def=upgradeDefs.find(v=>v[0]===d?.key);if(!wasTaken&&def){if(d.key!=='rocket'&&beforeRank===upgrades[d.key]&&score>beforeScore)say(def[2]+' · rang maximum · points bonus',3);else say(def[2]+' · '+effect(d.key),3.8)}return result};
+const collectBase=collectUpgrade;collectUpgrade=function(d){const wasTaken=d?.taken,beforeRank=d?.key?upgrades[d.key]:0,beforeScore=score,result=collectBase(d),def=upgradeDefs.find(v=>v[0]===d?.key);if(!wasTaken&&def){if(d.key!=='rocket'&&beforeRank===upgrades[d.key]&&score>beforeScore)say(def[2]+' · rang maximum · points bonus',3,'bonus-'+d.key);else say(def[2]+' · '+effect(d.key),3.8,'bonus-'+d.key)}return result};
 
 /* Une salve ne crédite qu’une esquive précise, même avec plusieurs projectiles. */
 function onDodge(){dashCredit=false}
-function perfectDodge(){if(dashCredit)return;dashCredit=true;success={x:player.x,y:player.y,life:.55,max:.55};guideThreat=null;hideCoach();window.League?.event?.('perfectDodges',1);if(!guideDone())completeGuide();particle(player.x,player.y,'#d9f5ff',10);tone(920,.13,'sine',.06,1.35);noiseBurst(.07,.012,1450);say('ESQUIVE RÉUSSIE · tir traversé sans dégâts',1.8)}
+function perfectDodge(){if(dashCredit)return;const first=!guideDone();dashCredit=true;success={x:player.x,y:player.y,life:.55,max:.55};guideThreat=null;hideCoach();window.League?.event?.('perfectDodges',1);if(first){completeGuide();say('ESQUIVE RÉUSSIE · tir traversé sans dégâts',2.8,'dodge')}particle(player.x,player.y,'#d9f5ff',10);tone(920,.13,'sine',.06,1.35);noiseBurst(.07,.012,1450)}
 const hurtBase=hurt;hurt=function(n,source,detail){const precise=state==='play'&&player.dash>0&&detail?.kind==='shot',result=hurtBase(n,source,detail);if(precise)perfectDodge();return result};
 
 function threatTime(b){
@@ -1245,9 +1246,9 @@ function syncCoach(){
  coach.innerHTML=mode==='wait'?'<b>ESQUIVE EN RECHARGE · '+Math.ceil(player.dashCD)+' s</b><span>Déplace-toi hors de la trajectoire et attends qu’elle soit prête.</span>':mode==='now'?'<b>ESQUIVE MAINTENANT</b><span>Tir ciblé : '+action+' · '+dashInv().toFixed(2).replace('.',',')+' s sans dégâts.</span>':'<b>TIR EN APPROCHE · PRÉPARE L’ESQUIVE</b><span>'+action+' quand l’anneau se referme, pas trop tôt.</span>';
  coach.classList.remove('hidden');
 }
-function syncDash(){const dash=$('dash');if(!dash)return;const ready=state==='play'&&player.dashCD<=0,now=ready&&guideThreat&&!guideDone()&&guideThreat.time<=Math.max(.3,dashInv());dash.classList.toggle('dash-ready',ready);dash.classList.toggle('dash-coach',!!now);dash.setAttribute('aria-disabled',String(!ready));dash.title=ready?'Esquive prête : '+dashInv().toFixed(2)+' s sans dégâts. Utilise-la au contact d’un tir.':'Esquive en recharge : '+Math.max(0,player.dashCD).toFixed(1)+' s';dash.setAttribute('aria-label',ready?'Esquive prête · '+dashInv().toFixed(2)+' secondes d’invulnérabilité':'Esquive en recharge · '+Math.ceil(player.dashCD)+' secondes')}
+function syncDash(){const dash=$('dash');if(!dash)return;const ready=state==='play'&&player.dashCD<=0,now=ready&&guideThreat&&guideThreat.time<=Math.max(.3,dashInv());dash.classList.toggle('dash-ready',ready);dash.classList.toggle('dash-coach',!!now);dash.setAttribute('aria-disabled',String(!ready));dash.title=ready?'Esquive prête : '+dashInv().toFixed(2)+' s sans dégâts. Utilise-la au contact d’un tir.':'Esquive en recharge : '+Math.max(0,player.dashCD).toFixed(1)+' s';dash.setAttribute('aria-label',ready?'Esquive prête · '+dashInv().toFixed(2)+' secondes d’invulnérabilité':'Esquive en recharge · '+Math.ceil(player.dashCD)+' secondes')}
 const hudBase=updateHUD;updateHUD=function(){hudBase();syncDash()};
-const updateBase=update;update=function(dt){updateBase(dt);if(gameTime<lastTime)reset();lastTime=gameTime;if(success){success.life-=dt;if(success.life<=0)success=null}const tutorVisible=$('journeyTutor')&&!$('journeyTutor').classList.contains('hidden');guideThreat=state==='play'&&!guideDone()&&!tutorVisible?nearestThreat():null;syncCoach();syncDash()};
+const updateBase=update;update=function(dt){updateBase(dt);if(gameTime<lastTime)reset();lastTime=gameTime;if(success){success.life-=dt;if(success.life<=0)success=null}guideThreat=state==='play'&&window.GuidedTraining?.showProjectileCue?nearestThreat():null;if(window.GuidedTraining?.showCoach)syncCoach();else hideCoach();syncDash()};
 
 function drawEnemy(g,e){
  if(e.dead||e.rival||e.node||!(e.fire>0&&e.fire<.45)||e.y<80||e.y>560)return;
@@ -1264,6 +1265,193 @@ function draw(g){
 const begin=window.Journey?.begin,restore=window.Journey?.restore;if(begin)Journey.begin=function(...a){reset();return begin(...a)};if(restore)Journey.restore=function(...a){reset();return restore(...a)};
 const startBase=start;start=function(...a){reset();return startBase(...a)};const resumeBase=resumeCheckpoint;resumeCheckpoint=function(...a){reset();return resumeBase(...a)};
 window.CombatFeel={shortEffect,effect,draw,drawEnemy,nearestThreat,reset,onDodge,get guideThreat(){return guideThreat},get success(){return success}};
+})();
+</script><script>/* Accueil allégé, aide illustrée et entraînement réellement interactif.
+   Le laboratoire garantit l’isolation de la sauvegarde ; ce module ne change ni les
+   collisions, ni les dégâts, ni les temporisations des vols normaux. */
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id),arena=document.querySelector('.arena');
+const coarse=()=>matchMedia('(pointer:coarse)').matches;
+let active=false,finished=false,stepIndex=0,exercise={},guidePage=0,guideReturn='menu';
+
+function artSource(name){
+ name=({'pickup-shield':'bonus-pickup-shield',heal:'bonus-heal'})[name]||name;
+ return CollectibleArt?.art?.[name]?.src||MinuitArt?.[name]?.src||'';
+}
+function iconNode(name,extra=''){
+ const wrap=document.createElement('span');wrap.className='lesson-icon '+extra;wrap.setAttribute('aria-hidden','true');
+ if(name==='special'){
+  wrap.classList.add('spell-icon');wrap.textContent='✦';return wrap;
+ }
+ const sourceName=name==='dodge'||name==='move'?'witch':name,src=artSource(sourceName);
+ if(src){const img=document.createElement('img');img.src=src;img.alt='';wrap.appendChild(img)}
+ if(name==='dodge'||name==='move'){const mark=document.createElement('b');mark.className='icon-mark';mark.textContent=name==='dodge'?'✦':'↔';wrap.appendChild(mark)}
+ return wrap;
+}
+
+/* Une notification courte reste lisible, les suivantes attendent leur tour et les
+   répétitions sont supprimées. Les alertes de boss restent prioritaires. */
+let currentMessage=null,messageQueue=[];
+const recentMessages=new Map(),urgent=/GARDIEN|CHAMPION|CHARGE|VEILLEUR/i;
+function messageIcon(text,explicit){
+ if(explicit)return explicit;
+ for(const d of upgradeDefs)if(text.includes(d[2]))return 'bonus-'+d[0];
+ if(/BONBON VIOLET/i.test(text))return 'xp';
+ if(/BONBON DORÉ/i.test(text))return 'points';
+ if(/BONBON TURQUOISE/i.test(text))return 'shield';
+ if(/Bouclier spectral/i.test(text))return 'pickup-shield';
+ if(/Vie récupérée|Vies au maximum|Vie du gardien/i.test(text))return 'heal';
+ if(/ESQUIVE/i.test(text))return 'dodge';
+ if(/TRIPLE TIR/i.test(text))return 'bonus-fire';
+ if(/RELIQUAIRE|Trésor découvert|SCEAU/i.test(text))return 'chest';
+ if(/VEILLEUR/i.test(text))return 'hunter';
+ if(/TISSEUSES|TOILE/i.test(text))return 'spider';
+ if(/MENEUR|PROTECTEUR/i.test(text))return 'lantern';
+ if(/GARDIEN|CHARGE/i.test(text))return world?.kind||'pumpkin';
+ if(/sort spécial|Onde améthyste|Marée céleste|Lance solaire/i.test(text))return 'special';
+ return '';
+}
+function showMessage(message){
+ currentMessage=message;toast=message.text;toastTime=message.duration;
+ const root=$('toast'),card=document.createElement('div');card.className='toast-card';root.replaceChildren(card);
+ const iconName=messageIcon(message.text,message.icon);if(iconName)card.appendChild(iconNode(iconName));
+ const copy=document.createElement('span');copy.className='toast-copy';copy.textContent=message.text;card.appendChild(copy);
+}
+function clearMessages(){currentMessage=null;messageQueue=[];toast='';toastTime=0;$('toast').replaceChildren()}
+say=function(text,time=2.8,icon=''){
+ if(!text||active)return;
+ text=String(text);const now=performance.now(),last=recentMessages.get(text)||-1e9,isUrgent=urgent.test(text);
+ if(!isUrgent&&now-last<8000)return;recentMessages.set(text,now);
+ if(recentMessages.size>60){const oldest=recentMessages.keys().next().value;recentMessages.delete(oldest)}
+ const message={text,icon,urgent:isUrgent,duration:Math.max(2.8,Math.min(4.8,+time||0),Math.min(4.8,text.length/23))};
+ if(currentMessage&&toastTime>0){
+  if(message.urgent){messageQueue=messageQueue.filter(m=>m.urgent);showMessage(message)}
+  else if(!messageQueue.some(m=>m.text===text)){if(messageQueue.length<2)messageQueue.push(message);else messageQueue[messageQueue.length-1]=message;}
+ }else showMessage(message);
+};
+
+const steps=[
+ {id:'move',icon:'move',title:'Pilote ton balai',
+  text:()=>coarse()?'Glisse un doigt dans la zone de jeu. Le balai suit ton geste sans téléportation.':'Utilise les flèches ou ZQSD/WASD. Maintien Maj pour un déplacement de précision.',
+  goal:'Déplace-toi dans la zone. Le tir vers les cibles est automatique.',success:'Pilotage compris · le tir est automatique.'},
+ {id:'dodge',icon:'dodge',title:'Traverse un tir avec l’esquive',
+  text:()=>coarse()?'Pilote avec un doigt et touche « Esquive » avec un autre au contact du projectile orange.':'Appuie sur Espace au contact du projectile orange. L’esquive dure 0,45 s, puis se recharge pendant 4 s.',
+  goal:'Le halo et le bouton signalent le bon moment. Traverse le tir sans perdre de vie.',success:'Esquive réussie · tu as traversé le tir sans dégâts.'},
+ {id:'special',icon:'special',title:'Libère ton sort spécial',
+  text:()=>coarse()?'Touche « Sort spécial ». L’onde blesse les cibles et dissipe les projectiles proches.':'Appuie sur F. L’onde blesse les cibles et dissipe les projectiles proches, puis doit se recharger.',
+  goal:'Déclenche le sort au milieu des cibles et des projectiles.',success:'Sort spécial déclenché · les tirs proches ont été dissipés.'},
+ {id:'relic',icon:'bonus-fragment',title:'Ramasse une relique',
+  text:()=> 'Les reliques portent un nom, une couleur et un effet précis. Celle-ci ajoute des éclats aux explosions de roquettes.',
+  goal:'Rejoins la relique Fragmentation pour la ramasser.',success:'Fragmentation · chaque roquette libère 8 tirs en cercle.'},
+ {id:'shield',icon:'pickup-shield',title:'Utilise un bouclier spectral',
+  text:()=> 'Le bouclier turquoise absorbe les dégâts pendant 12 secondes. Il ne remplace pas une vie : surveille ses deux jauges.',
+  goal:'Rejoins le bouclier pour le ramasser.',success:'Bouclier actif · jauge de protection et durée visibles.'}
+];
+function makeTarget(x,y,hp=100){return{x,y,baseX:x,r:35,hp,max:hp,speed:0,fire:9999,age:0,pattern:9,tier:0,kind:'pumpkin',boss:false,dead:false,poison:0,poisonTick:0,hit:0}}
+function makeBullet(x,y,vx=0,vy=0,speed=0){return{x,y,vx,vy,speed,r:10,life:20,type:'fire',damage:25,grazed:false,homing:false,lockRemaining:0,age:0}}
+function setupStep(index){
+ if(!active)return;stepIndex=index;const step=steps[index];
+ enemies=[];hostile=[];shots=[];rockets=[];drops=[];obstacles=[];hazards=[];gates=[];scares=[];particles=[];
+ transition=0;transitionBoss=false;waveTime=0;spawnIndex=0;schedule=[{time:99999}];obstacleTimer=99999;
+ player.x=400;player.y=780;player.vx=0;player.vy=0;player.inv=1;player.dash=0;player.dashCD=0;player.shield=0;player.shieldTime=0;player.fire=0;
+ if(Arsenal.active){Arsenal.active.cooldown=0;Arsenal.active.petCooldown=0}
+ exercise={done:false,wait:.75,distance:0,lastX:player.x,lastY:player.y};
+ if(step.id==='move')enemies=[makeTarget(400,330,500)];
+ if(step.id==='special'){
+  enemies=[makeTarget(330,650,80),makeTarget(470,650,80)];
+  for(let i=0;i<8;i++){const a=i*Math.PI/4;hostile.push(makeBullet(400+Math.cos(a)*120,780+Math.sin(a)*120))}
+ }
+ if(step.id==='relic')drops=[{x:400,y:560,kind:'upgrade',key:'fragment',age:0}];
+ if(step.id==='shield')drops=[{x:400,y:560,kind:'shield',age:0}];
+ CombatFeel.reset();clearMessages();renderStep();
+}
+function renderStep(){
+ const step=steps[stepIndex],card=$('trainingCard');card.classList.remove('hidden');
+ $('trainingProgress').textContent='ENTRAÎNEMENT GUIDÉ · '+(stepIndex+1)+' / '+steps.length;
+ $('trainingTitle').textContent=step.title;$('trainingText').textContent=step.text();
+ $('trainingGoal').textContent=exercise.done?'✓ '+step.success:step.goal;$('trainingGoal').classList.toggle('done',!!exercise.done);
+ const art=$('trainingIcon');art.replaceChildren(iconNode(step.icon));
+ $('trainingNext').disabled=!exercise.done;$('trainingNext').textContent=stepIndex===steps.length-1?'Terminer':'Suivant';
+}
+function completeStep(){if(exercise.done)return;exercise.done=true;renderStep();tone(760,.16,'sine',.045,1.3)}
+function tickTraining(dt,before){
+ if(exercise.done)return;const id=steps[stepIndex].id;
+ exercise.distance+=Math.hypot(player.x-before.x,player.y-before.y);
+ if(id==='move'&&exercise.distance>=130)completeStep();
+ if(id==='dodge'){
+  if(CombatFeel.success){hostile=[];completeStep();return}
+  if(!hostile.length){exercise.wait-=dt;if(exercise.wait<=0){hostile=[makeBullet(player.x,player.y-310,0,155,155)];exercise.wait=1}}
+ }
+ if(id==='special'&&Arsenal.active?.cooldown>0)completeStep();
+ if((id==='relic'||id==='shield')&&!drops.length){exercise.wait-=dt;if(exercise.wait<=0){drops=[{x:400,y:560,kind:id==='relic'?'upgrade':'shield',key:id==='relic'?'fragment':undefined,age:0}];exercise.wait=1}}
+ if(id==='relic'&&upgrades.fragment>0)completeStep();
+ if(id==='shield'&&player.shield>0)completeStep();
+}
+function nextStep(){if(!active)return;if(stepIndex<steps.length-1)setupStep(stepIndex+1);else finishTraining()}
+function finishTraining(){
+ finished=true;state='training-complete';$('trainingCard').classList.add('hidden');clearMessages();
+ overlay(`<section class="training-finish"><div class="menu-kicker">ENTRAÎNEMENT TERMINÉ</div><h2>Tu es prête pour la nuit</h2><div class="guide-art finish-art" id="finishArt"></div><p>Pilotage, esquive, sort spécial, reliques et bouclier : les cinq exercices sont terminés.</p><p class="tiny">En vol normal, aucune consigne automatique ne viendra couvrir le combat. Le guide reste disponible dans le menu.</p><div class="training-finish-actions"><button class="primary" id="trainingPlay">Commencer l’aventure</button><button class="secondary" id="trainingAgain">Refaire les exercices</button><button class="secondary" id="trainingMenu">Retour au menu</button></div></section>`);
+ $('finishArt').append(iconNode('move'),iconNode('dodge'),iconNode('special'),iconNode('bonus-fragment'),iconNode('pickup-shield'));
+ $('trainingPlay').onclick=()=>{exitTraining();LocalLeague.play()};
+ $('trainingAgain').onclick=()=>{state='play';hideOverlay();setupStep(0)};
+ $('trainingMenu').onclick=exitTraining;
+}
+function startTraining(){
+ if(active)return;active=true;finished=false;
+ try{Adventure.startGuided()}catch(error){active=false;throw error}
+ document.body.classList.add('guided-training');$('modeLabel').textContent='Entraînement guidé · aucune progression';$('labTools').classList.add('hidden');$('adventureStatus').classList.add('hidden');setupStep(0);
+}
+function exitTraining(){
+ if(!active)return;active=false;document.body.classList.remove('guided-training');$('trainingCard').classList.add('hidden');clearMessages();
+ if(Adventure.training)Adventure.exitLab();else LocalLeague.menu();
+}
+arena.insertAdjacentHTML('beforeend',`<section class="training-card hidden" id="trainingCard" aria-label="Exercice d’entraînement"><div id="trainingIcon" class="training-icon"></div><div class="training-copy"><div class="menu-kicker" id="trainingProgress"></div><h3 id="trainingTitle"></h3><p id="trainingText"></p><p class="training-goal" id="trainingGoal"></p></div><div class="training-nav"><button class="primary" id="trainingNext" disabled>Suivant</button><button class="secondary" id="trainingSkip">Passer</button><button class="secondary" id="trainingQuit">Quitter</button></div></section>`);
+$('trainingNext').onclick=nextStep;$('trainingSkip').onclick=nextStep;$('trainingQuit').onclick=exitTraining;
+
+const guidePages=[
+ {icon:'move',title:'Pilotage et tir automatique',text:()=>coarse()?'Glisse dans la zone de jeu pour piloter. Le second doigt reste libre pour l’esquive et le sort spécial.':'Flèches ou ZQSD/WASD pour piloter ; Maj pour la précision. Le tir est automatique.',notes:['Le balai ne se téléporte pas au doigt.','Les cibles sont touchées par les projectiles violets.']},
+ {icon:'dodge',title:'Esquive : traverser sans dégâts',text:()=>coarse()?'Touche « Esquive » au contact d’un tir avec un second doigt.':'Appuie sur Espace au contact d’un tir.',notes:['0,45 seconde d’invulnérabilité.','4 secondes de recharge. Maj ne rend pas invulnérable.']},
+ {icon:'special',title:'Sort spécial et recharge',text:()=>coarse()?'Le bouton « Sort spécial » déclenche l’équipement choisi dans Préparer mon vol.':'La touche F déclenche l’équipement choisi dans Préparer mon vol.',notes:['L’Onde améthyste blesse autour de toi et dissipe les tirs proches.','La jauge du bouton indique la recharge ; aucun sort ne change la difficulté des ennemis.']},
+ {icons:['bonus-rocket','bonus-fragment','bonus-familiar'],title:'Reliques : image, nom et effet',text:()=> 'Ramasse les reliques sur le terrain. Leur illustration et leur nom permettent de les reconnaître avant et après le ramassage.',notes:['Roquettes : missiles guidés pendant 10 secondes.','Fragmentation : chaque roquette libère 8 tirs en cercle.','Familier lunaire : un compagnon tire à tes côtés.']},
+ {icons:['pickup-shield','xp','points','shield'],title:'Bouclier et bonbons',text:()=> 'Le bouclier spectral absorbe les dégâts pendant 12 secondes. Les bonbons ont des couleurs et des emblèmes distincts.',notes:['Violet : expérience de collection.','Doré : points. Turquoise : recharge de bouclier.','Le bouclier ne rend pas invulnérable et ne remplace pas une vie.']},
+ {icons:['pumpkin','hunter','spider'],title:'Créatures et attaques',text:()=> 'Chaque silhouette annonce un comportement. Les champions affichent leur nom et leur attaque ; les gardiens télégraphient leurs charges.',notes:['Les toiles ralentissent, les projectiles orange font perdre une vie.','Les reliquaires scellés sont facultatifs : aucun passage ne dépend de leur ouverture.']}
+];
+function renderGuide(){
+ const page=guidePages[guidePage],icons=page.icons||[page.icon];
+ overlay(`<section class="guide-card"><div class="menu-kicker">GUIDE ILLUSTRÉ · ${guidePage+1} / ${guidePages.length}</div><h2>${safeText(page.title)}</h2><div class="guide-art" id="guideArt"></div><p>${safeText(page.text())}</p><ul class="guide-notes">${page.notes.map(n=>'<li>'+safeText(n)+'</li>').join('')}</ul><div class="guide-nav"><button class="secondary" id="guidePrev" ${guidePage===0?'disabled':''}>Précédent</button><button class="primary" id="guideNext">${guidePage===guidePages.length-1?'Terminer':'Suivant'}</button><button class="secondary" id="guideBack">Retour</button></div></section>`);
+ const art=$('guideArt');for(const name of icons)art.appendChild(iconNode(name));
+ $('guidePrev').onclick=()=>{if(guidePage>0){guidePage--;renderGuide()}};
+ $('guideNext').onclick=()=>{if(guidePage<guidePages.length-1){guidePage++;renderGuide()}else closeGuide()};$('guideBack').onclick=closeGuide;
+}
+function openGuide(returnTo='menu'){guideReturn=returnTo;guidePage=0;state='help';clearMessages();renderGuide()}
+function closeGuide(){if(guideReturn==='settings')settings();else LocalLeague.menu()}
+
+/* Tous les réglages restent accessibles, mais les deux décisions principales et les
+   catégories sont immédiatement identifiables. Les IDs d’origine sont conservés. */
+const previousMenu=Journey.menu;
+Journey.menu=function(){
+ previousMenu();if(state!=='league-menu'||Adventure.training)return;
+ const ids=['playAdventure','localResume','localRanked','localDaily','prepareFlight','wardrobe','masteryMenu','archives','localSettings','labMenu'],actions={};
+ for(const id of ids)if($(id))actions[id]=$(id).onclick;
+ clearMessages();const level=Math.floor(Math.sqrt(Math.max(0,Journey.state.xp)/120))+1;
+ const button=(id,label)=>`<button class="secondary" id="${id}">${label}</button>`;
+ overlay(`<main class="main-menu"><header class="menu-heading"><div class="menu-kicker">UN VOL ARCADE ENTRE MINUIT ET L’AUBE</div><h1>La Nuit aux Trousses</h1><p>Joue directement ou apprends les commandes dans un vrai exercice.</p></header><div class="menu-primary"><button class="primary" id="playAdventure">Jouer</button><button class="secondary training-entry" id="startGuided">${finished?'Revoir l’entraînement':'S’entraîner'}<small>5 exercices · sans score ni progression</small></button></div>${actions.localResume?button('localResume','Reprendre le vol sauvegardé'):''}<div class="menu-progress"><b>Niveau ${level}</b><span>${Journey.state.xp} XP · ${Journey.state.achievements.length} succès</span></div><section class="menu-group"><h2>Défis</h2><div class="menu-grid">${button('localRanked','Partie classée')}${button('localDaily','Défi du jour')}</div></section><section class="menu-group"><h2>Personnalisation</h2><div class="menu-grid three">${button('prepareFlight','Préparer mon vol')}${button('wardrobe','Collection')}${button('masteryMenu','Exploits & variantes')}</div></section><section class="menu-group"><h2>Options & aide</h2><div class="menu-grid">${button('localHelp','Guide illustré')}${button('archives','Sauvegarde & partage')}${button('localSettings','Réglages')}${button('labMenu','Laboratoire libre')}</div></section></main>`);
+ for(const [id,handler]of Object.entries(actions))if($(id)&&handler)$(id).onclick=handler;
+ $('startGuided').onclick=startTraining;$('localHelp').onclick=()=>openGuide('menu');
+};
+
+const previousUpdate=update;update=function(dt){
+ const before={x:player.x,y:player.y};previousUpdate(dt);
+ if(currentMessage&&toastTime<=0){currentMessage=null;if(messageQueue.length)showMessage(messageQueue.shift());else{toast='';$('toast').replaceChildren()}}
+ if(active&&state==='play')tickTraining(dt,before);
+};
+window.GuidedTraining={start:startTraining,exit:exitTraining,openGuide,get active(){return active},get finished(){return finished},get step(){return active?steps[stepIndex].id:null},get stepIndex(){return stepIndex},get exerciseDone(){return!!exercise.done},get showProjectileCue(){return active&&state==='play'&&steps[stepIndex]?.id==='dodge'&&!exercise.done},showCoach:false};
+
+const style=document.createElement('style');style.textContent=`
+#toast{max-width:min(92%,650px)}.toast-card{display:flex;align-items:center;justify-content:center;gap:10px;line-height:1.45}.toast-copy{display:block}.toast-card .lesson-icon{width:46px;height:46px;flex:0 0 46px}.lesson-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:74px;height:74px;flex:0 0 auto}.lesson-icon img{display:block;width:100%;height:100%;object-fit:contain}.lesson-icon .icon-mark{position:absolute;right:-2px;bottom:0;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#302342;border:2px solid #e4d4ff;color:#fff;font-size:18px;box-shadow:0 0 16px #b89cff88}.spell-icon{border-radius:50%;color:#fff4ff;font-size:38px;background:radial-gradient(circle at 35% 30%,#f7e5ff 0 5%,#c598ff 12%,#7847bc 35%,#2b1b48 68%);border:2px solid #dbc1ff;box-shadow:0 0 24px #ad7bff77,inset 0 0 15px #fff5}.overlay:has(.main-menu){justify-content:flex-start;padding:20px 14px;overflow-y:auto}.main-menu{width:100%;max-width:610px;margin:auto;text-align:left}.menu-heading{display:block;height:auto;padding:0;border:0;text-align:center}.menu-heading h1{font-size:29px;line-height:1.05;margin:5px 0 8px}.menu-heading p{font-size:11px;line-height:1.5;margin:0 auto 15px;max-width:440px}.menu-kicker{font-size:8px;letter-spacing:2px;color:#d0b6df;text-transform:uppercase}.menu-primary{display:grid;grid-template-columns:1fr 1.35fr;gap:9px}.menu-primary>button{min-height:54px;margin:0}.menu-primary>button:first-child{font-size:17px}.training-entry{border-color:#b99bd4}.training-entry small{display:block;font-size:8px;font-weight:400;letter-spacing:.2px;margin-top:4px}.main-menu>#localResume{width:100%;margin-top:9px;border-color:#c3a6dc}.menu-progress{display:flex;justify-content:space-between;gap:12px;margin:13px 2px 4px;color:#cbb5d8;font-size:10px}.menu-progress b{color:#f0d49c}.menu-group{margin-top:12px;padding-top:10px;border-top:1px solid #76608055}.menu-group h2{font-size:10px;letter-spacing:1.2px;color:#e6d4ee;margin:0 0 7px}.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.menu-grid.three{grid-template-columns:repeat(3,1fr)}.menu-grid button{min-height:35px;margin:0;padding:7px 9px;font-size:10px;text-align:left;background:#2a2038}.training-card{position:absolute;z-index:7;left:12px;right:12px;top:104px;display:grid;grid-template-columns:66px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #b99bd4;border-radius:14px;background:linear-gradient(135deg,#241b35f5,#161224f5);box-shadow:0 8px 35px #090612aa;pointer-events:auto}.training-card h3{font-size:15px;color:#fff0ff;margin:3px 0}.training-card p{font-size:10px;line-height:1.45;margin:3px 0;color:#d8c8e4}.training-card .training-goal{color:#f1d7a2}.training-card .training-goal.done{color:#a9f1d7}.training-icon .lesson-icon{width:64px;height:64px}.training-nav{display:flex;flex-direction:column;gap:5px}.training-nav button{font-size:9px;padding:7px 10px;margin:0;min-width:76px}.training-nav button:disabled{opacity:.4}.guided-training #labTools,.guided-training #adventureStatus,.guided-training #journeyTutor,.guided-training #dodgeCoach,.guided-training #questHUD,.guided-training #toast{display:none!important}.guide-card,.training-finish{width:100%;max-width:590px;text-align:center;margin:auto}.guide-card h2,.training-finish h2{font-size:23px;margin:8px 0;color:#f1e2fa}.guide-card>p,.training-finish>p{font-size:12px;line-height:1.6;color:#d9c9e4}.guide-art{display:flex;align-items:center;justify-content:center;gap:12px;min-height:100px;margin:10px 0}.guide-art .lesson-icon{width:90px;height:90px}.guide-notes{text-align:left;max-width:510px;margin:12px auto 18px;padding-left:22px;color:#cdbbda;font-size:11px;line-height:1.65}.guide-nav,.training-finish-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}.guide-nav button,.training-finish-actions button{margin:0;padding:10px 16px}.finish-art .lesson-icon{width:64px;height:64px}@media(max-width:850px){.overlay:has(.main-menu){padding:14px 10px}.menu-heading h1{font-size:25px}.menu-heading p{font-size:10px;margin-bottom:11px}.menu-primary>button{min-height:50px}.menu-grid.three{grid-template-columns:1fr 1fr}.menu-grid.three button:last-child{grid-column:1/-1}.training-card{top:96px;grid-template-columns:52px 1fr;gap:8px;padding:9px}.training-icon .lesson-icon{width:50px;height:50px}.training-card h3{font-size:13px}.training-card p{font-size:10px}.training-nav{grid-column:1/-1;flex-direction:row;justify-content:flex-end}.training-nav button{min-width:0;flex:1;padding:6px}.toast-card .lesson-icon{width:40px;height:40px;flex-basis:40px}.toast-card{gap:7px}.guide-art .lesson-icon{width:72px;height:72px}.guide-card h2{font-size:20px}}@media(max-height:500px){.training-card{top:68px;padding:6px;grid-template-columns:42px 1fr auto}.training-card p{font-size:8px}.training-card h3{font-size:11px}.training-nav{grid-column:auto;flex-direction:column}.training-icon .lesson-icon{width:40px;height:40px}.menu-heading p{display:none}.menu-group{margin-top:7px;padding-top:6px}.menu-progress{margin-top:8px}}
+`;
+document.head.appendChild(style);Journey.menu();
 })();
 </script><script>/* Reconstitution locale des cinq dernières secondes : positions, pas vidéo. */
 (()=>{'use strict';let frames=[],fatal=null,session=null,lastSample=-1,ids=new WeakMap(),serial=0;

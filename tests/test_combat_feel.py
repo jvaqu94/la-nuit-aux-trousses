@@ -1,4 +1,4 @@
-"""Confort de combat : guide réel, impacts limités et invariants de gameplay."""
+"""Confort de combat : aucune aide invasive, impacts limités et invariants."""
 from playwright.sync_api import sync_playwright
 
 
@@ -12,10 +12,9 @@ with sync_playwright() as p:
     page.click('#playAdventure')
     page.wait_for_function("state === 'play'")
 
-    guide = page.evaluate('''() => {
-      Journey.state.tutorialDone = true;
+    normal = page.evaluate('''() => {
+      Journey.state.tutorialDone = false;
       Journey.state.dodgeGuideDone = false;
-      $('journeyTutor').classList.add('hidden');
       enemies = []; obstacles = []; gates = []; scares = []; drops = [];
       schedule = []; spawnIndex = 0; waveTime = 0; transition = 0;
       player.x = 400; player.y = 700; player.inv = 0;
@@ -23,17 +22,14 @@ with sync_playwright() as p:
       hostile = [{x:400,y:560,vx:0,vy:200,type:'fire',r:7,damage:25,
                   life:5,grazed:false,homing:false,age:0,lockRemaining:0}];
       update(1/60);
-      return {time:CombatFeel.guideThreat?.time,
-              text:$('dodgeCoach').innerText,
-              visible:!$('dodgeCoach').classList.contains('hidden'),
+      return {threat:CombatFeel.guideThreat,
+              coach:$('dodgeCoach')&&!$('dodgeCoach').classList.contains('hidden'),
+              tutor:!$('journeyTutor').classList.contains('hidden'),
               dash:$('dash').className,
-              tutorFont:parseFloat(getComputedStyle(document.querySelector('#journeyTutor span')).fontSize),
               dashFont:parseFloat(getComputedStyle($('dash')).fontSize)};
     }''')
-    assert guide['visible'] and guide['time'] > 0, guide
-    assert 'PRÉPARE' in guide['text'] and 'pas trop tôt' in guide['text'], guide
-    assert 'dash-ready' in guide['dash'], guide
-    assert guide['tutorFont'] >= 12 and guide['dashFont'] >= 11, guide
+    assert normal['threat'] is None and not normal['coach'] and not normal['tutor'], normal
+    assert 'dash-coach' not in normal['dash'] and normal['dashFont'] >= 11, normal
 
     # Les gestionnaires installés par le jeu d’origine doivent eux aussi
     # réinitialiser le crédit : ce test n’appelle pas un nouveau bouton.
@@ -93,6 +89,7 @@ with sync_playwright() as p:
       const drop = {x:400,y:500,kind:'upgrade',key:'fragment'};
       drawRelic(ctx,drop,ambient);
       collectUpgrade(drop);
+      for(let i=0;i<6&&!$('toast').textContent.includes('8 tirs en cercle');i++){toastTime=0;update(0)}
       return {text:$('toast').textContent,rank:upgrades.fragment,
               short:CombatFeel.shortEffect('fragment')};
     }''')
@@ -113,4 +110,4 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= 390 && document.documentElement.scrollHeight <= 844')
     assert not errors, errors
     browser.close()
-    print('OK : guide sur projectile réel, esquive unique par activation, impacts limités, hitboxes intactes, relique explicite, champion présenté sans statistiques ajoutées, mobile lisible.')
+    print('OK : aucune aide invasive en vol normal, esquive unique par activation, impacts limités, hitboxes intactes, relique explicite, champion présenté sans statistiques ajoutées, mobile lisible.')

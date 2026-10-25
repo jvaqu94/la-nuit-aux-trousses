@@ -62,7 +62,7 @@ Le tir principal est **automatique**.
 
 - La précision ralentit le déplacement et affiche la zone de collision de la sorcière.
 - L’esquive et le sort spécial possèdent chacun un temps de recharge. Avec le balai initial, l’esquive protège pendant **0,45 s** et se recharge en **4 s** : il faut l’utiliser au contact du danger, pas trop tôt.
-- Lors du premier apprentissage, un projectile réel est entouré et le bouton s’illumine au bon moment. Une esquive qui traverse effectivement un tir produit un retour distinct et valide ce guide ; **Revoir les conseils** permet de le réactiver.
+- Le bouton **S’entraîner** propose cinq exercices réels : pilotage, esquive sur projectile, sort spécial, relique et bouclier. Le projectile d’apprentissage est entouré et le bouton s’illumine au bon moment. Les consignes illustrées restent affichées jusqu’à validation ; elles ne s’affichent plus automatiquement pendant les vols normaux.
 - Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le son est désactivé par défaut et s’active avec le bouton **Son**.
@@ -74,11 +74,14 @@ Le tir principal est **automatique**.
 | **Aventure libre** | Vols illimités, difficulté réglable, progression et records personnels. |
 | **Défi score** | Trois essais par jour, en difficulté **Nuit noire**. Seule l’amélioration du meilleur score du jour augmente le cumul local. |
 | **Défi primes** | Un essai séparé par jour et trois objectifs à prime unique. Le score brut de cet essai ne constitue pas un quatrième score classé. |
+| **Entraînement guidé** | Cinq exercices interactifs avec consignes illustrées et validation manuelle. Aucun score, XP, déblocage ou essai quotidien n’est crédité. |
 | **Laboratoire** | Entraînement libre avec les sorts, balais, compagnons, variantes et charges de boss. Ne crédite ni score, ni XP, ni déblocage et ne consomme aucun essai quotidien. |
 
 Les essais et objectifs quotidiens sont renouvelés à minuit, heure d’**Europe/Paris**. Leur comptage est local : il ne s’agit ni d’un système compétitif sécurisé ni d’un mécanisme anti-triche.
 
 Les défis imposent l’équipement de base afin que l’Arsenal débloqué dans l’aventure ne donne pas d’avantage permanent.
+
+Le menu principal sépare **Jouer** et **S’entraîner**, puis regroupe les défis, la personnalisation et les options. Le **Guide illustré** est consultable à la demande. Les notifications ordinaires restent au moins 2,8 secondes, attendent leur tour au lieu de s’écraser et affichent l’icône de la relique, du bonbon, du bouclier ou de la créature concernée. Les alertes de boss restent prioritaires.
 
 ## Contenu et mécaniques
 
@@ -217,6 +220,8 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `surprise.js` | Apparitions soudaines et présentation de la défaite. |
 | `coven.js` | Coopération entre créatures et scène de victoire. |
 | `nemesis.js` | Rencontres avec le Veilleur. |
+| `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
+| `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
 | `viewport.js` | Adaptation du terrain, des commandes tactiles et de l’affichage à la fenêtre. |
@@ -280,6 +285,7 @@ python tests/test_arsenal_browser.py
 python tests/test_adventure.py
 python tests/test_encounters.py
 python tests/test_combat_feel.py
+python tests/test_onboarding.py
 python tests/test_flow.py
 python tests/test_surprise_ui.py
 python tests/test_vertical_drift.py

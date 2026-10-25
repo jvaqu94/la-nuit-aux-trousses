@@ -44,14 +44,14 @@ function reset(){guideThreat=null;success=null;dashCredit=false;lastChampion=-99
 
 /* Les champions existants deviennent de vraies rencontres annoncées, sans
    toucher à leurs statistiques ni à leur fréquence d’apparition. */
-const spawnBase=spawnEnemy;spawnEnemy=function(d){const count=enemies.length;spawnBase(d);if(enemies.length<=count)return;const e=enemies[enemies.length-1];if(!e||e.tier!==2||e.boss||e.rival)return;const profile=championProfiles[e.kind]||['CHAMPION DES OMBRES','salves renforcées'];e.championName=profile[0];e.championHint=profile[1];if(!e.coop&&gameTime-lastChampion>=2.8){lastChampion=gameTime;say('CHAMPION · '+profile[0]+' · '+profile[1],3);tone(118,.2,'triangle',.055,.55);noiseBurst(.09,.012,260)}};
+const spawnBase=spawnEnemy;spawnEnemy=function(d){const count=enemies.length;spawnBase(d);if(enemies.length<=count)return;const e=enemies[enemies.length-1];if(!e||e.tier!==2||e.boss||e.rival)return;const profile=championProfiles[e.kind]||['CHAMPION DES OMBRES','salves renforcées'];e.championName=profile[0];e.championHint=profile[1];if(!e.coop&&gameTime-lastChampion>=2.8){lastChampion=gameTime;say('CHAMPION · '+profile[0]+' · '+profile[1],3,e.kind);tone(118,.2,'triangle',.055,.55);noiseBurst(.09,.012,260)}};
 
 /* Le nom seul ne suffit pas : l’effet utile est annoncé au ramassage. */
-const collectBase=collectUpgrade;collectUpgrade=function(d){const wasTaken=d?.taken,beforeRank=d?.key?upgrades[d.key]:0,beforeScore=score,result=collectBase(d),def=upgradeDefs.find(v=>v[0]===d?.key);if(!wasTaken&&def){if(d.key!=='rocket'&&beforeRank===upgrades[d.key]&&score>beforeScore)say(def[2]+' · rang maximum · points bonus',3);else say(def[2]+' · '+effect(d.key),3.8)}return result};
+const collectBase=collectUpgrade;collectUpgrade=function(d){const wasTaken=d?.taken,beforeRank=d?.key?upgrades[d.key]:0,beforeScore=score,result=collectBase(d),def=upgradeDefs.find(v=>v[0]===d?.key);if(!wasTaken&&def){if(d.key!=='rocket'&&beforeRank===upgrades[d.key]&&score>beforeScore)say(def[2]+' · rang maximum · points bonus',3,'bonus-'+d.key);else say(def[2]+' · '+effect(d.key),3.8,'bonus-'+d.key)}return result};
 
 /* Une salve ne crédite qu’une esquive précise, même avec plusieurs projectiles. */
 function onDodge(){dashCredit=false}
-function perfectDodge(){if(dashCredit)return;dashCredit=true;success={x:player.x,y:player.y,life:.55,max:.55};guideThreat=null;hideCoach();window.League?.event?.('perfectDodges',1);if(!guideDone())completeGuide();particle(player.x,player.y,'#d9f5ff',10);tone(920,.13,'sine',.06,1.35);noiseBurst(.07,.012,1450);say('ESQUIVE RÉUSSIE · tir traversé sans dégâts',1.8)}
+function perfectDodge(){if(dashCredit)return;const first=!guideDone();dashCredit=true;success={x:player.x,y:player.y,life:.55,max:.55};guideThreat=null;hideCoach();window.League?.event?.('perfectDodges',1);if(first){completeGuide();say('ESQUIVE RÉUSSIE · tir traversé sans dégâts',2.8,'dodge')}particle(player.x,player.y,'#d9f5ff',10);tone(920,.13,'sine',.06,1.35);noiseBurst(.07,.012,1450)}
 const hurtBase=hurt;hurt=function(n,source,detail){const precise=state==='play'&&player.dash>0&&detail?.kind==='shot',result=hurtBase(n,source,detail);if(precise)perfectDodge();return result};
 
 function threatTime(b){
@@ -68,9 +68,9 @@ function syncCoach(){
  coach.innerHTML=mode==='wait'?'<b>ESQUIVE EN RECHARGE · '+Math.ceil(player.dashCD)+' s</b><span>Déplace-toi hors de la trajectoire et attends qu’elle soit prête.</span>':mode==='now'?'<b>ESQUIVE MAINTENANT</b><span>Tir ciblé : '+action+' · '+dashInv().toFixed(2).replace('.',',')+' s sans dégâts.</span>':'<b>TIR EN APPROCHE · PRÉPARE L’ESQUIVE</b><span>'+action+' quand l’anneau se referme, pas trop tôt.</span>';
  coach.classList.remove('hidden');
 }
-function syncDash(){const dash=$('dash');if(!dash)return;const ready=state==='play'&&player.dashCD<=0,now=ready&&guideThreat&&!guideDone()&&guideThreat.time<=Math.max(.3,dashInv());dash.classList.toggle('dash-ready',ready);dash.classList.toggle('dash-coach',!!now);dash.setAttribute('aria-disabled',String(!ready));dash.title=ready?'Esquive prête : '+dashInv().toFixed(2)+' s sans dégâts. Utilise-la au contact d’un tir.':'Esquive en recharge : '+Math.max(0,player.dashCD).toFixed(1)+' s';dash.setAttribute('aria-label',ready?'Esquive prête · '+dashInv().toFixed(2)+' secondes d’invulnérabilité':'Esquive en recharge · '+Math.ceil(player.dashCD)+' secondes')}
+function syncDash(){const dash=$('dash');if(!dash)return;const ready=state==='play'&&player.dashCD<=0,now=ready&&guideThreat&&guideThreat.time<=Math.max(.3,dashInv());dash.classList.toggle('dash-ready',ready);dash.classList.toggle('dash-coach',!!now);dash.setAttribute('aria-disabled',String(!ready));dash.title=ready?'Esquive prête : '+dashInv().toFixed(2)+' s sans dégâts. Utilise-la au contact d’un tir.':'Esquive en recharge : '+Math.max(0,player.dashCD).toFixed(1)+' s';dash.setAttribute('aria-label',ready?'Esquive prête · '+dashInv().toFixed(2)+' secondes d’invulnérabilité':'Esquive en recharge · '+Math.ceil(player.dashCD)+' secondes')}
 const hudBase=updateHUD;updateHUD=function(){hudBase();syncDash()};
-const updateBase=update;update=function(dt){updateBase(dt);if(gameTime<lastTime)reset();lastTime=gameTime;if(success){success.life-=dt;if(success.life<=0)success=null}const tutorVisible=$('journeyTutor')&&!$('journeyTutor').classList.contains('hidden');guideThreat=state==='play'&&!guideDone()&&!tutorVisible?nearestThreat():null;syncCoach();syncDash()};
+const updateBase=update;update=function(dt){updateBase(dt);if(gameTime<lastTime)reset();lastTime=gameTime;if(success){success.life-=dt;if(success.life<=0)success=null}guideThreat=state==='play'&&window.GuidedTraining?.showProjectileCue?nearestThreat():null;if(window.GuidedTraining?.showCoach)syncCoach();else hideCoach();syncDash()};
 
 function drawEnemy(g,e){
  if(e.dead||e.rival||e.node||!(e.fire>0&&e.fire<.45)||e.y<80||e.y>560)return;

@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
  b=p.chromium.launch(headless=True,args=['--no-sandbox']);context=b.new_context(viewport={'width':1440,'height':1100},accept_downloads=True);page=context.new_page();errors=[];api=[]
  page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept());page.on('request',lambda r:api.append(r.url) if '/api/' in r.url else None);page.goto('http://localhost:3000');page.wait_for_selector('#playAdventure');assert page.evaluate('Journey.state.xp')==0
- page.click('#playAdventure');page.wait_for_function("state==='play'");assert not page.evaluate('League.active');assert page.locator('#journeyTutor').is_visible();page.evaluate('gameTime=9;League.tick(1.1)');assert 'ESQUIVE' in page.locator('#journeyTutor').inner_text();page.click('#skipTutor');assert page.evaluate('Journey.state.tutorialDone')
+ page.click('#playAdventure');page.wait_for_function("state==='play'");assert not page.evaluate('League.active');assert not page.locator('#journeyTutor').is_visible();page.evaluate('gameTime=9;League.tick(1.1)');assert not page.locator('#journeyTutor').is_visible();assert not page.locator('#dodgeCoach').is_visible()
  page.evaluate('saveCheckpoint()');cp=page.evaluate("localStorage.getItem('minuit-checkpoint')")
  page.evaluate("player.inv=999;League.event('kills',35);League.event('waves',2);League.event('graze',6);League.tick(1.1)");xp=page.evaluate('Journey.state.xp');assert xp==370,xp
  assert not page.locator('#questHUD').is_visible();page.click('#pause');assert page.locator('#pausedJournal').is_visible();assert 'CARNET' in page.locator('#pausedJournal').inner_text();page.click('#resume')
