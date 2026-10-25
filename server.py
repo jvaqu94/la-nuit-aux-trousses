@@ -91,7 +91,7 @@ class Handler(SimpleHTTPRequestHandler):
                     result=self.state(db,user)
                     if path.path=='/api/scores':result['scores']=[{**r,'score':r['total']} for r in result['leaders']]
                     return self.reply(200,result)
-            if path.path not in ['/','/index.html','/game.js','/characters.js','/online.js','/journey.js','/viewport.js','/arsenal.js','/night-hazards.js','/adventure.js','/encounters.js','/collectible-art.js','/flow.js','/surprise.js','/coven.js','/nemesis.js','/collision-replay.js','/README.md','/favicon.ico']:raise ApiError(404,'Introuvable')
+            if path.path not in ['/','/index.html','/music.js','/game.js','/characters.js','/online.js','/journey.js','/viewport.js','/arsenal.js','/night-hazards.js','/adventure.js','/encounters.js','/collectible-art.js','/flow.js','/surprise.js','/coven.js','/nemesis.js','/combat-feel.js','/onboarding.js','/collision-replay.js','/supabase-config.js','/supabase.js','/README.md','/favicon.ico'] and not re.fullmatch(r'/audio/(nuitsorc-loop|boss-arrival|(?:arrival-)?(forest|cemetery|castle|marsh|lanterns))\.mp3',path.path):raise ApiError(404,'Introuvable')
             if path.path=='/favicon.ico':self.send_response(204);self.send_header('Content-Length','0');self.end_headers();return
             for header in ['If-Modified-Since','If-None-Match']:
                 if header in self.headers:del self.headers[header]
