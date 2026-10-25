@@ -230,8 +230,8 @@ class MinuitMusicPlayer{
    this.stop();
    const source=this.context.createBufferSource(),gain=this.context.createGain(),now=this.context.currentTime;
    source.buffer=buffer;gain.gain.setValueAtTime(.0001,now);gain.gain.linearRampToValueAtTime(.72,now+.08);gain.gain.setValueAtTime(.72,now+Math.max(.1,buffer.duration-.7));gain.gain.linearRampToValueAtTime(.0001,now+buffer.duration);
-   source.connect(gain);gain.connect(this.effectsDestination);this.oneShots.add(source);source.onended=()=>{this.oneShots.delete(source);try{source.disconnect();gain.disconnect()}catch{}};source.start(now);
-  }catch{}
+   source.connect(gain);gain.connect(this.effectsDestination);this.oneShots.add(source);source.onended=()=>{this.oneShots.delete(source);try{source.disconnect();gain.disconnect()}catch{}};source.start(now);return buffer.duration*1000;
+  }catch{return 0}
  }
  async bossArrival(id){
   const key=id||'forest';
@@ -783,9 +783,11 @@ if(window.MinuitCloud?.connected&&$('teamEndPanel')){
 function renderResult(r){
  if(r.win)return renderResultNow(r);
  state='end';
- window.MinuitSoundtrack?.player?.defeat?.();
- overlay('<div class="death-transition" role="alert"><div class="death-transition-mark">✦</div><h2>VOUS AVEZ PERDU</h2><p>La nuit a eu le dernier mot…</p><small>Le classement de votre partie va s’afficher.</small></div>');
- setTimeout(()=>{if(state==='end')renderResultNow(r)},950);
+ const reveal=()=>{if(state==='end')renderResultNow(r)};
+ const cue=window.MinuitSoundtrack?.player?.defeat?.();
+ const schedule=ms=>setTimeout(reveal,Math.max(900,Math.min(8500,(Number(ms)||1200)-250)));
+ if(cue?.then)cue.then(schedule).catch(()=>schedule(0));else schedule(0);
+ overlay('<div class="death-transition" role="alert"><div class="death-transition-mark">✦</div><h2>VOUS AVEZ PERDU</h2><p>La nuit a eu le dernier mot…</p><small>Le classement de votre partie va s’afficher à la fin de la musique.</small></div>');
 }
 
 function wardrobe(){if(['play','pause'].includes(state))wardrobePaused=true;else if(state!=='journey-wardrobe')wardrobePaused=false;const fromPlay=wardrobePaused;if(state==='play')pauseScreen();state='journey-wardrobe';overlay(`<div class="eyebrow">LA COLLECTION · 100 % COSMÉTIQUE</div><h2 class="local-title">Ta signature dans la nuit.</h2><canvas id="wardrobePreview" width="220" height="160" class="wardrobe-preview"></canvas>${progressHTML()}<div class="wardrobe-grid">${['outfit','spell','broom','pet','title'].map(kind=>`<section><h3>${({outfit:'TENUES',spell:'SORTS · COULEURS',broom:'BALAIS · APPARENCE',pet:'COMPAGNONS DÉCORATIFS',title:'TITRES'})[kind]}</h3>${items.filter(i=>i.kind===kind).map(i=>`<button class="wardrobe-item ${j.selected[kind]===i.id?'equipped':''}" data-item="${i.id}" ${earned(i)?'':'disabled'}><i style="background:${i.color||'#f3cd8e'}"></i><span><b>${i.name}</b><small>${earned(i)?(j.selected[kind]===i.id?'Équipé':'Débloqué · équiper'):i.achievement?achievementRules[i.achievement].label:fmt(i.xp)+' XP · encore '+fmt(i.xp-j.xp)}</small></span></button>`).join('')}</section>`).join('')}</div><div class="journey-small">Aucune arme, vie ou statistique supplémentaire. Les compagnons de collection ne tirent pas.</div><button class="primary" id="collectionBack">${fromPlay?'Revenir à la pause':'Retour au menu'} →</button>`);document.querySelectorAll('[data-item]').forEach(b=>b.onclick=()=>{const i=items.find(i=>i.id===b.dataset.item);if(!earned(i))return;j.selected[i.kind]=i.id;write();wardrobe();if(fromPlay)$('collectionBack').onclick=pauseScreen});$('collectionBack').onclick=fromPlay?pauseScreen:LocalLeague.menu;const ctx=$('wardrobePreview').getContext('2d');ctx.clearRect(0,0,220,160);const draw=()=>{if(!$('wardrobePreview'))return;ctx.clearRect(0,0,220,160);sprite(ctx,'witch',110,85,1.05,ambient);ctx.fillStyle=spellColor();ctx.beginPath();ctx.ellipse(110,12,3,8,0,0,Math.PI*2);ctx.fill()};draw();if(!MinuitArt.witchFlight.complete)MinuitArt.witchFlight.addEventListener('load',draw,{once:true})}

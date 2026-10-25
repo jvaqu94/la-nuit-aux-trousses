@@ -88,8 +88,8 @@ class MinuitMusicPlayer{
    this.stop();
    const source=this.context.createBufferSource(),gain=this.context.createGain(),now=this.context.currentTime;
    source.buffer=buffer;gain.gain.setValueAtTime(.0001,now);gain.gain.linearRampToValueAtTime(.72,now+.08);gain.gain.setValueAtTime(.72,now+Math.max(.1,buffer.duration-.7));gain.gain.linearRampToValueAtTime(.0001,now+buffer.duration);
-   source.connect(gain);gain.connect(this.effectsDestination);this.oneShots.add(source);source.onended=()=>{this.oneShots.delete(source);try{source.disconnect();gain.disconnect()}catch{}};source.start(now);
-  }catch{}
+   source.connect(gain);gain.connect(this.effectsDestination);this.oneShots.add(source);source.onended=()=>{this.oneShots.delete(source);try{source.disconnect();gain.disconnect()}catch{}};source.start(now);return buffer.duration*1000;
+  }catch{return 0}
  }
  async bossArrival(id){
   const key=id||'forest';
