@@ -1,6 +1,6 @@
 # Musiques, tirs et impacts
 
-Le jeu utilise les boucles musicales, les signaux d’arrivée, une musique de défaite et huit effets de combat MP3 locaux. Aucun service musical n’est nécessaire pendant le jeu.
+Le jeu utilise les boucles musicales, les signaux d’arrivée, une musique de défaite et onze effets de combat MP3 locaux. Aucun service musical n’est nécessaire pendant le jeu.
 
 | Fichier | Univers / fonction |
 |---|---|
@@ -24,6 +24,9 @@ Le jeu utilise les boucles musicales, les signaux d’arrivée, une musique de d
 | `sfx-impact-light.mp3` | Impact léger sur une créature |
 | `sfx-impact-heavy.mp3` | Impact lourd ou élite |
 | `sfx-impact-boss.mp3` | Impact sur un gardien |
+| `sfx-player-life-loss.mp3` | Perte d’une vie |
+| `sfx-obstacle-collision.mp3` | Collision de la sorcière avec un obstacle |
+| `sfx-surprise-monster.mp3` | Apparition surprise d’un gros monstre |
 
 ## Nouvelles ambiances par monde
 

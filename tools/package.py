@@ -27,6 +27,9 @@ for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'onli
                 'impactLight': 'audio/sfx-impact-light.mp3',
                 'impactHeavy': 'audio/sfx-impact-heavy.mp3',
                 'impactBoss': 'audio/sfx-impact-boss.mp3',
+                'lifeLoss': 'audio/sfx-player-life-loss.mp3',
+                'obstacleCollision': 'audio/sfx-obstacle-collision.mp3',
+                'surpriseMonster': 'audio/sfx-surprise-monster.mp3',
             }.items()
         }
         code = 'window.MinuitSfxData=' + json.dumps(sfx, separators=(',', ':')) + ';\n' + code
