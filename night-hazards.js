@@ -9,7 +9,7 @@ function moveBoss(e,dt,oldPX=player.x,oldPY=player.y){
  }
  const c=e.charge,ox=e.x,oy=e.y,wasDiving=c.mode==='dive';c.time+=dt;
  if(c.mode==='recover'){if(c.time>=1.4){e.charge=null;e.chargeWait=7;e.fire=Math.max(e.fire,1.3)}return true}
- if(c.mode==='warn'){if(c.time>=(stage>=2?0:stage===1?.65:e.kind==='vampire'?1.45:c.round===2?.9:1.15)){c.mode='dive';c.time=0;c.dodged=false}return true}
+ if(c.mode==='warn'){if(c.time>=(stage>=2?0:stage===1?.65:e.kind==='vampire'?1.45:c.round===2?.9:1.15)){c.mode='dive';c.time=0;c.dodged=false;playSfx('bossDive',.72,.18)}return true}
  if(c.mode==='dive'){
  const distance=Math.hypot(c.tx-e.x,c.ty-e.y),step=((e.kind==='pumpkin'?440:e.kind==='demon'?570:500)*(1+stage*.14))*dt;
  if(distance<=step){e.x=c.tx;e.y=c.ty;c.mode='return';c.time=0;

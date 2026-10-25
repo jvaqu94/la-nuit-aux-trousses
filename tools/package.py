@@ -30,6 +30,8 @@ for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'onli
                 'lifeLoss': 'audio/sfx-player-life-loss.mp3',
                 'obstacleCollision': 'audio/sfx-obstacle-collision.mp3',
                 'surpriseMonster': 'audio/sfx-surprise-monster.mp3',
+                'pickup': 'audio/sfx-pickup-bonus.mp3',
+                'bossDive': 'audio/sfx-boss-dive.mp3',
             }.items()
         }
         code = 'window.MinuitSfxData=' + json.dumps(sfx, separators=(',', ':')) + ';\n' + code
@@ -46,7 +48,7 @@ with zipfile.ZipFile(ROOT / 'La-Nuit-aux-Trousses.zip', 'w', zipfile.ZIP_DEFLATE
         z.write(path, 'La-Nuit-aux-Trousses/' + str(path.relative_to(ROOT)))
     for path in sorted((ROOT / 'scenery').glob('*.jpg')):
         z.write(path, 'La-Nuit-aux-Trousses/' + str(path.relative_to(ROOT)))
-    for name in ['test_settings_audio.py', 'test_soundtrack.py', 'test_music_mp3.py', 'test_supabase.py', 'test_teams.py', 'test_pseudo_invite.py', 'test_rival_replay.py', 'test_coven_dawn.py', 'test_vertical_drift.py', 'test_surprise_ui.py', 'test_flow.py', 'test_sealed_chest.py', 'test_bonus_art.py', 'test_collectibles_art.py', 'test_encounters.py', 'test_combat_feel.py', 'test_onboarding.py', 'test_adventure.py', 'test_charges_sweets.py', 'test_arsenal_browser.py', 'test_touch_controls.py', 'test_viewport.py', 'test_journey_browser.py', 'test_journey_campaign.py', 'test_no_account_browser.py', 'test_home.py', 'test_settings_page.py', 'test_arcade_scores.py', 'test_highscore.cjs', 'test_loot.cjs', 'test_flight.cjs', 'test_arcade.cjs']:
+    for name in ['test_settings_audio.py', 'test_soundtrack.py', 'test_music_mp3.py', 'test_supabase.py', 'test_teams.py', 'test_pseudo_invite.py', 'test_rival_replay.py', 'test_coven_dawn.py', 'test_vertical_drift.py', 'test_surprise_ui.py', 'test_flow.py', 'test_sealed_chest.py', 'test_bonus_art.py', 'test_collectibles_art.py', 'test_encounters.py', 'test_combat_feel.py', 'test_audio_feedback.py', 'test_onboarding.py', 'test_adventure.py', 'test_charges_sweets.py', 'test_arsenal_browser.py', 'test_touch_controls.py', 'test_viewport.py', 'test_journey_browser.py', 'test_journey_campaign.py', 'test_no_account_browser.py', 'test_home.py', 'test_settings_page.py', 'test_arcade_scores.py', 'test_highscore.cjs', 'test_loot.cjs', 'test_flight.cjs', 'test_arcade.cjs']:
         z.write(ROOT / 'tests' / name, 'La-Nuit-aux-Trousses/tests/' + name)
 
 import shutil
