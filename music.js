@@ -91,7 +91,7 @@ class MinuitMusicPlayer{
     param.setValueAtTime(param.value,now);param.linearRampToValueAtTime(.45,now+.08);
     param.setValueAtTime(.45,now+1.9);param.linearRampToValueAtTime(1,now+2.45);
    }
-   this.playArrival(buffer,.9);
+   this.playArrival(buffer,key==='lanterns'?.72:.9);
   }catch{this.arrivalFailed.add(key)}
  }
  decode(bytes){
