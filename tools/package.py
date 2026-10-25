@@ -13,7 +13,7 @@ with zipfile.ZipFile(ROOT/'La-Nuit-aux-Trousses.zip','w',zipfile.ZIP_DEFLATED) a
  for name in ['index.html','characters.js','game.js','online.js','journey.js','viewport.js','arsenal.js','collectible-art.js','night-hazards.js','adventure.js','encounters.js','flow.js','surprise.js','coven.js','nemesis.js','collision-replay.js','server.py','README.md','La-Nuit-aux-Trousses.html','tools/package.py']:
   z.write(ROOT/name,'La-Nuit-aux-Trousses/'+name)
  for path in sorted((ROOT/'scenery').glob('*.jpg')):z.write(path,'La-Nuit-aux-Trousses/'+str(path.relative_to(ROOT)))
- for name in ['test_rival_replay.py','test_coven_dawn.py','test_vertical_drift.py','test_surprise_ui.py','test_flow.py','test_sealed_chest.py','test_bonus_art.py','test_collectibles_art.py','test_encounters.py','test_adventure.py','test_charges_sweets.py','test_arsenal_browser.py','test_viewport.py','test_journey_browser.py','test_journey_campaign.py','test_no_account_browser.py','test_highscore.cjs','test_loot.cjs','test_flight.cjs','test_arcade.cjs']:
+ for name in ['test_settings_audio.py','test_rival_replay.py','test_coven_dawn.py','test_vertical_drift.py','test_surprise_ui.py','test_flow.py','test_sealed_chest.py','test_bonus_art.py','test_collectibles_art.py','test_encounters.py','test_adventure.py','test_charges_sweets.py','test_arsenal_browser.py','test_touch_controls.py','test_viewport.py','test_journey_browser.py','test_journey_campaign.py','test_no_account_browser.py','test_highscore.cjs','test_loot.cjs','test_flight.cjs','test_arcade.cjs']:
   z.write(ROOT/'tests'/name,'La-Nuit-aux-Trousses/tests/'+name)
 import shutil
 shutil.copyfile(ROOT/'La-Nuit-aux-Trousses.zip',ROOT/'Minuit-edition-nocturne.zip')
