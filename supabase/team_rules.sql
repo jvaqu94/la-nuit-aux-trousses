@@ -418,6 +418,52 @@ begin
 end;
 $$;
 
+-- Réinitialisation complète de la campagne par le créateur de la team.
+-- Les membres, le code d'invitation et les règles sont conservés.
+create or replace function public.minuit_reset_team_campaign()
+returns json
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_uid uuid := (select auth.uid());
+  v_team_id uuid;
+begin
+  if v_uid is null then
+    raise exception 'AUTH_REQUIRED' using errcode = '42501';
+  end if;
+
+  select tm.team_id into v_team_id
+  from public.team_members tm
+  where tm.user_id = v_uid;
+  if v_team_id is null then
+    raise exception 'NOT_IN_TEAM';
+  end if;
+  if not exists (
+    select 1 from public.teams t
+    where t.id = v_team_id and t.created_by = v_uid
+  ) then
+    raise exception 'TEAM_ADMIN_REQUIRED' using errcode = '42501';
+  end if;
+
+  -- Une partie terminée après cette remise à zéro pourra être comptée normalement.
+  select t.id into v_team_id from public.teams t
+  where t.id = v_team_id
+  for update;
+  -- Chaque envoi de score verrouille déjà son membre : les fins de vol et la
+  -- réinitialisation sont ainsi cohérentes, même si elles sont simultanées.
+  perform tm.user_id from public.team_members tm
+  where tm.team_id = v_team_id
+  order by tm.user_id
+  for update;
+  delete from public.team_score_attempts ta where ta.team_id = v_team_id;
+  delete from public.team_scores ts where ts.team_id = v_team_id;
+
+  return public.minuit_team_state();
+end;
+$$;
+
 create or replace function public.minuit_delete_team()
 returns json
 language plpgsql
@@ -455,6 +501,7 @@ revoke all on function public.minuit_update_team_rules(integer, timestamptz, tim
 revoke all on function public.minuit_submit_team_score(integer, text, text, integer, integer, text) from public, anon, authenticated;
 revoke all on function public.minuit_team_state() from public, anon, authenticated;
 revoke all on function public.minuit_leave_team() from public, anon, authenticated;
+revoke all on function public.minuit_reset_team_campaign() from public, anon, authenticated;
 revoke all on function public.minuit_delete_team() from public, anon, authenticated;
 
 grant execute on function public.minuit_create_team(text, text, integer, timestamptz, timestamptz) to authenticated;
@@ -462,4 +509,5 @@ grant execute on function public.minuit_update_team_rules(integer, timestamptz, 
 grant execute on function public.minuit_submit_team_score(integer, text, text, integer, integer, text) to authenticated;
 grant execute on function public.minuit_team_state() to authenticated;
 grant execute on function public.minuit_leave_team() to authenticated;
+grant execute on function public.minuit_reset_team_campaign() to authenticated;
 grant execute on function public.minuit_delete_team() to authenticated;
