@@ -20,6 +20,22 @@ if (NativeAudioContext) {
 }
 """
 
+PHONE_FULLSCREEN_BLOCK = """
+window.__phoneGesture = false;
+window.__fullscreenCalls = 0;
+window.__fullscreenActive = false;
+window.addEventListener('pointerdown', () => { window.__phoneGesture = true; }, true);
+window.addEventListener('touchstart', () => { window.__phoneGesture = true; }, true);
+Object.defineProperty(document, 'fullscreenElement', {configurable:true,
+  get: () => window.__fullscreenActive ? document.documentElement : null});
+Element.prototype.requestFullscreen = function() {
+  window.__fullscreenCalls++;
+  if (!window.__phoneGesture) return Promise.reject(new DOMException('Un geste est requis', 'NotAllowedError'));
+  window.__fullscreenActive = true;
+  return Promise.resolve();
+};
+"""
+
 MOBILE_GEOMETRY = """()=>{
   const overlayNode=document.querySelector('#overlay'),overlay=overlayNode.getBoundingClientRect();
   const holder=document.querySelector('.layout>div:first-child').getBoundingClientRect();
@@ -41,8 +57,10 @@ with sync_playwright() as p:
     errors, requests = [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('request', lambda request: requests.append(request.url))
+    page.add_init_script(PHONE_FULLSCREEN_BLOCK)
     page.goto(URL)
     page.wait_for_selector('#homeSoundToggle')
+    assert page.evaluate('window.__fullscreenCalls') == 0
     page.wait_for_function("audio?.state==='running' && mp3Music?.current==='menu' && !!mp3Music.source")
     page.wait_for_function("document.querySelector('#homeAudioNote').textContent==='Lecture en cours'")
     assert any('nuitsorc-loop.mp3' in url for url in requests)
@@ -94,6 +112,25 @@ with sync_playwright() as p:
     assert compact['accountVisible'] and compact['tonVolVisible'], compact
     assert compact['fullHeight'] and not compact['titleOverflow'], compact
 
+    # Navigateur mobile strict : le premier toucher débloque plein écran et son,
+    # sans bouton ou panneau de commande supplémentaire.
+    phone = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
+    phone_errors = []
+    phone.on('pageerror', lambda error: phone_errors.append(str(error)))
+    phone.add_init_script(AUTOPLAY_BLOCK)
+    phone.add_init_script(PHONE_FULLSCREEN_BLOCK)
+    phone.goto(URL)
+    phone.wait_for_selector('#homeSoundToggle')
+    phone.wait_for_function('window.__fullscreenCalls >= 1')
+    assert phone.evaluate('window.__fullscreenActive') is False
+    phone.wait_for_function("audio?.state==='suspended'")
+    phone.locator('#localSettings').scroll_into_view_if_needed()
+    phone.click('#localSettings')
+    phone.wait_for_selector('.settings-page')
+    phone.wait_for_function('window.__fullscreenActive && window.__fullscreenCalls >= 2')
+    phone.wait_for_function("audio?.state==='running'")
+    assert not phone.locator('#fullView').is_visible()
+
     silent = browser.new_page(viewport={'width': 1000, 'height': 800})
     silent.add_init_script("localStorage.setItem('minuit-settings',JSON.stringify({sound:false,music:true,volume:.35,difficulty:'normal',name:'Sorcière'}))")
     silent.goto(URL)
@@ -117,6 +154,7 @@ with sync_playwright() as p:
 
     assert not errors, errors
     assert not mobile_errors, mobile_errors
+    assert not phone_errors, phone_errors
     assert not blocked_errors, blocked_errors
     browser.close()
-    print('OK : accueil remanié, sorcière de profil, MP3, compte direct, pleine hauteur mobile et Ton vol visible à 390×844 comme à 360×640.')
+    print('OK : accueil, compte direct, plein écran téléphone automatique ou au premier toucher, son débloqué et Ton vol visible aux deux tailles mobiles.')

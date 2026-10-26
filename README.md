@@ -67,6 +67,7 @@ Le tir principal est **automatique**.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
 - Sur smartphone, l’accueil occupe toute la zone disponible. **Compte & team** et la section **Ton vol** sont visibles sans défilement, y compris à 360×640 ; le reste du menu défile dans la même fenêtre.
+- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages** occupent toute la hauteur et présentent les commandes tactiles à la place des raccourcis clavier.
 
 ## Modes de jeu
 
@@ -235,11 +236,11 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
-| `settings-page.js` | Cartes de réglages, audio, commandes et sauvegarde locale, sans compte imbriqué. |
+| `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `arcade-scores.js` | Top 10 arcade, catégories locales, surlignage du dernier vol et défilement contrôlable. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
-| `viewport.js` | Adaptation du terrain, des commandes tactiles et de l’affichage à la fenêtre. |
+| `viewport.js` | Mode téléphone, plein écran automatique dès que permis, terrain et commandes adaptés à la fenêtre. |
 | `supabase.js` | Client REST Supabase optionnel, accès pseudo/e-mail, invitations, cloud, teams, highscores et avis. |
 | `supabase/functions/pseudo-auth/index.ts` | Fonction serveur d’inscription et connexion par pseudo, sans e-mail ni clé secrète dans le navigateur. |
 | `supabase-config.js` | URL et clé publiable du projet ; des valeurs vides désactivent le cloud pour un fonctionnement local. |
