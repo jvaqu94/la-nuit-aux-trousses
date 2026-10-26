@@ -34,6 +34,13 @@ css.textContent+=`
  .overlay p{font-size:11px}.overlay .journey-small{font-size:10px}.touchbar button,.touchbar #specialCast{font-size:11px!important}
 }
 `;
+css.textContent+=`
+@media(max-width:850px){
+ body:has(.account-page) .arena:has(.overlay:not(.hidden)),body:has(.account-team-board) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+ .overlay:has(.account-page),.overlay:has(.account-team-board){justify-content:flex-start;padding:10px}
+ .account-team-board{width:100%;min-height:100%}
+}
+`;
 document.head.appendChild(css);
 const holder=document.querySelector('.layout>div:first-child'),arena=document.querySelector('.arena'),aside=document.querySelector('.sidebar'),bar=document.querySelector('.touchbar');
 arena.insertAdjacentHTML('beforeend','<div class="touch-stick hidden" id="touchStick" aria-hidden="true"><i></i></div>');

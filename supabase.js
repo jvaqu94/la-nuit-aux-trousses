@@ -649,8 +649,8 @@ function renderTeam(){
 function openTeamBoard(){
  if(!teamData.team)return;
  const info=teamData.team,rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
- overlay(`<div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div>`);
- $('teamBoardBack').onclick=archives;$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
+ overlay(`<section class="account-team-board"><div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div></section>`);
+ $('teamBoardBack').onclick=()=>window.Journey?.archives?.();$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
 }
 async function finishTeamScore(value){if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result}}
 async function submitTeamScore(value){
@@ -751,6 +751,8 @@ css.textContent=`
 .team-admin-panel summary{cursor:pointer;color:#ffd08e;font-size:10px;letter-spacing:.5px}
 .team-admin-panel[open] summary{margin-bottom:10px}
 .team-role{margin-left:7px;color:#ffd08e!important;font-size:7px!important;letter-spacing:1px}
+.account-team-board{width:min(720px,100%);margin:0 auto;text-align:center}.account-team-board .team-leaderboard{width:100%;margin:14px 0;max-height:min(420px,50vh)}.account-team-board .tiny{display:block;margin:8px 0}.account-team-board .menu-actions{margin-top:auto;padding-top:12px}
+@media(max-width:850px){.account-team-board{display:flex;flex-direction:column}.account-team-board .menu-actions button{min-height:42px}}
 .team-leaderboard{max-height:280px;overflow:auto;border:1px solid #6d5a7c55;border-radius:8px;background:#110e1c88}
 .team-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto minmax(74px,auto);align-items:center;gap:8px;padding:9px 8px;border-bottom:1px solid #ffffff09;font-size:11px}
 .team-row:last-child{border-bottom:0}

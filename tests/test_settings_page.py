@@ -12,7 +12,12 @@ with sync_playwright() as p:
     page.click('#archives')
     page.wait_for_selector('#cloudPseudo', state='visible')
     assert page.locator('.settings-page').count() == 0
-    assert page.locator('#exportJourney').count() == 1
+    assert not page.locator('#exportJourney').is_visible()
+    page.click('#archiveLocalTab')
+    page.wait_for_selector('#exportJourney', state='visible')
+    assert not page.locator('#cloudPseudo').is_visible()
+    page.click('#archiveAccountTab')
+    page.wait_for_selector('#cloudPseudo', state='visible')
     page.click('#archivesBack')
     page.wait_for_selector('.home-menu #localSettings')
     page.locator('#localSettings').scroll_into_view_if_needed()
@@ -104,6 +109,27 @@ with sync_playwright() as p:
     mobile_errors = []
     mobile.on('pageerror', lambda error: mobile_errors.append(str(error)))
     mobile.goto('http://localhost:3000', wait_until='networkidle')
+    mobile.click('#archives')
+    mobile.wait_for_selector('.account-page #cloudPseudo', state='visible')
+    account_layout = mobile.evaluate("""() => {
+        const overlay=document.querySelector('#overlay').getBoundingClientRect();
+        const holder=document.querySelector('.layout>div:first-child').getBoundingClientRect();
+        const title=document.querySelector('#accountPageTitle').getBoundingClientRect();
+        const intro=document.querySelector('#accountPageIntro').getBoundingClientRect();
+        return {full:overlay.height+2>=holder.height,titleBottom:title.bottom,introTop:intro.top,
+            localHidden:document.querySelector('#accountLocalPanel').classList.contains('hidden')};
+    }""")
+    assert account_layout['full'] and account_layout['localHidden'], account_layout
+    assert account_layout['titleBottom'] <= account_layout['introTop'], account_layout
+    assert not mobile.locator('#exportJourney').is_visible()
+    mobile.click('#archiveLocalTab')
+    mobile.wait_for_selector('#exportJourney', state='visible')
+    assert mobile.locator('.journey-history').is_visible()
+    assert not mobile.locator('#cloudPseudo').is_visible()
+    mobile.click('#archiveAccountTab')
+    mobile.wait_for_selector('#cloudPseudo', state='visible')
+    mobile.click('#archivesBack')
+    mobile.wait_for_selector('.home-account-access')
     mobile.locator('#localSettings').scroll_into_view_if_needed()
     mobile.click('#localSettings')
     mobile.wait_for_selector('.settings-page #save')
@@ -142,5 +168,5 @@ with sync_playwright() as p:
 
     assert not errors, errors
     assert not mobile_errors, mobile_errors
-    print('OK : Réglages pleine hauteur sur téléphone, commandes tactiles adaptées, contrôles desktop conservés, exports locaux et retours menu/pause validés.')
+    print('OK : Compte & team plein écran, onglets séparés des vols et exports, Réglages pleine hauteur et commandes tactiles validés.')
     browser.close()
