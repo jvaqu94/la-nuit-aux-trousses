@@ -67,7 +67,7 @@ Le tir principal est **automatique**.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
 - Sur smartphone, l’accueil occupe toute la zone disponible. **Compte & team** et la section **Ton vol** sont visibles sans défilement, y compris à 360×640 ; le reste du menu défile dans la même fenêtre.
-- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages**, la fenêtre **Compte & team** et le classement de team occupent toute la hauteur disponible ; les Réglages présentent les commandes tactiles à la place des raccourcis clavier.
+- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages**, la fenêtre **Compte & team**, le **Hi-score** et le classement de team occupent toute la hauteur disponible ; les Réglages présentent les commandes tactiles à la place des raccourcis clavier.
 
 ## Modes de jeu
 

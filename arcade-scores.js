@@ -1,4 +1,4 @@
-/* La Nuit aux Trousses — tableau de highscores arcade local. */
+/* La Nuit aux Trousses — tableau de highscores arcade local, plein écran sur téléphone. */
 (function(){
 'use strict';
 const categories=[['normal','Nuit noire'],['easy','Clair de lune'],['hard','Cauchemar'],['daily','Défi du jour']];
@@ -59,16 +59,22 @@ css.textContent=`
 .scoreboard-window .arcade-scroll-controls{align-items:flex-start;font-size:8px}.scoreboard-window .arcade-scroll-toggle{font-size:8px;padding:5px 7px}
 .arcade-result-caption{margin-top:7px;color:#a892b4;font-size:8px;line-height:1.5;text-align:center}
 @keyframes arcade-score-scroll{0%,10%{transform:translateY(0)}90%,100%{transform:translateY(-50%)}}
-@media(max-width:850px){.overlay:has(.arcade-score-screen){justify-content:flex-start;padding:12px}.arcade-score-screen{margin:0 auto}}
+@media(max-width:850px){
+.overlay:has(.arcade-score-screen){justify-content:flex-start;padding:10px}
+.arcade-score-screen{width:100%;min-height:100%;max-height:none;margin:0;display:flex;flex-direction:column}
+.arcade-board-actions{z-index:2;position:sticky;bottom:0;margin-top:auto;padding:12px 0 2px;background:linear-gradient(0deg,#110d22f5,#110d22d9);backdrop-filter:blur(8px)}
+}
 @media(max-width:560px){
 .arcade-score-table{--arcade-visible:3!important}
-.arcade-score-screen{padding:10px;max-height:calc(100svh - 20px);border-radius:10px}.arcade-marquee{padding:10px 8px 12px}.arcade-marquee h2{font-size:31px;letter-spacing:4px}.arcade-marquee>span{font-size:7px;letter-spacing:2px}.arcade-marquee p{font-size:9px}
+.arcade-score-screen{padding:10px;max-height:none;border-radius:10px}.arcade-marquee{padding:10px 8px 12px}.arcade-marquee h2{font-size:31px;letter-spacing:4px}.arcade-marquee>span{font-size:7px;letter-spacing:2px}.arcade-marquee p{font-size:9px}
 .arcade-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:10px 0 8px}.arcade-tabs button{padding:7px 5px;font-size:9px}
 .arcade-board-summary{display:block;margin:7px 2px;font-size:8px}.arcade-board-summary b{display:block;margin-bottom:3px;font-size:9px}
 .arcade-score-columns,.arcade-score-row{grid-template-columns:35px minmax(0,1fr) 45px 75px;column-gap:4px;padding-left:7px;padding-right:7px}
 .arcade-score-columns{font-size:6px;letter-spacing:.5px}.arcade-score-row{font-size:9px}.arcade-player{display:block}.arcade-player b{display:block;font-size:10px}.arcade-player small{display:block;margin-top:2px;font-size:6px}.arcade-stage{font-size:8px}.arcade-points{font-size:9px;letter-spacing:0}
-.arcade-scroll-controls{font-size:8px}.arcade-scroll-controls>span{max-width:150px}.arcade-local-note{font-size:8px}.arcade-board-actions{margin-top:9px}.arcade-board-actions button{padding:11px 20px}
+.arcade-scroll-controls{font-size:8px}.arcade-scroll-controls>span{max-width:150px}.arcade-local-note{font-size:8px}.arcade-board-actions{margin-top:auto}.arcade-board-actions button{padding:11px 20px}
 }
+@media(max-width:560px) and (min-height:760px){.arcade-score-screen .arcade-score-table{--arcade-visible:6!important}}
+@media(max-width:560px) and (min-height:600px) and (max-height:759px){.arcade-score-screen .arcade-score-table{--arcade-visible:4!important}}
 @media(prefers-reduced-motion:reduce){.arcade-score-viewport{scroll-behavior:auto}}
 `;
 document.head.appendChild(css);
