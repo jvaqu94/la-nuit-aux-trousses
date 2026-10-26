@@ -10,7 +10,7 @@ with sync_playwright() as p:
     page.goto('http://localhost:3000')
     page.wait_for_selector('#startGuided')
 
-    assert page.locator('.main-menu button').count() == 11
+    assert page.locator('.main-menu button').count() == 13
     assert 'Éclaircir les ombres' not in page.locator('.main-menu').inner_text()
     assert page.locator('#playAdventure').is_visible()
     assert page.locator('#localRanked').is_visible() and page.locator('#labMenu').is_visible()

@@ -13,6 +13,13 @@ calls = []
 feedback_failures = 1
 
 
+def open_email(page):
+    page.wait_for_selector('.cloud-email-access')
+    if not page.locator('.cloud-email-access').evaluate('(node) => node.open'):
+        page.click('.cloud-email-access summary')
+    page.wait_for_selector('#cloudEmail', state='visible')
+
+
 def handle(route):
     global feedback_failures
     request = route.request
@@ -73,7 +80,7 @@ with sync_playwright() as p:
     assert page.evaluate('MinuitCloud.configured && !MinuitCloud.connected')
 
     page.click('#archives')
-    page.wait_for_selector('#cloudEmail')
+    open_email(page)
     # Une inscription avec confirmation ne reçoit pas encore de session.
     page.fill('#cloudEmail', 'nouvelle.sorciere@example.com')
     page.fill('#cloudPassword', 'mot-de-passe-inscription')
@@ -154,7 +161,7 @@ with sync_playwright() as p:
     page.click('#archives')
     page.wait_for_selector('#cloudLogout')
     page.click('#cloudLogout')
-    page.wait_for_selector('#cloudEmail')
+    open_email(page)
     page.click('#archivesBack')
     page.click('#playAdventure')
     page.wait_for_function("state==='play'")

@@ -22,7 +22,7 @@ with sync_playwright() as p:
     assert page.evaluate('(keys)=>keys.every(key=>!(key in prefs))', REMOVED)
     assert page.evaluate('(keys)=>keys.every(key=>!(key in JSON.parse(localStorage.getItem("minuit-settings"))))', REMOVED)
 
-    page.click('#settings')
+    page.click('#localSettings')
     page.wait_for_selector('#opt-music')
     for selector in ['#difficulty', '#nickname', '#volume', '#opt-music', '#bindings']:
         assert page.locator(selector).count() == 1, selector

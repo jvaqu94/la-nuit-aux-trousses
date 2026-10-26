@@ -5,7 +5,7 @@ import re, zipfile, base64, json
 ROOT = Path(__file__).resolve().parents[1]
 html = (ROOT / 'index.html').read_text()
 
-for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'online.js', 'journey.js', 'viewport.js', 'arsenal.js', 'collectible-art.js', 'night-hazards.js', 'adventure.js', 'encounters.js', 'flow.js', 'surprise.js', 'coven.js', 'nemesis.js', 'combat-feel.js', 'onboarding.js', 'collision-replay.js', 'supabase.js']:
+for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'online.js', 'journey.js', 'viewport.js', 'arsenal.js', 'collectible-art.js', 'night-hazards.js', 'adventure.js', 'encounters.js', 'flow.js', 'surprise.js', 'coven.js', 'nemesis.js', 'combat-feel.js', 'onboarding.js', 'collision-replay.js', 'supabase.js', 'settings-page.js', 'home.js', 'arcade-scores.js']:
     code = (ROOT / name).read_text().replace('</script', '<\\/script')
     if name == 'music.js':
         sources = {}
@@ -40,13 +40,13 @@ for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'onli
 (ROOT / 'minuit-autonome.html').write_text(html)
 
 with zipfile.ZipFile(ROOT / 'La-Nuit-aux-Trousses.zip', 'w', zipfile.ZIP_DEFLATED) as z:
-    for name in ['index.html', 'supabase-config.js', 'characters.js', 'music.js', 'game.js', 'online.js', 'journey.js', 'viewport.js', 'arsenal.js', 'collectible-art.js', 'night-hazards.js', 'adventure.js', 'encounters.js', 'flow.js', 'surprise.js', 'coven.js', 'nemesis.js', 'combat-feel.js', 'onboarding.js', 'collision-replay.js', 'supabase.js', 'server.py', 'README.md', 'audio/README.md', 'supabase/README.md', 'supabase/schema.sql', 'supabase/teams.sql', 'supabase/team_rules.sql', 'supabase/functions/email-confirmation/index.ts', 'La-Nuit-aux-Trousses.html', 'tools/package.py', 'tools/generate_music.py']:
+    for name in ['index.html', 'supabase-config.js', 'characters.js', 'music.js', 'game.js', 'online.js', 'journey.js', 'viewport.js', 'arsenal.js', 'collectible-art.js', 'night-hazards.js', 'adventure.js', 'encounters.js', 'flow.js', 'surprise.js', 'coven.js', 'nemesis.js', 'combat-feel.js', 'onboarding.js', 'collision-replay.js', 'supabase.js', 'settings-page.js', 'home.js', 'arcade-scores.js', 'server.py', 'README.md', 'audio/README.md', 'supabase/README.md', 'supabase/schema.sql', 'supabase/teams.sql', 'supabase/team_rules.sql', 'supabase/functions/email-confirmation/index.ts', 'supabase/functions/pseudo-auth/index.ts', 'La-Nuit-aux-Trousses.html', 'tools/package.py', 'tools/generate_music.py']:
         z.write(ROOT / name, 'La-Nuit-aux-Trousses/' + name)
     for path in sorted((ROOT / 'audio').glob('*.mp3')):
         z.write(path, 'La-Nuit-aux-Trousses/' + str(path.relative_to(ROOT)))
     for path in sorted((ROOT / 'scenery').glob('*.jpg')):
         z.write(path, 'La-Nuit-aux-Trousses/' + str(path.relative_to(ROOT)))
-    for name in ['test_settings_audio.py', 'test_soundtrack.py', 'test_music_mp3.py', 'test_supabase.py', 'test_teams.py', 'test_rival_replay.py', 'test_coven_dawn.py', 'test_vertical_drift.py', 'test_surprise_ui.py', 'test_flow.py', 'test_sealed_chest.py', 'test_bonus_art.py', 'test_collectibles_art.py', 'test_encounters.py', 'test_combat_feel.py', 'test_onboarding.py', 'test_adventure.py', 'test_charges_sweets.py', 'test_arsenal_browser.py', 'test_touch_controls.py', 'test_viewport.py', 'test_journey_browser.py', 'test_journey_campaign.py', 'test_no_account_browser.py', 'test_highscore.cjs', 'test_loot.cjs', 'test_flight.cjs', 'test_arcade.cjs']:
+    for name in ['test_settings_audio.py', 'test_soundtrack.py', 'test_music_mp3.py', 'test_supabase.py', 'test_teams.py', 'test_pseudo_invite.py', 'test_rival_replay.py', 'test_coven_dawn.py', 'test_vertical_drift.py', 'test_surprise_ui.py', 'test_flow.py', 'test_sealed_chest.py', 'test_bonus_art.py', 'test_collectibles_art.py', 'test_encounters.py', 'test_combat_feel.py', 'test_onboarding.py', 'test_adventure.py', 'test_charges_sweets.py', 'test_arsenal_browser.py', 'test_touch_controls.py', 'test_viewport.py', 'test_journey_browser.py', 'test_journey_campaign.py', 'test_no_account_browser.py', 'test_home.py', 'test_settings_page.py', 'test_arcade_scores.py', 'test_highscore.cjs', 'test_loot.cjs', 'test_flight.cjs', 'test_arcade.cjs']:
         z.write(ROOT / 'tests' / name, 'La-Nuit-aux-Trousses/tests/' + name)
 
 import shutil

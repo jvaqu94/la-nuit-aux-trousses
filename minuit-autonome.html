@@ -599,9 +599,9 @@ function refreshBoard(){const filter=mode==='daily'?'daily':(['play','pause','ch
 async function fetchScores(){serverMessage='Connexion…';refreshBoard();try{let q=new URLSearchParams({category:mode==='daily'?'daily':(['play','pause','choice','end'].includes(state)?runId:prefs.difficulty),date:dailyDate||dateKey()});const r=await fetch('/api/scores?'+q);if(!r.ok)throw Error();let d=await r.json();serverScores=d.scores;serverMessage='Classement partagé · non homologué'}catch{serverScores=[];serverMessage='Serveur indisponible · records locaux conservés'}refreshBoard()}
 $('localtab').onclick=()=>{boardTab='local';refreshBoard()};$('onlinetab').onclick=()=>{boardTab='server';fetchScores()};
 function teamEndRows(data){const rows=(data?.scores||[]).slice(0,10);return rows.length?rows.map(r=>`<div class="team-end-row ${r.isYou?'team-you':''}"><b>#${Number(r.rank)||0}</b><span>${safeText(r.displayName||'Sorcière')}${r.isYou?'<small>TOI</small>':''}</span><strong>${Number(r.score||0).toLocaleString('fr-FR')}</strong></div>`).join(''):'<div class="tiny">Aucun score de team pour le moment.</div>'}
-function renderTeamEnd(data){const slot=$('teamEndPanel');if(!slot)return;if(data?.skipped||!data?.team){slot.remove();return}const mine=(data.scores||[]).find(r=>r.isYou),rank=mine?.rank||'—';slot.innerHTML=`<div class="team-end-heading"><span>🏆 TEAM · ${safeText(data.team.name||'Sans nom')}</span><b>TA POSITION : #${rank}</b></div><div class="team-end-board">${teamEndRows(data)}</div><div class="tiny">Classement du meilleur score de chaque membre · ${Number(data.team.memberCount)||0} membre${Number(data.team.memberCount)>1?'s':''}</div>`;slot.classList.remove('team-end-reveal');requestAnimationFrame(()=>slot.classList.add('team-end-reveal'));if(prefs.sound){tone(392,.16,'sine',.045,1.22);setTimeout(()=>tone(587,.24,'sine',.035,1.08),110)}}
+function renderTeamEnd(data){const slot=$('teamEndPanel');if(!slot)return;if(data?.skipped||!data?.team){slot.remove();return}const mine=(data.scores||[]).find(r=>r.isYou),rank=mine?.rank||'—';slot.innerHTML=`<div class="team-end-heading"><span>🏆 TEAM · ${safeText(data.team.name||'Sans nom')}</span><b>TA POSITION : #${rank}</b></div><div class="team-end-board">${teamEndRows(data)}</div><div class="tiny">Classement du meilleur score de chaque membre · ${Number(data.team.memberCount)||0} membre${Number(data.team.memberCount)>1?'s':''}</div>`;const status=$('teamResultStatus'),result=data.result||{},remaining=result.gamesRemaining??data.team.gamesRemaining;if(status)status.textContent=(result.duplicate?'Vol déjà comptabilisé dans la team.':result.improved?'Nouveau highscore de team !':'Score du vol transmis à la team.')+(remaining===null||remaining===undefined?'':' · '+Number(remaining)+' partie'+(Number(remaining)>1?'s':'')+' restante'+(Number(remaining)>1?'s':''));slot.classList.remove('team-end-reveal');requestAnimationFrame(()=>slot.classList.add('team-end-reveal'));if(prefs.sound){tone(392,.16,'sine',.045,1.22);setTimeout(()=>tone(587,.24,'sine',.035,1.08),110)}}
 function loadTeamEndScore(value){const slot=$('teamEndPanel');if(!slot||!window.MinuitCloud?.finishTeamScore)return;slot.innerHTML='<div class="tiny">Synchronisation du score avec la team…</div>';window.MinuitCloud.finishTeamScore(value).then(renderTeamEnd).catch(()=>{if(slot)slot.innerHTML='<div class="tiny">Score enregistré localement ; classement team momentanément indisponible.</div>'})}
-function end(win){release();if(recorded)return;trackHighScore();saveHighScores();recorded=true;try{localStorage.removeItem('minuit-checkpoint')}catch{}state='end';const result={name:prefs.name,score:Math.floor(score),category:runId,date:dailyDate,stage:stage+1,clears,win,time:Math.floor(gameTime)};records.push(result);records.sort((a,b)=>b.score-a.score);records=records.slice(0,150);try{localStorage.setItem('minuit-v2-scores',JSON.stringify(records))}catch{}const teamSlot=window.MinuitCloud?.connected&&!window.Journey?.finish?'<section class="team-end-panel" id="teamEndPanel"><div class="tiny">Préparation du classement team…</div></section>':'';overlay(`<div class="eyebrow">${win?'LES CINQ GARDIENS SONT TOMBÉS':'LA NUIT GARDE ENCORE SES SECRETS'}</div><h2>${win?'Enfin, l’aube.':'Vous êtes mort !'}</h2><p>${win?'Tu as traversé les cinq univers. La sorcière peut rentrer.':'Dernier coup reçu : '+lastDamage+'. Chaque nuit t’apprend un nouveau chemin.'}</p>${recordBroken?'<div class="new-record">✦ NOUVEAU HI-SCORE ✦</div>':''}<div class="statsline"><span>Score <b>${Math.floor(score)}</b></span><span>Record <b>${getHighScore()}</b></span><span>Frôlements <b>${graze}</b></span><span>Gardiens <b>${clears}/5</b></span>${mode==='daily'?'<span>Bonus défi <b>+'+dailyBonus+'</b></span>':''}</div>${teamSlot}<div class="tiny" id="submitstatus">Record enregistré sur cet appareil.</div><br><div class="menu-actions"><button class="primary" id="retry">Une autre nuit →</button><button class="secondary" id="return">Menu</button></div>`);$('retry').onclick=()=>start(mode);$('return').onclick=menu;if(teamSlot)loadTeamEndScore({score:Math.floor(score),mode:mode==='daily'?'daily':(window.League?.active?'ranked':'free'),difficulty:prefs.difficulty,stage:stage+1,wave,id:session||runId});refreshBoard()}
+function end(win){release();if(recorded)return;trackHighScore();saveHighScores();recorded=true;try{localStorage.removeItem('minuit-checkpoint')}catch{}state='end';const result={name:prefs.name,score:Math.floor(score),category:runId,date:dailyDate,stage:stage+1,clears,win,time:Math.floor(gameTime)};window.MinuitLastScore=result;records.push(result);records.sort((a,b)=>b.score-a.score);records=records.slice(0,150);try{localStorage.setItem('minuit-v2-scores',JSON.stringify(records))}catch{}const teamSlot=window.MinuitCloud?.connected&&!window.Journey?.finish?'<section class="team-end-panel" id="teamEndPanel"><div class="tiny">Préparation du classement team…</div></section>':'';overlay(`<div class="eyebrow">${win?'LES CINQ GARDIENS SONT TOMBÉS':'LA NUIT GARDE ENCORE SES SECRETS'}</div><h2>${win?'Enfin, l’aube.':'Vous êtes mort !'}</h2><p>${win?'Tu as traversé les cinq univers. La sorcière peut rentrer.':'Dernier coup reçu : '+lastDamage+'. Chaque nuit t’apprend un nouveau chemin.'}</p>${recordBroken?'<div class="new-record">✦ NOUVEAU HI-SCORE ✦</div>':''}<div class="statsline"><span>Score <b>${Math.floor(score)}</b></span><span>Record <b>${getHighScore()}</b></span><span>Frôlements <b>${graze}</b></span><span>Gardiens <b>${clears}/5</b></span>${mode==='daily'?'<span>Bonus défi <b>+'+dailyBonus+'</b></span>':''}</div>${teamSlot}<div class="tiny" id="submitstatus">Record enregistré sur cet appareil.</div><br><div class="menu-actions"><button class="primary" id="retry">Une autre nuit →</button><button class="secondary" id="return">Menu</button></div>`);$('retry').onclick=()=>start(mode);$('return').onclick=menu;if(teamSlot)loadTeamEndScore({score:Math.floor(score),mode:mode==='daily'?'daily':(window.League?.active?'ranked':'free'),difficulty:prefs.difficulty,stage:stage+1,wave,id:session||runId});refreshBoard()}
 
 // Dessin vectoriel original : silhouettes communes mais animations propres à chaque créature.
 function poly(g,pts,fill,stroke){g.beginPath();pts.forEach((p,i)=>i?g.lineTo(...p):g.moveTo(...p));g.closePath();if(fill){g.fillStyle=fill;g.fill()}if(stroke){g.strokeStyle=stroke;g.stroke()}}
@@ -777,7 +777,12 @@ $('sendGameFeedback').onclick=async()=>{const button=$('sendGameFeedback'),messa
 if(window.MinuitCloud?.connected&&$('teamEndPanel')){
  const teamMessage=$('teamResultStatus');
  const finishTeam=window.MinuitCloud.finishTeamScore?window.MinuitCloud.finishTeamScore({id:r.id,score:r.score,mode:r.mode,difficulty:prefs.difficulty,stage:r.stage,wave:r.wave}):window.MinuitCloud.submitTeamScore({id:r.id,score:r.score,mode:r.mode,difficulty:prefs.difficulty,stage:r.stage,wave:r.wave}).then(result=>({result,skipped:!result}));
- finishTeam.then(data=>{if(data?.skipped||!data?.team){$('teamEndPanel')?.remove();return}if(typeof renderTeamEnd==='function')renderTeamEnd(data);else teamMessage.textContent='Classement de team actualisé.'}).catch(error=>{teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove()});
+ finishTeam.then(data=>{
+  if(data?.skipped||!data?.team){$('teamEndPanel')?.remove();return}
+  const result=data.result||{},remaining=result.gamesRemaining;
+  teamMessage.textContent=(result.improved?'Nouveau highscore de team.':'Highscore de team conservé.')+(Number.isFinite(remaining)?' '+remaining+' partie'+(remaining>1?'s':'')+' restante'+(remaining>1?'s':''):'');
+  if(typeof renderTeamEnd==='function')renderTeamEnd(data);else teamMessage.textContent+=' Classement de team actualisé.';
+ }).catch(error=>{teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove()});
 }
 }
 function renderResult(r){
@@ -807,9 +812,9 @@ async function importSave(file,status){
   location.reload();return true;
  }catch(e){status.textContent=e instanceof SyntaxError?'Fichier JSON illisible. Aucun changement effectué.':e.message;return false}
 }
-function saveControls(){return '<div class="journey-save-controls"><button class="secondary" id="exportJourney">Exporter ma progression</button><label class="secondary journey-import">Importer une sauvegarde<input id="importJourney" type="file" accept=".json,application/json"></label></div><div class="journey-small" id="saveMessage">Fichier JSON : progression, cosmétiques, records, réglages et point de reprise. La session du compte en ligne n’est jamais incluse.</div><div id="supabaseMount"></div>'}
+function saveControls(){return '<div id="supabaseMount"></div><div class="journey-save-controls"><button class="secondary" id="exportJourney">Exporter ma progression</button><label class="secondary journey-import">Importer une sauvegarde<input id="importJourney" type="file" accept=".json,application/json"></label></div><div class="journey-small" id="saveMessage">Fichier JSON : progression, cosmétiques, records, réglages et point de reprise. La session du compte en ligne n’est jamais incluse.</div>'}
 function bindSave(){const ex=$('exportJourney'),im=$('importJourney');if(ex)ex.onclick=exportSave;if(im)im.onchange=()=>importSave(im.files[0],$('saveMessage'));window.MinuitCloud?.renderPanel?.($('supabaseMount'))}
-function archives(){if(state==='play')pauseScreen();state='journey-archives';overlay(`<div class="eyebrow">TON HISTOIRE T’APPARTIENT</div><h2 class="local-title">Garde une trace.</h2><p>Exporte ta progression avant de changer de navigateur ou d’appareil. Importe le fichier sur l’autre appareil pour la retrouver. Les sauvegardes se remplacent, elles ne se fusionnent pas.</p>${saveControls()}<button class="secondary" id="rollbackImport">Annuler le dernier import</button><div class="journey-history"><h3>LES DERNIERS VOLS · DONNÉES LOCALES</h3>${j.recent.slice(0,8).map(r=>`<div><span>${safeText(r.day)} · ${safeText(r.world)} · V${r.wave}<br><small>${safeText(r.cause)} · ${r.stats.hits||0} impacts · ${r.feedback?({hard:'trop difficile',fair:'bien dosé',easy:'trop facile'})[r.feedback]:'avis non renseigné'}</small></span><b>${fmt(r.score)} pts</b></div>`).join('')||'<p>Ton prochain vol ouvrira ce journal.</p>'}</div><div class="journey-small">Les avis restent dans ton journal local. Avec le compte en ligne configuré, tu peux aussi en transmettre une copie privée pour l’équilibrage ; ils ne sont jamais affichés sur un mur public.</div><button class="primary" id="archivesBack">Retour →</button>`);bindSave();$('archivesBack').onclick=LocalLeague.menu;$('rollbackImport').onclick=()=>{try{const v=JSON.parse(localStorage.getItem('minuit-import-rollback')||'null');if(!v)throw Error('Aucun import à annuler.');if(!confirm('Restaurer la progression antérieure au dernier import ?'))return;window.MinuitImporting=true;for(const k of exportKeys){if(v[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,v[k])}localStorage.removeItem('minuit-import-rollback');location.reload()}catch(e){$('saveMessage').textContent=e.message}}}
+function archives(){if(state==='play')pauseScreen();state='journey-archives';overlay(`<div class="eyebrow">COMPTE, TEAM & SAUVEGARDE</div><h2 class="local-title">Retrouve ta bande.</h2><p>Connecte-toi avec ton pseudo pour retrouver ta team et ta progression. Juste après, tu peux aussi exporter ou importer une sauvegarde locale.</p>${saveControls()}<button class="secondary" id="rollbackImport">Annuler le dernier import</button><div class="journey-history"><h3>LES DERNIERS VOLS · DONNÉES LOCALES</h3>${j.recent.slice(0,8).map(r=>`<div><span>${safeText(r.day)} · ${safeText(r.world)} · V${r.wave}<br><small>${safeText(r.cause)} · ${r.stats.hits||0} impacts · ${r.feedback?({hard:'trop difficile',fair:'bien dosé',easy:'trop facile'})[r.feedback]:'avis non renseigné'}</small></span><b>${fmt(r.score)} pts</b></div>`).join('')||'<p>Ton prochain vol ouvrira ce journal.</p>'}</div><div class="journey-small">Les avis restent dans ton journal local. Avec le compte en ligne configuré, tu peux aussi en transmettre une copie privée pour l’équilibrage ; ils ne sont jamais affichés sur un mur public.</div><button class="primary" id="archivesBack">Retour →</button>`);bindSave();$('archivesBack').onclick=LocalLeague.menu;$('rollbackImport').onclick=()=>{try{const v=JSON.parse(localStorage.getItem('minuit-import-rollback')||'null');if(!v)throw Error('Aucun import à annuler.');if(!confirm('Restaurer la progression antérieure au dernier import ?'))return;window.MinuitImporting=true;for(const k of exportKeys){if(v[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,v[k])}localStorage.removeItem('minuit-import-rollback');location.reload()}catch(e){$('saveMessage').textContent=e.message}}}
 const originalSettings=settings;settings=function(){if(state==='settings')return;originalSettings();$('save').insertAdjacentHTML('beforebegin',saveControls()+'<button class="secondary" id="restartTutorial">Guide illustré des commandes</button>');bindSave();$('restartTutorial').onclick=()=>window.GuidedTraining?.openGuide('settings')};$('settings').onclick=settings;
 const css=document.createElement('style');css.textContent=`
 .journey-level{display:flex;justify-content:space-between;width:100%;max-width:460px;font-size:10px;letter-spacing:1px;color:#d8c3e1;margin:12px 0 7px}.journey-level b{color:#ffcc85}.journey-bar{height:5px;background:#45344f;border-radius:5px;overflow:hidden;max-width:460px;width:100%}.journey-bar i{display:block;height:100%;background:linear-gradient(90deg,#a685d2,#f4bf7c);transition:width .3s}.journey-small{font-size:10px;color:#b7a4c7;line-height:1.7;margin:9px 0;max-width:620px}.journey-small b{color:#ebd2af}.journey-menu-progress{width:min(420px,100%)}.journey-main-actions{margin:14px 0 0}.journey-subactions{margin-top:10px}.journey-contracts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;width:100%;max-width:620px;margin-top:18px}.journey-contract{border:1px solid #6f587c77;background:#2b2038aa;padding:12px;border-radius:9px;text-align:left}.journey-contract>div:first-child{display:flex;justify-content:space-between;gap:7px;font-size:10px;color:#d4bfdc}.journey-contract b{white-space:nowrap;font-size:10px;color:#f3d0a5}.journey-contract small{font-size:9px;color:#caacdb;display:block;margin-top:6px}.journey-contract.done{border-color:#83c7a5aa}.journey-contract.done .journey-bar i{background:#91d6b3}.journey-wide{width:100%;margin:12px 0 4px}.journey-result-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:620px;margin:12px 0}.journey-result-grid>div{border:1px solid #74587966;border-radius:10px;background:#2a203aaa;padding:13px;text-align:left}.journey-result-grid small{font-size:9px;letter-spacing:1px;margin:0}.journey-result-grid b{display:block;font-size:24px;color:#f7d1a0;margin:6px 0}.journey-result-grid span{font-size:10px;line-height:1.6;color:#b9a7c9;display:block}.death-transition{text-align:center;animation:deathTransitionIn .42s ease both}.death-transition-mark{font-size:38px;color:#ffb278;margin-bottom:8px;text-shadow:0 0 22px #ff8b4d88}.death-transition h2{font-size:clamp(36px,6vw,68px)!important;letter-spacing:3px;color:#f1c0bd!important;margin:10px 0 12px!important}.death-transition p{margin-bottom:8px!important}.death-transition small{display:block;color:#bdaabd;font-size:10px;letter-spacing:1px}@keyframes deathTransitionIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}.scoreboard-window{width:100%;max-width:620px;margin:14px 0;padding:13px;border:1px solid #a47b685e;border-radius:12px;background:linear-gradient(145deg,#21182dcc,#171323e8);box-shadow:0 10px 35px #0004;text-align:left}.scoreboard-title{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #ffffff14;padding-bottom:9px;margin-bottom:8px;color:#edceb0;font-size:10px;letter-spacing:2px}.scoreboard-title b{color:#ffbd7c;font-size:9px}.scoreboard-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;padding:8px 9px;border-bottom:1px solid #ffffff0d;color:#cdbbd5}.scoreboard-row strong{color:#ffd08e;font-size:18px;text-align:right}.scoreboard-row small{grid-column:1/-1;color:#9f8fac;font-size:9px}.scoreboard-you{background:#b0884433;border-radius:7px;color:#fff0d2}.scoreboard-window .team-end-panel{margin:10px 0 0;max-width:none}.scoreboard-window .tiny{margin-top:7px}.journey-unlocked{font-size:12px;color:#aee4c8;border:1px solid #98caac66;border-radius:8px;padding:10px;margin:10px 0}.journey-feedback{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;font-size:10px;color:#baabc6;margin:14px 0}.journey-feedback span{width:100%}.journey-feedback button{background:#30233e;border:1px solid #6e587e;color:#e2cce9;border-radius:20px;font-size:10px;padding:7px 10px}.wardrobe-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:650px;text-align:left;margin:14px 0}.wardrobe-grid>section:last-child{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:5px}.wardrobe-grid>section:last-child h3{grid-column:1/-1}.wardrobe-grid h3{font-size:9px;color:#b7a1c6;letter-spacing:2px;margin:9px 0}.wardrobe-item{width:100%;display:flex;gap:9px;align-items:center;background:#292035;border:1px solid #6c537666;border-radius:8px;text-align:left;color:#d9c6e4;padding:9px;margin-bottom:5px}.wardrobe-item i{width:15px;height:15px;flex-shrink:0;border-radius:50%}.wardrobe-item b{font-size:11px;display:block}.wardrobe-item small{font-size:9px;color:#b5a0c3;letter-spacing:0;display:block;margin:4px 0 0}.wardrobe-item:disabled{opacity:.5;cursor:not-allowed}.wardrobe-item.equipped{border-color:#e5b876;background:#493346}.overlay canvas.wardrobe-preview{position:static;width:180px;height:130px;flex-shrink:0}.journey-save-controls{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:12px 0}.journey-import{cursor:pointer}.journey-import input{display:none}.journey-history{width:100%;max-width:550px;text-align:left;margin:20px 0}.journey-history h3{font-size:10px;letter-spacing:1px;color:#c4a8d2}.journey-history>div{display:flex;justify-content:space-between;gap:10px;border-top:1px solid #70578055;padding:10px 0;font-size:10px;color:#d2bedb}.journey-history small{font-size:9px;line-height:1.6;color:#9e8cab;margin:4px 0 0;letter-spacing:0}.journey-history b{white-space:nowrap;color:#edc593}.journey-tutor{position:absolute;z-index:3;top:105px;left:50%;transform:translateX(-50%);width:min(380px,85%);display:flex;gap:12px;padding:12px 14px;border:1px solid #bfa18177;border-radius:10px;background:#22182cdd;backdrop-filter:blur(4px);pointer-events:none}.journey-tutor b{display:block;color:#f2c891;font-size:9px;letter-spacing:1px}.journey-tutor span{display:block;font-size:11px;line-height:1.6;color:#d6c3e1;margin-top:6px}.journey-tutor button{pointer-events:auto;align-self:start;background:none;border:0;color:#ccafd9;font-size:18px}.overlay:has(.wardrobe-grid),.overlay:has(.journey-history){justify-content:flex-start}.overlay:has(.journey-result-grid)>*{flex-shrink:0}
@@ -1530,7 +1535,8 @@ const enabled=!!(url&&key);
 const confirmationUrl=enabled?url+'/functions/v1/email-confirmation':'';
 const SESSION_KEY='minuit-supabase-session-v1';
 const AUTO_KEY='minuit-supabase-auto-v1';
-const GAME_VERSION='2026.10.25-9';
+const INVITE_KEY='minuit-team-invite-v1';
+const GAME_VERSION='2026.10.26-10';
 const EMPTY_TEAM=()=>({team:null,scores:[]});
 
 let session=null;
@@ -1552,8 +1558,16 @@ let teamEpoch=0;
 let pendingTeamCode='';
 let teamInviteRecipient='';
 try{
- const value=normalizeTeamCode(new URLSearchParams(location.search).get('team'));
- if(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(value)){pendingTeamCode=value;cleanInvitationUrl()}
+ const fromUrl=normalizeTeamCode(new URLSearchParams(location.search).get('team'));
+ let value=fromUrl;
+ if(!value)try{value=normalizeTeamCode(sessionStorage.getItem(INVITE_KEY))}catch{}
+ if(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(value)){
+  pendingTeamCode=value;
+  if(fromUrl){
+   try{sessionStorage.setItem(INVITE_KEY,value)}catch{}
+   cleanInvitationUrl();
+  }
+ }
 }catch{}
 
 try{
@@ -1584,6 +1598,15 @@ function teamStatus(text,error=false){
  if(element){element.textContent=text;element.classList.toggle('cloud-error',error)}
 }
 function errorMessage(data,fallback){return data?.msg||data?.error_description||data?.message||data?.error||fallback}
+function sessionUser(user,fallback={}){
+ const source=user||fallback,metadata=source?.user_metadata||{};
+ return{
+  id:source?.id||fallback?.id,
+  email:source?.email||fallback?.email||'',
+  displayName:metadata.display_name||source?.displayName||fallback?.displayName||'',
+  authProvider:metadata.auth_provider||source?.authProvider||fallback?.authProvider||(source?.email?'email':'')
+ };
+}
 
 async function refresh(){
  if(!session?.refresh_token)throw Error('Session en ligne expirée. Reconnecte-toi.');
@@ -1591,7 +1614,7 @@ async function refresh(){
  refreshing=(async()=>{
   const data=await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:session.refresh_token}},false);
   if(!data?.access_token)throw Error('Impossible de renouveler la session en ligne.');
-  session={...session,...data,user:data.user||session.user,refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
+  session={...session,...data,user:sessionUser(data.user,session.user),refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
   storeSession();
  })();
  try{return await refreshing}finally{refreshing=null}
@@ -1649,7 +1672,7 @@ function setSession(data){
   access_token:data.access_token,
   refresh_token:data.refresh_token||'',
   expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600),
-  user:{id:data.user.id,email:data.user.email||''}
+  user:sessionUser(data.user)
  };
  if(!session.refresh_token)throw Error('Session en ligne incomplète.');
  storeSession();
@@ -1662,6 +1685,42 @@ function credentials(){
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>180)throw Error('Saisis une adresse e-mail valide.');
  if(password.length<8||password.length>128)throw Error('Le mot de passe doit contenir 8 à 128 caractères.');
  return{email,password};
+}
+function pseudoCredentials(){
+ const username=String(document.getElementById('cloudPseudo')?.value||'').normalize('NFKC').trim();
+ const password=String(document.getElementById('cloudPseudoPassword')?.value||'');
+ const length=Array.from(username).length,passwordLength=Array.from(password).length;
+ if(length<2||length>24||!/^[\p{L}\p{N}\p{M} ._'-]+$/u.test(username))throw Error('Le pseudo doit contenir 2 à 24 caractères, sans symboles spéciaux.');
+ if(passwordLength<8||passwordLength>128)throw Error('Le mot de passe doit contenir 8 à 128 caractères.');
+ return{username,password};
+}
+const PSEUDO_ERRORS={
+ PSEUDO_INVALID:'Le pseudo doit contenir 2 à 24 caractères, sans symboles spéciaux.',
+ PASSWORD_INVALID:'Le mot de passe doit contenir 8 à 128 caractères.',
+ PSEUDO_UNAVAILABLE:'Ce pseudo est déjà utilisé. Connecte-toi ou choisis un autre pseudo.',
+ AUTH_INVALID:'Pseudo ou mot de passe incorrect.',
+ AUTH_UNAVAILABLE:'Le service de connexion est indisponible. Réessaie dans un moment.'
+};
+function pseudoErrorMessage(error){
+ const message=String(error?.message||error||'Connexion impossible.');
+ for(const [code,text] of Object.entries(PSEUDO_ERRORS))if(message.includes(code))return text;
+ if(/invalid.*(credentials|grant)/i.test(message))return PSEUDO_ERRORS.AUTH_INVALID;
+ return message;
+}
+async function authenticatePseudo(signup){
+ if(busy)return;
+ busy=true;
+ const invited=!!pendingTeamCode;
+ status(signup?'Création de ton accès…':'Connexion…');
+ try{
+  const body=pseudoCredentials();
+  const data=await request('/functions/v1/pseudo-auth',{method:'POST',auth:false,body:{action:signup?'register':'login',...body}});
+  if(!setSession(data))throw Error('AUTH_INVALID');
+  renderPanel();
+  status(signup?'Accès créé, sans e-mail ni confirmation.':'Connexion réussie.');
+  if(invited)await joinPendingTeam(body.username);
+ }catch(error){status(pseudoErrorMessage(error),true)}
+ finally{busy=false}
 }
 async function authenticate(signup){
  if(busy)return;
@@ -1832,7 +1891,11 @@ function cleanInvitationUrl(){
   history.replaceState(null,'',target.pathname+(target.searchParams.size?'?'+target.searchParams:''));
  }catch{}
 }
-function clearPendingTeamCode(){pendingTeamCode='';cleanInvitationUrl()}
+function clearPendingTeamCode(){
+ pendingTeamCode='';
+ try{sessionStorage.removeItem(INVITE_KEY)}catch{}
+ cleanInvitationUrl();
+}
 function teamNumber(value){return Math.max(0,Number(value)||0).toLocaleString('fr-FR')}
 function validTeamState(value){
  if(!value||typeof value!=='object')throw Error('Réponse de team invalide.');
@@ -1985,6 +2048,24 @@ async function joinTeam(){
   teamStatus(teamErrorMessage(error),true);
  }
 }
+async function joinPendingTeam(displayName){
+ const code=pendingTeamCode;
+ if(!code||!session)return;
+ const data=await loadTeam(false);
+ if(!data||code!==pendingTeamCode)return;
+ if(teamData.team){
+  if(teamData.team.code===code){
+   clearPendingTeamCode();
+   teamStatus('Tu es déjà membre de cette team.');
+  }else teamStatus('Tu appartiens déjà à « '+(teamData.team.name||'une autre team')+' ». Quitte-la avant de répondre à cette invitation.',true);
+  return;
+ }
+ const name=document.getElementById('teamDisplayName'),codeInput=document.getElementById('teamCode');
+ if(!name||!codeInput)return;
+ name.value=String(displayName||'').slice(0,24);
+ codeInput.value=formatTeamCode(code);
+ await joinTeam();
+}
 async function leaveTeam(){
  if(teamBusy||!session)return;
  const wasLast=Number(teamData.team?.memberCount)===1;
@@ -2074,13 +2155,17 @@ function renderTeam(){
   }
   return;
  }
- card.innerHTML=`<h3>🏆 TEAM & HIGHSCORE</h3><p>Crée une team ou rejoins-la avec son code. Le classement réunit le meilleur score de chaque membre et leur total, sans afficher les e-mails.</p><label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile"></label><label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div><div class="team-separator"><span>OU REJOINDRE AVEC UN CODE</span></div><label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="secondary" id="teamJoin">Rejoindre la team</button></div><div class="cloud-status" id="teamStatus" role="status">Le créateur devient administrateur. Un compte e-mail est nécessaire pour retrouver ta team et compter chaque joueur une seule fois.</div>`;
+ const displayField=`<label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(session.user.displayName||'')}"></label>`;
+ const createFields=`<label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div>`;
+ const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div>`;
+ if(pendingTeamCode){
+  card.innerHTML=`<h3>🏆 INVITATION À UNE TEAM</h3><div class="team-invite-callout"><span>CODE DE L’INVITATION</span><b>${safeText(formatTeamCode(pendingTeamCode))}</b></div><p>Choisis ton pseudo dans la team, puis rejoins les autres joueurs. Aucune adresse e-mail n’est demandée.</p>${displayField}${joinFields}<details class="team-create-alternative"><summary>Créer plutôt une nouvelle team</summary>${createFields}</details><div class="cloud-status" id="teamStatus" role="status">L’invitation est prête : le code est déjà rempli.</div>`;
+ }else{
+  card.innerHTML=`<h3>🏆 TEAM & HIGHSCORE</h3><p>Crée une team ou rejoins-la avec son code. Le classement réunit le meilleur score de chaque membre et leur total, sans afficher les identifiants de connexion.</p>${displayField}${createFields}<div class="team-separator"><span>OU REJOINDRE AVEC UN CODE</span></div>${joinFields}<div class="cloud-status" id="teamStatus" role="status">Le créateur devient administrateur. Ton accès par pseudo ou e-mail permet de retrouver ta team et de compter chaque joueur une seule fois.</div>`;
+ }
  document.getElementById('teamCreate').onclick=createTeam;
  document.getElementById('teamJoin').onclick=joinTeam;
- if(pendingTeamCode){
-  document.getElementById('teamCode').value=formatTeamCode(pendingTeamCode);
-  teamStatus('Lien d’invitation détecté : le code est prérempli. Choisis ton pseudo puis rejoins la team.');
- }
+ if(pendingTeamCode)document.getElementById('teamCode').value=formatTeamCode(pendingTeamCode);
 }
 function openTeamBoard(){
  if(!teamData.team)return;
@@ -2119,13 +2204,22 @@ function renderPanel(target=mount){
   return;
  }
  if(!session){
-  mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>Compte e-mail optionnel, pour retrouver ta progression sur un autre appareil ou rejoindre une team. Le jeu local reste disponible sans compte.</p><label>E-mail<input id="cloudEmail" type="email" autocomplete="email" maxlength="180"></label><label>Mot de passe<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="128"></label><div class="cloud-actions"><button class="secondary" id="cloudLogin">Se connecter</button><button class="secondary" id="cloudRegister">Créer un compte</button><button class="secondary" id="cloudResend">Renvoyer la confirmation</button></div><div class="cloud-status" id="cloudStatus" role="status">Le mot de passe part uniquement vers le service de connexion et n’est jamais enregistré par le jeu.</div></section>`;
+  const invited=!!pendingTeamCode;
+  mount.innerHTML=`<section class="cloud-card${invited?' team-invite-access':''}"${invited?' id="teamInviteCard"':''}>${invited?`<div class="team-invite-badge">INVITATION À REJOINDRE UNE TEAM</div><div class="team-invite-callout"><span>CODE DE L’INVITATION</span><b>${safeText(formatTeamCode(pendingTeamCode))}</b></div>`:''}<h3>${invited?'PSEUDO + MOT DE PASSE, PUIS TU JOUES AVEC EUX':'ACCÈS EN LIGNE'}</h3><p>${invited?'Crée simplement ton accès avec un pseudo et un mot de passe : tu rejoindras la team juste après, sans adresse e-mail.':'Un pseudo et un mot de passe suffisent pour la sauvegarde et les teams. Le jeu local reste disponible sans accès.'}</p><label>Pseudo<input id="cloudPseudo" type="text" autocomplete="username" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile"></label><label>Mot de passe<input id="cloudPseudoPassword" type="password" autocomplete="current-password" maxlength="128"></label><div class="cloud-actions"><button class="secondary" id="cloudPseudoLogin">${invited?'Me connecter et rejoindre':'Se connecter'}</button><button class="${invited?'primary':'secondary'}" id="cloudPseudoRegister">${invited?'Créer mon accès et rejoindre':'Créer mon accès'}</button></div><details class="cloud-email-access"><summary>Utiliser une adresse e-mail (optionnel)</summary><label>E-mail<input id="cloudEmail" type="email" autocomplete="email" maxlength="180"></label><label>Mot de passe<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="128"></label><div class="cloud-actions"><button class="secondary" id="cloudLogin">Se connecter avec e-mail</button><button class="secondary" id="cloudRegister">Créer un compte e-mail</button><button class="secondary" id="cloudResend">Renvoyer la confirmation</button></div></details><div class="cloud-status" id="cloudStatus" role="status">Le mot de passe n’est jamais enregistré par le jeu. Sans e-mail, conserve-le soigneusement : aucune récupération par message.</div>${invited?'<div class="cloud-actions"><button class="team-invite-dismiss" id="teamInviteDismiss" type="button">Ignorer cette invitation</button></div>':''}</section>`;
+  document.getElementById('cloudPseudoLogin').onclick=()=>authenticatePseudo(false);
+  document.getElementById('cloudPseudoRegister').onclick=()=>authenticatePseudo(true);
+  document.getElementById('cloudPseudoPassword').addEventListener('keydown',event=>{if(event.key==='Enter')authenticatePseudo(false)});
   document.getElementById('cloudLogin').onclick=()=>authenticate(false);
   document.getElementById('cloudRegister').onclick=()=>authenticate(true);
   document.getElementById('cloudResend').onclick=resendConfirmation;
+  if(invited){
+   document.getElementById('teamInviteDismiss').onclick=()=>{clearPendingTeamCode();renderPanel()};
+   requestAnimationFrame(()=>document.getElementById('teamInviteCard')?.scrollIntoView({block:'nearest'}));
+  }
   return;
  }
- mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>Compte : <b>${safeText(session.user.email||'compte en ligne')}</b><br>Un emplacement cloud par compte ; le dernier envoi remplace le précédent.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée après chaque changement.':'Premier envoi manuel, puis synchronisation automatique.'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
+ const identity=session.user.displayName||session.user.email||'accès en ligne',identityLabel=session.user.displayName?'Pseudo':'Compte';
+ mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>${identityLabel} : <b>${safeText(identity)}</b><br>Un emplacement cloud par accès ; le dernier envoi remplace le précédent.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée après chaque changement.':'Premier envoi manuel, puis synchronisation automatique.'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
  document.getElementById('cloudSync').onclick=()=>syncNow();
  document.getElementById('cloudRestore').onclick=restore;
  document.getElementById('cloudLogout').onclick=logout;
@@ -2141,6 +2235,19 @@ css.textContent=`
 .cloud-card label{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:10px;margin:8px 0;font-size:11px;color:#d3c8e2}
 .cloud-card input,.cloud-card select{min-width:0;width:100%;padding:9px;background:#251f36;color:#f2eaff;border:1px solid #65577c;border-radius:6px}
 .cloud-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.cloud-card .cloud-actions .primary{padding:11px 14px;font-size:11px}
+.team-invite-access{border-color:#d6ae6d99;background:linear-gradient(145deg,#2d2438,#172436);box-shadow:0 12px 35px #09061255}
+.team-invite-badge{margin-bottom:10px;color:#ffd18e;font-size:9px;font-weight:700;letter-spacing:1.2px}
+.team-invite-callout{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:10px 12px;border:1px dashed #d9b77399;border-radius:8px;background:#33284088}
+.team-invite-callout span{color:#c6b6d2;font-size:8px;letter-spacing:1px}
+.team-invite-callout b{color:#ffe0a0;font:700 15px ui-monospace,monospace;letter-spacing:2px;white-space:nowrap}
+.cloud-email-access{margin-top:13px;padding-top:10px;border-top:1px solid #ffffff12}
+.cloud-email-access summary{cursor:pointer;color:#aebdD2;font-size:10px;line-height:1.6}
+.cloud-email-access[open] summary{margin-bottom:10px}
+.team-create-alternative{margin-top:12px;padding-top:9px;border-top:1px solid #ffffff12}
+.team-create-alternative summary{cursor:pointer;color:#b7a8c5;font-size:10px}
+.team-create-alternative[open] summary{margin-bottom:10px}
+.team-invite-dismiss{padding:6px 0;border:0;background:transparent;color:#aa9bb8;font-size:9px;text-decoration:underline}
 .team-mobile-share{display:none;margin:10px 0;padding:10px;border:1px solid #79b99a44;border-radius:8px;background:#18302755}
 .team-mobile-share>span{color:#a9d8c5;font-size:9px;letter-spacing:1px}
 .team-mobile-share a{text-decoration:none;text-align:center}
@@ -2209,6 +2316,343 @@ window.MinuitCloud={
  get user(){return session?.user||null}
 };
 if(enabled&&session&&auto)schedule();
-if(enabled&&pendingTeamCode)setTimeout(()=>{if(typeof archives==='function')archives()},0);
+if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
+})();
+</script><script>/* Réglages remaniés : les contrôles d’origine sont déplacés, jamais recréés. */
+(()=>{
+'use strict';
+const baseSettings=settings;
+function updateAudioSummary(){
+ const button=$('settingsSoundToggle'),status=$('settingsAudioStatus');if(!button||!status)return;
+ button.textContent=prefs.sound?'Couper tout le son':'Activer le son';
+ button.setAttribute('aria-pressed',String(prefs.sound));
+ status.textContent=!prefs.sound?'Aucun son ne sera joué.':$('opt-music')?.checked?'Musique, thème et ambiances activés.':'Seuls les effets sonores seront actifs.';
+}
+function leaveSettings(){
+ if(['play','pause'].includes(previousState)){state=previousState;if(state==='pause')pauseScreen();else hideOverlay()}
+ else window.LocalLeague?.menu?.();
+}
+settings=function(){
+ if(state==='settings')return;
+ baseSettings();
+ const overlay=$('overlay');
+ const nodes={
+  difficulty:$('difficulty'),nickname:$('nickname'),volume:$('volume'),music:$('opt-music'),bindings:$('bindings'),
+  exports:overlay.querySelector('.journey-save-controls'),message:$('saveMessage'),tutorial:$('restartTutorial'),save:$('save')
+ };
+ overlay.innerHTML=`<section class="settings-page" aria-label="Réglages du jeu"><header class="settings-header"><div><div class="menu-kicker">PRÉPARE TON VOL</div><h2>Réglages</h2><p>Personnalise ton aventure et retrouve chaque option au bon endroit.</p></div><div class="settings-emblem" aria-hidden="true"><span>☾</span><i>⚙</i></div></header><div class="settings-grid"><section class="settings-card"><div class="settings-card-title"><span>01</span><div><h3>Aventure</h3><p>Ton identité et le niveau de l’aventure libre.</p></div></div><label class="settings-field"><span>Difficulté<small>Les défis restent en Nuit noire.</small></span><span id="settingsDifficultySlot"></span></label><label class="settings-field"><span>Pseudo des records<small>16 caractères maximum.</small></span><span id="settingsNicknameSlot"></span></label><div class="settings-note">Aucune option de facilité : les dangers, apparitions et effets de jeu restent identiques.</div></section><section class="settings-card"><div class="settings-card-title"><span>02</span><div><h3>Audio</h3><p>Le volume et les différentes couches sonores.</p></div></div><label class="settings-field settings-volume"><span>Volume général<small id="settingsVolumeValue">35 %</small></span><span id="settingsVolumeSlot"></span></label><label class="settings-field settings-toggle-row"><span>Musique et ambiance<small>Le thème et les boucles des mondes.</small></span><span class="settings-switch" id="settingsMusicSlot"></span></label><div class="settings-audio-status" id="settingsAudioStatus" role="status"></div><button class="secondary settings-sound-toggle" id="settingsSoundToggle" type="button"></button></section><section class="settings-card settings-card-wide"><div class="settings-card-title"><span>03</span><div><h3>Commandes</h3><p>Clique sur une action, puis appuie sur la nouvelle touche.</p></div></div><div id="settingsBindingsSlot"></div><div class="settings-guide-row"><span>Les commandes tactiles et la manette restent disponibles.</span><span id="settingsTutorialSlot"></span></div></section><section class="settings-card settings-card-wide settings-save-card"><div class="settings-card-title"><span>04</span><div><h3>Sauvegarde locale</h3><p>Exporte ta progression avant de changer d’appareil.</p></div></div><div id="settingsExportSlot"></div><div id="settingsMessageSlot"></div></section></div><footer class="settings-actions"><button class="secondary" id="settingsCancel" type="button">Retour sans enregistrer</button><span id="settingsSaveSlot"></span></footer></section>`;
+ const move=(slot,node)=>{if(node)document.querySelector(slot).replaceWith(node)};
+ move('#settingsDifficultySlot',nodes.difficulty);move('#settingsNicknameSlot',nodes.nickname);move('#settingsVolumeSlot',nodes.volume);move('#settingsMusicSlot',nodes.music);move('#settingsBindingsSlot',nodes.bindings);move('#settingsExportSlot',nodes.exports);move('#settingsMessageSlot',nodes.message);move('#settingsTutorialSlot',nodes.tutorial);move('#settingsSaveSlot',nodes.save);
+ const updateVolume=()=>{$('settingsVolumeValue').textContent=Math.round(Number(nodes.volume.value)*100)+' %'};
+ nodes.volume.addEventListener('input',updateVolume);nodes.music.addEventListener('change',updateAudioSummary);updateVolume();updateAudioSummary();
+ $('settingsSoundToggle').onclick=()=>{prefs.sound=!prefs.sound;savePrefs();if(prefs.sound)activateAudio();else{syncAudio();if(audio)audio.suspend().catch(()=>{})}updateAudioSummary();setTimeout(updateAudioSummary,350)};
+ $('settingsCancel').onclick=leaveSettings;
+ overlay.scrollTop=0;
+};
+const style=document.createElement('style');style.textContent=`
+.overlay:has(.settings-page){justify-content:flex-start;padding:18px 20px}
+.settings-page{width:min(900px,100%);margin:0 auto;text-align:left;color:#e8dced}
+.settings-header{display:flex;align-items:center;justify-content:space-between;gap:20px;height:auto;min-height:0;padding:17px 20px;border:1px solid #b8926655;border-radius:14px;background:radial-gradient(circle at 90% 0,#80516b33,transparent 40%),linear-gradient(135deg,#291b38,#14101f);box-shadow:0 14px 45px #05030c55}
+.settings-header h2{margin:4px 0 5px;color:#fff0e1;font:400 35px/1 Georgia,serif}.settings-header p{margin:0;color:#bdaac9;font-size:11px;line-height:1.5}.settings-emblem{position:relative;flex:0 0 55px;height:55px;display:grid;place-items:center;border:1px solid #d0a16855;border-radius:50%;background:#3b273e;color:#f5cc8f;box-shadow:0 0 25px #e3a45e15}.settings-emblem span{font-size:28px}.settings-emblem i{position:absolute;right:-3px;bottom:-2px;display:grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#21162e;color:#d7bfe2;font-size:12px;font-style:normal}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.settings-card{min-width:0;padding:14px 15px;border:1px solid #765d8144;border-radius:12px;background:linear-gradient(145deg,#21182ddd,#15111fe8)}.settings-card-wide{grid-column:1/-1}.settings-card-title{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}.settings-card-title>span{display:grid;place-items:center;flex:0 0 29px;height:29px;border:1px solid #bd8c5955;border-radius:8px;background:#392539;color:#e8bd83;font:700 9px/1 ui-monospace,monospace}.settings-card-title h3{margin:0 0 3px;color:#efd7bb;font-size:12px;letter-spacing:.5px}.settings-card-title p{margin:0;color:#9f8cac;font-size:9px;line-height:1.45}
+.settings-field{display:flex;align-items:center;justify-content:space-between;gap:15px;margin:12px 0;color:#dbcce2;font-size:11px}.settings-field>span:first-child{min-width:0}.settings-field small{display:block;margin-top:4px;color:#91809e;font-size:8px;line-height:1.4}.settings-field input[type=text],.settings-field select{width:180px;min-width:0;padding:9px 10px;border:1px solid #70547e;border-radius:7px;background:#2b2039;color:#f1e4f6;font:11px Arial}.settings-field input[type=range]{width:180px;accent-color:#e5a45f}.settings-volume small{color:#f0c587;font-size:10px}.settings-toggle-row{padding-top:3px}.settings-switch{display:flex;align-items:center;flex:none}.settings-switch input{appearance:none;width:42px;height:23px;margin:0;border:1px solid #6d557a;border-radius:20px;background:#291e35;cursor:pointer;transition:background .15s,border-color .15s}.settings-switch input:after{content:"";display:block;width:17px;height:17px;margin:2px;border-radius:50%;background:#a89bb3;transition:transform .15s,background .15s}.settings-switch input:checked{border-color:#d59c61;background:#8b5a3f}.settings-switch input:checked:after{transform:translateX(19px);background:#ffe0a5}.settings-note{margin-top:13px;padding:9px 10px;border-left:2px solid #a67b57;background:#2b1d2b88;color:#ad99b6;font-size:9px;line-height:1.55}.settings-audio-status{margin-top:12px;color:#b6a1bf;font-size:9px;line-height:1.5}.settings-sound-toggle{margin-top:8px;padding:7px 10px;border-color:#8f6b5655;color:#e5c49b;font-size:9px}
+#bindings{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0}#bindings button{min-width:0;margin:0;padding:9px 7px;border-color:#6b527766;background:#2a2038;color:#e4d5eb;font-size:10px;white-space:nowrap}#bindings button:hover{border-color:#c3986c;color:#ffe0aa}.settings-guide-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:11px;color:#9c89a8;font-size:9px}.settings-guide-row button{margin:0;padding:7px 10px;font-size:9px;white-space:nowrap}
+.settings-save-card .journey-save-controls{margin:0;justify-content:flex-start}.settings-save-card .journey-save-controls button,.settings-save-card .journey-import{margin:0;font-size:10px}.settings-save-card .journey-small{max-width:none;margin:8px 0 0;font-size:9px}
+.settings-actions{position:sticky;bottom:0;z-index:4;display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px;padding:11px 12px;border:1px solid #80608355;border-radius:11px;background:#17111fee;backdrop-filter:blur(9px);box-shadow:0 -8px 24px #0b081455}.settings-actions button{margin:0;min-height:42px}.settings-actions .primary{border:1px solid #ffd09944;background:linear-gradient(135deg,#ffbd72,#ed8854);box-shadow:0 6px 20px #e8874522}.settings-actions>span{display:flex}
+@media(max-width:650px){.overlay:has(.settings-page){padding:12px 10px}.settings-header{padding:13px 14px;border-radius:11px}.settings-header h2{font-size:30px}.settings-header p{max-width:245px;font-size:10px}.settings-emblem{flex-basis:43px;height:43px}.settings-emblem span{font-size:22px}.settings-emblem i{width:19px;height:19px;font-size:10px}.settings-grid{grid-template-columns:1fr;gap:9px;margin-top:9px}.settings-card-wide{grid-column:auto}.settings-card{padding:12px}.settings-card-title{margin-bottom:9px}.settings-field{align-items:flex-start;flex-direction:column;gap:7px;margin:11px 0;font-size:12px}.settings-field input[type=text],.settings-field select{width:100%;padding:11px;font-size:13px}.settings-field input[type=range]{width:100%;height:24px}.settings-toggle-row{align-items:center;flex-direction:row}.settings-volume small{display:inline;margin-left:6px}.settings-note{font-size:10px}.settings-audio-status{font-size:10px}.settings-sound-toggle{min-height:38px;font-size:10px}#bindings{grid-template-columns:1fr 1fr;gap:7px}#bindings button{min-height:44px;font-size:10px}.settings-guide-row{align-items:flex-start;flex-direction:column;font-size:10px}.settings-guide-row button{min-height:38px}.settings-save-card .journey-save-controls{display:grid;grid-template-columns:1fr}.settings-save-card .journey-save-controls button,.settings-save-card .journey-import{min-height:40px;text-align:center}.settings-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:9px;gap:6px}.settings-actions button{min-width:0;min-height:44px;padding:10px 8px;font-size:10px}.settings-actions .secondary,.settings-actions .primary{width:100%}}
+`;
+document.head.appendChild(style);$('settings').onclick=settings;
+})();
+</script><script>/* Accueil : portrait de la sorcière et thème musical prêt dès l’arrivée. */
+(()=>{
+'use strict';
+const baseMenu=Journey.menu;
+const unlockEvents=['pointerdown','touchstart','keydown'];
+let unlockBound=false;
+function removeAudioUnlock(){
+ if(!unlockBound)return;unlockBound=false;
+ for(const type of unlockEvents)window.removeEventListener(type,unlockHomeAudio,true);
+}
+function updateHomeAudio(){
+ const button=$('homeSoundToggle');if(!button)return;
+ const enabled=prefs.sound&&prefs.music,running=enabled&&audio?.state==='running';
+ const label=$('homeSoundLabel'),note=$('homeAudioNote'),icon=$('homeSoundIcon');
+ button.setAttribute('aria-pressed',String(running));
+ button.setAttribute('aria-label',running?'Couper la musique de l’accueil':'Lancer la musique de l’accueil');
+ button.classList.toggle('is-playing',running);
+ const write=(node,value)=>{if(node&&node.textContent!==value)node.textContent=value};
+ write(icon,running?'♫':'♪');
+ write(label,!enabled?'Activer la musique':running?'Thème de minuit':'Lancer la musique');
+ write(note,!enabled?'Son coupé':running?(mp3Music?.current==='menu'?'Lecture en cours':'Chargement du thème…'):'Un geste pour démarrer');
+ if(running||!enabled)removeAudioUnlock();else if(audio)installAudioUnlock();
+}
+function unlockHomeAudio(event){
+ if(event?.target?.closest?.('#homeSoundToggle'))return;
+ if(!prefs.sound||!prefs.music){removeAudioUnlock();return}
+ startHomeAudio();
+}
+function installAudioUnlock(){
+ if(unlockBound)return;unlockBound=true;
+ for(const type of unlockEvents)window.addEventListener(type,unlockHomeAudio,true);
+}
+function startHomeAudio(){
+ if(!prefs.sound||!prefs.music){updateHomeAudio();return Promise.resolve(false)}
+ initAudio();
+ if(!audio){updateHomeAudio();return Promise.resolve(false)}
+ // Précharger et programmer le MP3 même si le contexte est encore suspendu :
+ // il sera ainsi prêt au premier geste autorisé par le navigateur.
+ audioSignature='';syncAudio();
+ let resumed;
+ try{resumed=audio.resume()}catch{resumed=Promise.reject(Error('Audio indisponible'))}
+ if(audio.state!=='running')installAudioUnlock();
+ updateHomeAudio();
+ return Promise.resolve(resumed).then(()=>{
+  audioSignature='';syncAudio();
+  if(audio.state==='running')removeAudioUnlock();else installAudioUnlock();
+  updateHomeAudio();return audio.state==='running';
+ }).catch(()=>{installAudioUnlock();updateHomeAudio();return false});
+}
+function toggleHomeAudio(){
+ const playing=prefs.sound&&prefs.music&&audio?.state==='running';
+ if(playing){
+  prefs.sound=false;savePrefs();audioSignature='';syncAudio();removeAudioUnlock();
+  audio?.suspend().catch(()=>{});updateHomeAudio();return;
+ }
+ if(!prefs.sound||!prefs.music){prefs.sound=true;prefs.music=true;savePrefs()}
+ startHomeAudio();
+}
+Journey.menu=function(){
+ baseMenu();if(state!=='league-menu'||Adventure.training)return;
+ const ids=['playAdventure','localResume','localRanked','localDaily','prepareFlight','wardrobe','masteryMenu','archives','localSettings','labMenu','startGuided','localHelp'],actions={};
+ for(const id of ids)if($(id))actions[id]=$(id).onclick;
+ const level=Math.floor(Math.sqrt(Math.max(0,Journey.state.xp)/120))+1,finishedLabel=GuidedTraining.finished?'Revoir l’entraînement':'S’entraîner';
+ const button=(id,label,icon)=>`<button class="secondary menu-card-button" id="${id}"><span class="menu-card-icon">${icon}</span><span>${label}</span></button>`;
+ overlay(`<section class="main-menu redesigned-menu home-menu"><section class="menu-hero-card home-hero"><div class="menu-visual home-visual" id="menuVisual"><div class="home-stars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div class="home-moon" aria-hidden="true"></div><div class="home-cloud home-cloud-one" aria-hidden="true"></div><div class="home-cloud home-cloud-two" aria-hidden="true"></div><img class="home-witch" src="${window.MinuitArt.witch.src}" alt="Sorcière de profil, volant sur son balai devant la lune" draggable="false"><div class="home-visual-caption"><span>LA SORCIÈRE DE MINUIT</span><small>Le vol commence avant l’aube</small></div></div><div class="menu-copy"><div class="menu-kicker">UN SHOOT’EM UP ARCADE · MINUIT → AUBE</div><h1><span>La Nuit</span><span>aux Trousses</span></h1><p>Enfourche ton balai, traverse cinq mondes et repousse les gardiens de la nuit.</p><div class="home-world-route" aria-label="Contenu de l’aventure"><span>5 mondes</span><i>·</i><span>25 vagues</span><i>·</i><span>5 gardiens</span></div><div class="menu-primary"><button class="primary" id="playAdventure"><span class="button-icon">✦</span>Jouer maintenant</button><button class="secondary training-entry" id="startGuided"><span class="button-icon">⌁</span>${finishedLabel}<small>5 exercices · sans score ni progression</small></button></div>${actions.localResume?'<button class="secondary resume-button" id="localResume">↻ Reprendre le vol sauvegardé</button>':''}</div></section><section class="menu-status"><div class="home-level"><b>NIVEAU ${level}</b><span>${Journey.state.xp} XP · ${Journey.state.achievements.length} succès</span></div><button class="home-sound-button" id="homeSoundToggle" type="button" aria-pressed="false"><span id="homeSoundIcon">♪</span><span><b id="homeSoundLabel">Thème de minuit</b><small id="homeAudioNote" role="status">Préparation du thème…</small></span></button></section><button class="home-account-access" id="archives" type="button"><span class="home-account-icon" aria-hidden="true">☁</span><span><b>Compte & team</b><small>Pseudo · sauvegarde · invitations</small></span><i aria-hidden="true">→</i></button><div class="home-menu-panels"><section class="menu-group"><h2>TON VOL</h2><div class="menu-grid three">${button('prepareFlight','Préparer mon vol','✦')}${button('wardrobe','Collection','◇')}${button('masteryMenu','Exploits & variantes','★')}</div></section><section class="menu-group"><h2>DÉFIS & PRATIQUE</h2><div class="menu-grid">${button('localRanked','Partie classée','◆')}${button('localDaily','Défi du jour','☾')}${button('labMenu','Laboratoire libre','⚗')}</div></section></div><div class="menu-bottom"><button class="secondary" id="localHelp">? Guide illustré</button><button class="secondary" id="localSettings">⚙ Réglages</button></div></section>`);
+ for(const [id,handler]of Object.entries(actions))if($(id)&&handler)$(id).onclick=handler;
+ $('homeSoundToggle').onclick=toggleHomeAudio;
+ updateHomeAudio();
+ if(prefs.sound&&prefs.music&&(!audio||audio.state!=='running'||mp3Music?.key!=='menu'))startHomeAudio();else removeAudioUnlock();
+};
+const style=document.createElement('style');style.textContent=`
+.home-menu{max-width:850px!important}
+.home-menu .home-hero{display:grid;grid-template-columns:minmax(285px,.95fr) minmax(0,1.05fr);gap:0;align-items:stretch;min-height:340px;padding:0;overflow:hidden;border-color:#b8926655;background:linear-gradient(135deg,#291b38,#12101f 72%);box-shadow:0 22px 70px #05030caa,inset 0 1px #fff1d608}
+#menuVisual.home-visual{position:relative;display:block;min-height:340px;border:0;border-radius:0;background:radial-gradient(circle at 47% 38%,#80516b55,transparent 48%),linear-gradient(165deg,#271b3c,#11152a 72%,#17101f);box-shadow:inset -30px 0 60px #0d0c1a55;overflow:hidden;isolation:isolate}
+.home-moon{position:absolute;z-index:-1;width:190px;height:190px;left:50%;top:43%;transform:translate(-50%,-50%);border-radius:50%;background:radial-gradient(circle at 35% 28%,#fff9d9,#f5d5a0 55%,#c88771 100%);box-shadow:0 0 35px #ffd89b55,0 0 95px #dd8d7533}
+.home-moon:before{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 28% 64%,#a76f6626 0 9%,transparent 10%),radial-gradient(circle at 69% 32%,#a76f6629 0 13%,transparent 14%),radial-gradient(circle at 72% 72%,#a76f661c 0 7%,transparent 8%)}
+.home-witch{position:absolute;z-index:2;width:310px;max-width:108%;left:50%;top:45%;transform:translate(-50%,-50%);filter:drop-shadow(0 12px 12px #08061188) drop-shadow(0 0 14px #f0b78022);pointer-events:none;user-select:none}
+.home-cloud{position:absolute;z-index:3;width:210px;height:35px;border-radius:50%;background:linear-gradient(90deg,transparent,#b5a3c92b,transparent);filter:blur(7px);pointer-events:none}
+.home-cloud-one{left:-35px;bottom:68px;transform:rotate(-6deg)}.home-cloud-two{right:-60px;top:75px;transform:rotate(5deg);opacity:.65}
+.home-stars i{position:absolute;width:3px;height:3px;border-radius:50%;background:#ffe4ac;box-shadow:0 0 8px #ffd18c}.home-stars i:nth-child(1){left:15%;top:16%}.home-stars i:nth-child(2){right:14%;top:20%;width:2px;height:2px}.home-stars i:nth-child(3){left:22%;top:52%;width:2px;height:2px}.home-stars i:nth-child(4){right:18%;top:57%}.home-stars i:nth-child(5){left:46%;top:9%;width:2px;height:2px}
+.home-visual-caption{position:absolute;z-index:4;left:18px;bottom:16px;display:flex;flex-direction:column;gap:3px;text-shadow:0 2px 5px #090612}.home-visual-caption span{color:#f5d6a1;font-size:8px;font-weight:800;letter-spacing:2px}.home-visual-caption small{color:#c2aec9;font-size:9px}
+.home-hero .menu-copy{padding:28px 27px 25px 20px;text-align:left;align-self:center}.home-hero .menu-copy h1{margin:8px 0 14px;font-size:clamp(40px,4.4vw,56px);line-height:.93;letter-spacing:-1.8px;text-shadow:0 3px 20px #0005}.home-hero .menu-copy h1 span{display:block;white-space:nowrap}.home-hero .menu-copy h1 span:last-child{color:#f3c692;font-size:.86em;font-style:italic}.home-hero .menu-copy p{max-width:370px;margin-bottom:12px;color:#cdbbd7;font-size:12px;line-height:1.65}
+.home-world-route{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:0 0 17px;color:#d7b98f;font-size:9px;font-weight:700;letter-spacing:.4px}.home-world-route i{color:#765b7c;font-style:normal}
+.home-menu .menu-primary{grid-template-columns:1.25fr 1fr;gap:8px}.home-menu .menu-primary>button{min-height:55px}.home-menu .menu-primary .primary{border:1px solid #ffd09955;background:linear-gradient(135deg,#ffbd72,#ed8854);box-shadow:0 8px 24px #e8874530;font-size:14px}.home-menu .training-entry{background:#2d223c;border-color:#8f70a0}.home-menu .resume-button{margin-top:8px}
+.home-menu .menu-status{margin:10px 0 0;padding:9px 11px;border:1px solid #76608044;border-radius:10px;background:#191324aa}.home-level{display:flex;align-items:center;gap:4px}.home-level span{color:#a995b8;font-size:9px}
+.home-sound-button{display:flex;align-items:center;gap:8px;margin:0;padding:6px 10px;border:1px solid #a47b5355;border-radius:8px;background:#2c2035;color:#f1cc93;text-align:left;min-height:40px}.home-sound-button>span:first-child{font-size:19px;line-height:1}.home-sound-button>span:last-child{display:flex;flex-direction:column;gap:2px}.home-sound-button b{font-size:9px;letter-spacing:.3px}.home-sound-button small{color:#a995b8;font-size:8px}.home-sound-button.is-playing{border-color:#b98b5e88;background:linear-gradient(135deg,#3d2a37,#251d35)}.home-sound-button.is-playing>span:first-child{color:#ffd88d;text-shadow:0 0 10px #ffbd69}
+.home-account-access{display:flex;align-items:center;gap:11px;width:100%;margin:10px 0 0;padding:10px 13px;border:1px solid #b78a5d66;border-radius:10px;background:linear-gradient(110deg,#34243e,#211a31);color:#f2d5aa;text-align:left;box-shadow:inset 0 1px #ffffff08}.home-account-access:hover{border-color:#d3a66f;background:linear-gradient(110deg,#40304a,#292037)}.home-account-icon{display:grid;place-items:center;flex:0 0 31px;height:31px;border-radius:8px;background:#563c4d;color:#ffd28f;font-size:17px}.home-account-access>span:nth-child(2){display:flex;flex:1;flex-direction:column;gap:3px}.home-account-access b{font-size:11px;letter-spacing:.3px}.home-account-access small{color:#ad9abb;font-size:9px}.home-account-access i{color:#e8bc82;font-size:17px;font-style:normal}
+.home-menu-panels{display:grid;grid-template-columns:.88fr 1.12fr;gap:14px;margin-top:11px}.home-menu-panels .menu-group{min-width:0;margin:0;padding:11px;border:1px solid #6e587744;border-radius:10px;background:#17122088}.home-menu-panels .menu-group h2{margin-bottom:8px;color:#d9bfdf}.home-menu-panels .menu-grid.three{grid-template-columns:1fr}.home-menu-panels .menu-card-button{min-height:35px;padding:7px 9px;border-color:#634d7344;background:linear-gradient(135deg,#2a2038,#211a30);font-size:10px}.home-menu-panels .menu-card-button:hover{border-color:#b98c6877;background:#35263f}.home-menu-panels .menu-card-icon{width:23px;height:23px;background:#493049}
+.home-menu .menu-bottom{margin-top:11px}.home-menu .menu-bottom button{border-color:#6c547b55;background:#1e172c}
+@media(max-width:850px){
+ body:has(.home-menu) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+ .overlay:has(.home-menu){justify-content:flex-start;padding:10px}
+ .home-menu{width:100%;max-width:none!important;min-height:100%}
+}
+@media(max-width:650px){
+ .home-menu .home-hero{grid-template-columns:1fr;min-height:0}#menuVisual.home-visual{min-height:110px;height:110px}.home-moon{width:84px;height:84px;top:46%}.home-witch{width:150px;top:48%}.home-cloud-one{bottom:19px}.home-cloud-two{top:23px}.home-visual-caption{left:10px;bottom:7px}.home-visual-caption span{font-size:5px;letter-spacing:1.2px}.home-visual-caption small{display:none}
+ .home-hero .menu-copy{padding:10px 12px 12px;text-align:center}.home-hero .menu-copy .menu-kicker{font-size:7px}.home-hero .menu-copy h1{font-size:clamp(26px,7.7vw,30px);letter-spacing:-1px;line-height:1;margin:5px 0 7px;white-space:normal}.home-hero .menu-copy h1 span{display:inline;white-space:normal}.home-hero .menu-copy h1 span:last-child:before{content:" "}.home-hero .menu-copy p{margin:0 auto 7px;font-size:10px;line-height:1.4}.home-world-route{justify-content:center;margin-bottom:8px;font-size:7px}.home-menu .menu-primary{grid-template-columns:1fr 1fr}.home-menu .menu-primary>button{min-height:44px;padding:9px 7px}.home-menu .menu-primary .primary{font-size:12px}.home-menu .training-entry small{font-size:7px}
+ .home-menu .menu-status{flex-direction:row;align-items:center;margin-top:7px;padding:5px 7px;gap:7px}.home-level{display:block}.home-level b{display:block;margin:0 0 2px;font-size:8px}.home-level span{font-size:7px}.home-sound-button{padding:4px 7px;min-height:34px}.home-sound-button b{font-size:8px}.home-sound-button small{font-size:7px}
+ .home-account-access{margin-top:7px;padding:7px 10px;min-height:45px}.home-account-icon{flex-basis:28px;height:28px}.home-account-access b{font-size:11px}.home-account-access small{font-size:8px}
+ .home-menu-panels{grid-template-columns:1fr;gap:7px;margin-top:7px}.home-menu-panels .menu-group{padding:8px}.home-menu-panels .menu-group h2{margin-bottom:6px}.home-menu-panels .menu-grid.three{grid-template-columns:1fr 1fr}.home-menu-panels .menu-grid.three .menu-card-button:last-child{grid-column:1/-1}.home-menu-panels .menu-card-button{min-height:35px;padding:6px 7px}.home-menu .menu-bottom{margin-top:7px}.home-menu .menu-bottom button{min-height:36px;padding:7px 10px}
+}
+@media(max-height:500px) and (min-width:651px){.home-menu .home-hero{min-height:275px}#menuVisual.home-visual{min-height:275px}.home-witch{width:255px}.home-moon{width:150px;height:150px}.home-hero .menu-copy{padding-top:18px;padding-bottom:18px}.home-hero .menu-copy h1{font-size:39px}.home-menu-panels{margin-top:8px}}
+@media(prefers-reduced-motion:reduce){.home-menu *{scroll-behavior:auto}}
+`;
+document.head.appendChild(style);setInterval(updateHomeAudio,800);Journey.menu();
+})();
+</script><script>/* La Nuit aux Trousses — tableau de highscores arcade local. */
+(function(){
+'use strict';
+const categories=[['normal','Nuit noire'],['easy','Clair de lune'],['hard','Cauchemar'],['daily','Défi du jour']];
+const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+let selected='normal';
+const css=document.createElement('style');
+css.textContent=`
+.arcade-score-screen{width:min(850px,100%);max-height:calc(100svh - 34px);overflow-y:auto;padding:18px;border:1px solid #c3935266;border-radius:14px;background:radial-gradient(circle at 50% 0,#542d4766,transparent 48%),linear-gradient(160deg,#171123f5,#0d0c18fa);box-shadow:0 20px 70px #0009,inset 0 0 40px #d8892110;scrollbar-width:thin;scrollbar-color:#8c6549 #171123}
+.arcade-marquee{position:relative;padding:12px 14px 15px;border:1px solid #b7874555;border-radius:9px;background:#120e1dcc;overflow:hidden}
+.arcade-marquee:after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,#ffffff06 4px);opacity:.45}
+.arcade-marquee>span{color:#d5a960;font-size:9px;letter-spacing:3px}
+.arcade-marquee h2{margin:7px 0 4px;color:#ffd477;font:900 clamp(32px,6vw,54px)/1 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:7px;text-shadow:0 0 16px #ff9c4666,3px 3px 0 #6c342f}
+.arcade-marquee p{margin:0;color:#bca9c5;font-size:11px;letter-spacing:.5px}
+.arcade-tabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:14px 0 10px}
+.arcade-tabs button{border:1px solid #72576d;border-radius:6px;background:#251b31;color:#c6b6ce;padding:8px 12px;font-size:10px;font-weight:700}
+.arcade-tabs button.active{border-color:#e0ad62;background:#61402f;color:#ffe1a3;box-shadow:inset 0 0 12px #ffb65718}
+.arcade-board-summary{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:8px 2px;color:#ae9abb;font-size:10px;text-align:left}
+.arcade-board-summary b{color:#eac488;font-size:11px;letter-spacing:.5px}
+.arcade-score-table{width:100%;--arcade-row-height:44px}
+.arcade-score-columns,.arcade-score-row{display:grid;grid-template-columns:58px minmax(0,1fr) 90px 112px;align-items:center;column-gap:8px}
+.arcade-score-columns{height:27px;padding:0 12px;border:1px solid #7f5c4744;border-bottom:0;border-radius:7px 7px 0 0;background:#2c1d2c;color:#b89469;font-size:8px;font-weight:800;letter-spacing:1.3px;text-align:left}
+.arcade-score-columns span:last-child{text-align:right}
+.arcade-score-viewport{position:relative;height:calc(var(--arcade-row-height) * var(--arcade-visible));overflow:hidden;border:1px solid #8d684b66;border-radius:0 0 7px 7px;background:linear-gradient(90deg,#100d1ddd,#191122dd);outline:none;scrollbar-width:thin;scrollbar-color:#b17c4e #191122;overscroll-behavior:contain}
+.arcade-score-viewport:focus-visible{border-color:#f0bd70;box-shadow:0 0 0 2px #f0bd7033}
+.arcade-score-track{will-change:transform}
+.arcade-score-row{height:var(--arcade-row-height);padding:0 12px;border-bottom:1px solid #ffffff0a;color:#d7c8df;font:11px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;text-align:left}
+.arcade-score-row:nth-child(odd){background:#ffffff03}
+.arcade-score-row:nth-child(1){color:#ffe0a0;background:linear-gradient(90deg,#9f66262b,transparent)}
+.arcade-score-row.is-last{color:#fff0c0;background:linear-gradient(90deg,#c17b365c,#7a452c22);box-shadow:inset 3px 0 #ffd276}
+.arcade-rank{color:#a98b70;font-weight:800}
+.arcade-score-row:nth-child(1) .arcade-rank{color:#ffd276}
+.arcade-player{min-width:0;display:flex;align-items:center;gap:8px}
+.arcade-player b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 11px/1.2 Arial,sans-serif}
+.arcade-player small{flex:none;color:#ffd276;font:700 7px/1 Arial,sans-serif;letter-spacing:.8px}
+.arcade-stage{color:#a994b8;text-align:center;font-size:10px}
+.arcade-points{color:#ffd08a;text-align:right;font-weight:800;letter-spacing:1px;font-variant-numeric:tabular-nums}
+.arcade-score-table.is-auto .arcade-score-track{animation:arcade-score-scroll var(--arcade-duration) linear infinite}
+.arcade-score-table.is-auto:hover .arcade-score-track,.arcade-score-table.is-auto:focus-within .arcade-score-track{animation-play-state:paused}
+.arcade-score-table.is-manual .arcade-score-viewport{overflow-y:auto}
+.arcade-score-table.is-manual .arcade-score-track{animation:none;transform:none;will-change:auto}
+.arcade-score-table.is-manual .arcade-score-duplicate{display:none}
+.arcade-score-table.is-static .arcade-score-viewport{overflow-y:auto}
+.arcade-scroll-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:7px;color:#8f7c9e;font-size:9px;text-align:left}
+.arcade-scroll-toggle{flex:none;border:1px solid #7c5d53;border-radius:5px;background:#2a1d30;color:#e5bd81;padding:6px 9px;font-size:9px}
+.arcade-scroll-toggle:hover{border-color:#d8a967;color:#ffe2aa}
+.arcade-score-empty{height:100%;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#8e7b9e;text-align:center}
+.arcade-score-empty>span{font-size:30px;color:#c49360}.arcade-score-empty>b{color:#d5b98e;font-size:12px}.arcade-score-empty>small{max-width:290px;font-size:10px;line-height:1.5}
+.arcade-outside{margin-top:8px;padding-top:7px;border-top:1px dashed #b48b5555}
+.arcade-outside>span{display:block;margin:0 0 5px;color:#d2a96e;font-size:8px;letter-spacing:1px;text-align:left}
+.arcade-outside .arcade-score-row{border:1px solid #b48b5555;border-radius:5px}
+.arcade-local-note{margin:11px 0 0;color:#81738f;font-size:9px;line-height:1.6}
+.arcade-board-actions{margin-top:12px;justify-content:center}
+.scoreboard-window .arcade-score-table{margin-top:9px}
+.scoreboard-window .arcade-score-columns,.scoreboard-window .arcade-score-row{grid-template-columns:40px minmax(0,1fr) 55px 82px;padding-left:8px;padding-right:8px;column-gap:5px}
+.scoreboard-window .arcade-score-columns{font-size:7px;letter-spacing:.5px}
+.scoreboard-window .arcade-player{display:block}.scoreboard-window .arcade-player b{display:block;font-size:10px}.scoreboard-window .arcade-player small{display:block;margin-top:2px;font-size:6px}
+.scoreboard-window .arcade-points{font-size:10px;letter-spacing:0}
+.scoreboard-window .arcade-scroll-controls{align-items:flex-start;font-size:8px}.scoreboard-window .arcade-scroll-toggle{font-size:8px;padding:5px 7px}
+.arcade-result-caption{margin-top:7px;color:#a892b4;font-size:8px;line-height:1.5;text-align:center}
+@keyframes arcade-score-scroll{0%,10%{transform:translateY(0)}90%,100%{transform:translateY(-50%)}}
+@media(max-width:850px){.overlay:has(.arcade-score-screen){justify-content:flex-start;padding:12px}.arcade-score-screen{margin:0 auto}}
+@media(max-width:560px){
+.arcade-score-table{--arcade-visible:3!important}
+.arcade-score-screen{padding:10px;max-height:calc(100svh - 20px);border-radius:10px}.arcade-marquee{padding:10px 8px 12px}.arcade-marquee h2{font-size:31px;letter-spacing:4px}.arcade-marquee>span{font-size:7px;letter-spacing:2px}.arcade-marquee p{font-size:9px}
+.arcade-tabs{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:10px 0 8px}.arcade-tabs button{padding:7px 5px;font-size:9px}
+.arcade-board-summary{display:block;margin:7px 2px;font-size:8px}.arcade-board-summary b{display:block;margin-bottom:3px;font-size:9px}
+.arcade-score-columns,.arcade-score-row{grid-template-columns:35px minmax(0,1fr) 45px 75px;column-gap:4px;padding-left:7px;padding-right:7px}
+.arcade-score-columns{font-size:6px;letter-spacing:.5px}.arcade-score-row{font-size:9px}.arcade-player{display:block}.arcade-player b{display:block;font-size:10px}.arcade-player small{display:block;margin-top:2px;font-size:6px}.arcade-stage{font-size:8px}.arcade-points{font-size:9px;letter-spacing:0}
+.arcade-scroll-controls{font-size:8px}.arcade-scroll-controls>span{max-width:150px}.arcade-local-note{font-size:8px}.arcade-board-actions{margin-top:9px}.arcade-board-actions button{padding:11px 20px}
+}
+@media(prefers-reduced-motion:reduce){.arcade-score-viewport{scroll-behavior:auto}}
+`;
+document.head.appendChild(css);
+const esc=value=>typeof safeText==='function'?safeText(value):String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const validCategory=category=>categories.some(([id])=>id===category);
+const label=category=>categories.find(([id])=>id===category)?.[1]||'Nuit noire';
+const points=value=>String(Math.max(0,Math.floor(Number(value)||0))).padStart(6,'0');
+function ranked(category,day){
+  const today=day||dateKey();
+  return records.map((record,index)=>({record,index})).filter(({record})=>record&&record.category===category&&(category!=='daily'||record.date===today)).sort((a,b)=>(Number(b.record.score)||0)-(Number(a.record.score)||0)||a.index-b.index).map(({record})=>record);
+}
+function row(record,rank,isLast){
+  const stage=Math.max(1,Math.min(5,Math.floor(Number(record.stage)||1)));
+  const destination=record.win?'AUBE':'M'+stage;
+  const name=record.name||'Sorcière';
+  return `<div class="arcade-score-row${isLast?' is-last':''}" role="row"${isLast?' data-last-score="true"':''}><span class="arcade-rank" role="cell">${String(rank).padStart(2,'0')}</span><span class="arcade-player" role="cell" title="${esc(name)}"><b>${esc(name)}</b>${isLast?'<small>DERNIER VOL</small>':''}</span><span class="arcade-stage" role="cell" title="${record.win?'Les cinq gardiens sont tombés':'Monde '+stage+' · '+Math.max(0,Number(record.clears)||0)+' gardiens vaincus'}">${destination}</span><span class="arcade-points" role="cell">${points(record.score)}</span></div>`;
+}
+function table(category,options={}){
+  const list=ranked(category,options.day);
+  const top=list.slice(0,10);
+  const latest=options.highlight?window.MinuitLastScore:null;
+  const visible=window.matchMedia?.('(max-width:560px)').matches?3:(options.compact?4:5);
+  const scrolling=top.length>visible;
+  const automatic=scrolling&&!reduced?.matches;
+  const rows=top.map((record,index)=>row(record,index+1,record===latest)).join('');
+  const latestRank=latest?list.indexOf(latest):-1;
+  const outside=latest&&latestRank>=10?`<div class="arcade-outside"><span>TON VOL · RANG ${latestRank+1}</span>${row(latest,latestRank+1,true)}</div>`:'';
+  const empty='<div class="arcade-score-empty"><span>☾</span><b>Le tableau attend sa première légende.</b><small>Termine un vol dans ce mode pour inscrire ton nom.</small></div>';
+  const duration=Math.max(18,top.length*2.4);
+  return `<div class="arcade-score-table${options.compact?' is-compact':''}${scrolling?(automatic?' is-auto':' is-manual'):' is-static'}" data-category="${category}" style="--arcade-visible:${visible};--arcade-duration:${duration}s" role="table" aria-label="Top 10 · ${esc(label(category))}"><div class="arcade-score-columns" role="row"><span role="columnheader">RANG</span><span role="columnheader">SORCIÈRE</span><span role="columnheader">MONDE</span><span role="columnheader">SCORE</span></div><div class="arcade-score-viewport" tabindex="0" aria-label="Liste des scores. Utilise le bouton de défilement ou les touches fléchées pour la parcourir."><div class="arcade-score-track">${top.length?`<div class="arcade-score-group" role="rowgroup">${rows}</div>${scrolling?`<div class="arcade-score-group arcade-score-duplicate" role="rowgroup" aria-hidden="true">${rows}</div>`:''}`:empty}</div></div>${outside}${scrolling?`<div class="arcade-scroll-controls"><button type="button" class="arcade-scroll-toggle" aria-pressed="${automatic}">${automatic?'Ⅱ Pause du défilement':'▶ Défilement automatique'}</button><span>${automatic?'Survole le tableau pour une pause temporaire.':'Molette, toucher ou flèches pour consulter.'}</span></div>`:''}</div>`;
+}
+function setScrollMode(tableElement,automatic){
+  if(!tableElement||!tableElement.querySelector('.arcade-scroll-toggle'))return;
+  const viewport=tableElement.querySelector('.arcade-score-viewport');
+  const button=tableElement.querySelector('.arcade-scroll-toggle');
+  viewport.scrollTop=0;
+  tableElement.classList.toggle('is-auto',automatic);
+  tableElement.classList.toggle('is-manual',!automatic);
+  button.setAttribute('aria-pressed',String(automatic));
+  button.textContent=automatic?'Ⅱ Pause du défilement':'▶ Défilement automatique';
+  const note=tableElement.querySelector('.arcade-scroll-controls span');
+  if(note)note.textContent=automatic?'Survole le tableau pour une pause temporaire.':'Molette, toucher ou flèches pour consulter.';
+}
+function wire(root){
+  root.querySelectorAll('.arcade-score-table:not([data-wired])').forEach(tableElement=>{
+    tableElement.dataset.wired='true';
+    tableElement.querySelector('.arcade-scroll-toggle')?.addEventListener('click',()=>setScrollMode(tableElement,!tableElement.classList.contains('is-auto')));
+    const viewport=tableElement.querySelector('.arcade-score-viewport');
+    const takeControl=()=>{if(tableElement.classList.contains('is-auto'))setScrollMode(tableElement,false)};
+    viewport?.addEventListener('wheel',takeControl,{passive:true});
+    viewport?.addEventListener('touchstart',takeControl,{passive:true});
+    viewport?.addEventListener('keydown',event=>{if(['ArrowDown','ArrowUp','PageDown','PageUp','Home','End'].includes(event.key))takeControl()});
+  });
+}
+function defaultCategory(){
+  if(state==='end'&&validCategory(runId))return runId;
+  return validCategory(prefs.difficulty)?prefs.difficulty:'normal';
+}
+function summary(category,day){
+  const list=ranked(category,day);
+  const dayLabel=category==='daily'?' · '+(day||dateKey()):'';
+  return `<b>${esc(label(category))}${esc(dayLabel)}</b><span>${list.length?`${Math.min(10,list.length)} score${Math.min(10,list.length)>1?'s':''} affiché${Math.min(10,list.length)>1?'s':''} · record ${points(list[0].score)}`:'Aucun score dans cette catégorie'}</span>`;
+}
+function open(category=defaultCategory()){
+  selected=validCategory(category)?category:'normal';
+  state='arcade-scores';
+  overlay(`<section class="arcade-score-screen"><div class="arcade-marquee"><span>✦ LA NUIT AUX TROUSSES ✦</span><h2>HI-SCORES</h2><p>Les dix plus grands vols de ce navigateur.</p></div><div class="arcade-tabs" role="tablist" aria-label="Catégorie de highscores">${categories.map(([id,name])=>`<button type="button" role="tab" id="arcadeTab-${id}" data-category="${id}" aria-selected="${id===selected}" class="${id===selected?'active':''}">${name}</button>`).join('')}</div><div class="arcade-board-summary" id="arcadeBoardSummary" aria-live="polite">${summary(selected)}</div><div id="arcadeBoardTable" role="tabpanel" aria-labelledby="arcadeTab-${selected}">${table(selected)}</div><div class="arcade-local-note">Records conservés sur cet appareil · les difficultés et le défi du jour restent séparés.</div><div class="menu-actions arcade-board-actions"><button class="primary" id="arcadeScoresBack">Retour au menu</button></div></section>`);
+  document.body.classList.add('menu-open');
+  const paint=()=>{
+    document.querySelectorAll('.arcade-tabs [role="tab"]').forEach(button=>{const active=button.dataset.category===selected;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active))});
+    $('arcadeBoardSummary').innerHTML=summary(selected);
+    $('arcadeBoardTable').setAttribute('aria-labelledby','arcadeTab-'+selected);
+    $('arcadeBoardTable').innerHTML=table(selected);
+    wire($('arcadeBoardTable'));
+  };
+  document.querySelectorAll('.arcade-tabs [role="tab"]').forEach(button=>button.onclick=()=>{selected=button.dataset.category;paint()});
+  $('arcadeScoresBack').onclick=()=>window.LocalLeague?.menu?.();
+  wire($('arcadeBoardTable'));
+}
+function installMenuButton(){
+  if(state!=='league-menu'||document.querySelector('#overlay .training-mode'))return;
+  const bottom=document.querySelector('#overlay .menu-bottom');
+  if(!bottom||$('arcadeScores'))return;
+  const button=document.createElement('button');
+  button.type='button';button.id='arcadeScores';button.className='secondary';button.textContent='★ Highscores';
+  button.onclick=()=>open();
+  bottom.insertBefore(button,bottom.firstChild);
+}
+function enhanceResult(){
+  const board=document.querySelector('#overlay .scoreboard-window');
+  if(!board||board.dataset.arcadeReady||state!=='end')return;
+  board.dataset.arcadeReady='true';
+  const title=board.querySelector(':scope > .scoreboard-title');
+  const teamNodes=[...board.children].filter(child=>child.id==='teamResultStatus'||child.id==='teamEndPanel');
+  [...board.children].forEach(child=>{if(child!==title&&!teamNodes.includes(child))child.remove()});
+  const category=validCategory(runId)?runId:'normal';
+  board.insertAdjacentHTML('beforeend',table(category,{compact:true,highlight:true,day:dailyDate}));
+  board.insertAdjacentHTML('beforeend',`<div class="arcade-result-caption">TOP 10 · ${esc(label(category))}${category==='daily'?' · '+esc(dailyDate):''} · la ligne dorée est ton dernier vol.</div>`);
+  teamNodes.forEach(node=>board.appendChild(node));
+  const grid=document.querySelector('#overlay > .journey-result-grid');
+  if(grid)grid.insertAdjacentElement('afterend',board);
+  document.querySelector('#overlay > .rankline')?.remove();
+  wire(board);
+}
+if(window.Journey?.menu){
+  const baseMenu=window.Journey.menu;
+  window.Journey.menu=function(...args){const result=baseMenu.apply(this,args);installMenuButton();return result};
+}
+const overlayElement=$('overlay');
+if(overlayElement)new MutationObserver(enhanceResult).observe(overlayElement,{childList:true});
+reduced?.addEventListener?.('change',event=>{if(event.matches)document.querySelectorAll('.arcade-score-table.is-auto').forEach(element=>setScrollMode(element,false))});
+installMenuButton();
+enhanceResult();
+window.ArcadeScores={open,ranked,table};
 })();
 </script></body></html>

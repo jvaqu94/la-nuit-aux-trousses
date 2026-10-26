@@ -17,10 +17,10 @@ with sync_playwright() as p:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('dialog', lambda dialog: dialog.accept())
         page.goto('http://localhost:3000')
-        page.wait_for_selector('#fullView')
+        page.wait_for_selector('#fullView', state='attached')
         page.wait_for_timeout(100)
 
-        def check():
+        def check(home=False):
             geometry = page.evaluate('''() => {
               const arena = document.querySelector('.arena').getBoundingClientRect();
               const bar = document.querySelector('.touchbar').getBoundingClientRect();
@@ -37,6 +37,10 @@ with sync_playwright() as p:
             assert arena['b'] <= height + 1 and geometry['bar']['b'] <= height + 1, geometry
             assert arena['y'] >= 0 and arena['r'] <= width + 1, geometry
             assert geometry['sw'] <= width and geometry['sh'] <= height + 1, geometry
+            # L’accueil smartphone utilise toute la hauteur ; le format 8:9 redevient
+            # obligatoire dès que le vol commence.
+            if home:
+                return geometry
             ratio = arena['h'] / arena['w']
             if width <= 600 and height > width:
                 # En portrait, le terrain grandit avec l’écran jusqu’à 1,45,
@@ -48,10 +52,11 @@ with sync_playwright() as p:
                 assert abs(arena['w'] / arena['h'] - 8 / 9) < .01, geometry
             return geometry
 
-        geometry = check()
+        geometry = check(home=True)
         page.locator('#playAdventure').scroll_into_view_if_needed()
         page.click('#playAdventure')
         page.wait_for_function("state === 'play'")
+        page.wait_for_timeout(100)
         check()
         if width < 851:
             controls = page.evaluate('''() => ['pause', 'specialCast', 'dash'].map(id => {

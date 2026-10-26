@@ -4,7 +4,7 @@ Le jeu reste utilisable localement sans Supabase. Le cloud ajoute une sauvegarde
 
 ## État de cette installation
 
-Le projet `fkdijgrmgnbpybcfowpr` est configuré dans `supabase-config.js`. Les migrations `20261025104836_la_nuit_cloud_saves_feedback`, `20261025110755_minuit_teams_and_highscores`, `20261025112049_minuit_team_admin_rules` et `20261025125012_minuit_team_deletion` sont appliquées ; toutes les tables ont RLS activé. L’authentification e-mail et la confirmation d’adresse sont activées. Seule la clé publiable est utilisée par le navigateur.
+Le projet `fkdijgrmgnbpybcfowpr` est configuré dans `supabase-config.js`. Les migrations `20261025104836_la_nuit_cloud_saves_feedback`, `20261025110755_minuit_teams_and_highscores`, `20261025112049_minuit_team_admin_rules` et `20261025125012_minuit_team_deletion` sont appliquées ; toutes les tables ont RLS activé. L’authentification e-mail et la confirmation d’adresse restent activées pour les comptes e-mail existants. La fonction **`pseudo-auth` version 1 est déployée et active avec `verify_jwt=false`** pour les accès par pseudo sans e-mail. Seule la clé publiable est utilisée par le navigateur ; la clé `service_role` reste dans l’environnement privé de la fonction.
 
 Les sections suivantes servent de procédure de maintenance ou de réinstallation sur un autre projet.
 
@@ -21,9 +21,19 @@ Les avis n’ont **aucune politique de lecture publique**. Ils se consultent dep
 
 Pour activer les teams, exécuter également [`teams.sql`](teams.sql), puis [`team_rules.sql`](team_rules.sql). Ils créent `teams`, `team_members`, `team_scores` et `team_score_attempts`, toutes protégées par RLS et sans accès direct pour `anon` ou `authenticated`. Seules sept fonctions authentifiées sont exposées : consulter sa team, créer, rejoindre, quitter, modifier les règles en tant qu’admin, supprimer la team en tant qu’admin et transmettre un score.
 
-## 2. Activer l’authentification e-mail
+## 2. Activer les accès par pseudo ou e-mail
 
-Dans **Authentication → Sign In / Providers**, activer le fournisseur **Email**. La confirmation d’adresse peut rester activée : après l’inscription, le joueur confirme l’e-mail puis revient se connecter.
+### Accès par pseudo, sans adresse e-mail
+
+La fonction [`functions/pseudo-auth/index.ts`](functions/pseudo-auth/index.ts) est déployée avec `verify_jwt=false`. Elle accepte un pseudo de 2 à 24 caractères et un mot de passe de 8 à 128 caractères. À l’inscription, elle crée côté serveur un utilisateur confirmé dans un domaine technique réservé dérivé du pseudo normalisé, puis obtient sa session avec son mot de passe. À la connexion suivante, le même pseudo et le même mot de passe retrouvent cet utilisateur, ses sauvegardes et sa team.
+
+Le fournisseur **Email** doit rester activé, car il fournit le mécanisme de session sous-jacent, mais le joueur ne renseigne ni ne confirme aucune adresse. Aucune table publique de pseudos n’est nécessaire et aucune clé secrète n’est renvoyée au navigateur. Les erreurs de connexion sont génériques et le mot de passe n’est ni journalisé ni stocké par le jeu. Sans e-mail, aucune récupération de mot de passe par message n’est proposée.
+
+Pour réinstaller la fonction, déployer l’équivalent de `supabase functions deploy pseudo-auth --no-verify-jwt`. Les variables `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont fournies par l’environnement des fonctions ; ne jamais recopier ces valeurs dans le dépôt ou le navigateur.
+
+### Comptes e-mail existants
+
+Dans **Authentication → Sign In / Providers**, conserver le fournisseur **Email**. La confirmation d’adresse peut rester activée : après une inscription avec e-mail, le joueur confirme l’adresse puis revient se connecter. Cette confirmation ne concerne pas les accès par pseudo créés par la fonction précédente.
 
 Dans **Authentication → URL Configuration**, conserver l’adresse publique du jeu comme **Site URL**, mais ajouter cette URL exacte dans **Redirect URLs** :
 
@@ -37,7 +47,7 @@ La réponse est explicitement servie en **`text/html; charset=utf-8`**, avec lon
 
 Cette page évite de rediriger l’e-mail vers une URL de prévisualisation Arena/E2B protégée par un **traffic access token**. Ne pas remettre l’origine `*.e2b.app` comme redirection d’inscription. Les anciens liens déjà envoyés conservent leur ancienne destination : utiliser **Renvoyer la confirmation** pour obtenir un lien corrigé. Ne pas utiliser de joker d’URL large.
 
-Pour réinstaller la fonction sur un autre projet, déployer le fichier source avec l’équivalent de `supabase functions deploy email-confirmation --no-verify-jwt`, puis autoriser son URL exacte. Aucun fournisseur anonyme n’est nécessaire. Un avis peut être envoyé sans compte, tandis que la sauvegarde cloud nécessite un compte afin de fonctionner sur plusieurs appareils.
+Pour réinstaller la fonction sur un autre projet, déployer le fichier source avec l’équivalent de `supabase functions deploy email-confirmation --no-verify-jwt`, puis autoriser son URL exacte. Aucun fournisseur anonyme n’est nécessaire. Un avis peut être envoyé sans compte, tandis que la sauvegarde cloud nécessite un accès par pseudo ou e-mail afin de fonctionner sur plusieurs appareils.
 
 ## 3. Renseigner la configuration publique
 
@@ -58,9 +68,9 @@ Laisser les deux valeurs vides désactive toutes les requêtes Supabase.
 
 ## 4. Utiliser le cloud dans le jeu
 
-Ouvrir **Sauvegarde & team** dans le menu ou les réglages :
+Ouvrir **Compte & team** dans le menu ou les réglages :
 
-1. créer un compte ou se connecter ;
+1. créer un accès avec un pseudo et un mot de passe, ou se connecter avec un compte e-mail existant ;
 2. cliquer sur **Envoyer ma progression** une première fois ;
 3. les changements suivants sont envoyés automatiquement, au maximum toutes les 30 secondes ;
 4. sur un autre appareil, se connecter puis choisir **Récupérer le cloud**.
@@ -75,7 +85,7 @@ Après connexion, le panneau **Team & highscore** permet de :
 
 1. choisir un pseudo de 2 à 24 caractères ;
 2. à la création, définir la limite quotidienne et, si nécessaire, la période de jeu ;
-3. préparer une invitation par e-mail avec destinataire, objet, code et lien préremplis, ou partager sur mobile le lien `?team=CODE` par WhatsApp ou Messenger ; l’e-mail ouvre la messagerie sans enregistrer le destinataire, et le lien ne contient aucun jeton de session ;
+3. préparer une invitation par e-mail avec destinataire, objet, code et lien préremplis, ou partager sur mobile le lien `?team=CODE` par WhatsApp ou Messenger ; l’e-mail ouvre la messagerie sans enregistrer le destinataire et le lien ne contient aucun jeton de session. À son ouverture, la carte d’invitation affiche le code avant toute connexion, le conserve dans `sessionStorage` après nettoyage de l’URL et propose de rejoindre directement avec un pseudo et un mot de passe ;
 4. terminer un vol pour transmettre automatiquement son score ;
 5. consulter le meilleur score de chaque membre, le total et les parties restantes.
 

@@ -221,7 +221,10 @@ def handle(route):
 def login(page, email):
     if not page.locator('#cloudEmail').count():
         page.click('#archives')
-    page.wait_for_selector('#cloudEmail')
+    page.wait_for_selector('.cloud-email-access')
+    if not page.locator('.cloud-email-access').evaluate('(node) => node.open'):
+        page.click('.cloud-email-access summary')
+    page.wait_for_selector('#cloudEmail', state='visible')
     page.fill('#cloudEmail', email)
     page.fill('#cloudPassword', 'mot-de-passe-jamais-stocke')
     page.click('#cloudLogin')
@@ -233,7 +236,7 @@ def finish_run(page, score):
         page.click('#playAdventure')
     page.wait_for_function("state==='play'")
     page.evaluate(f'gameTime=35;score={score};end(false)')
-    page.wait_for_selector('#teamResultStatus')
+    page.wait_for_selector('#teamResultStatus', state='attached')
 
 
 def score_total(page):
@@ -260,7 +263,7 @@ with sync_playwright() as p:
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('dialog', lambda dialog: dialog.accept())
         page.goto(url)
-        page.wait_for_selector('#playAdventure')
+        page.wait_for_function("document.querySelector('#playAdventure') || document.querySelector('#teamInviteCard')")
         login(page, email)
         return context, page
 
@@ -333,23 +336,23 @@ with sync_playwright() as p:
     # Deux parties par jour : le score faible compte quand même comme une tentative.
     alice.click('#archivesBack')
     finish_run(alice, 1500)
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('1 partie restante')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('1 partie restante')")
 
     bob.click('#archivesBack')
     finish_run(bob, 2200)
-    bob.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('Nouveau highscore')")
+    bob.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('Nouveau highscore')")
 
     alice.click('#retry')
     alice.wait_for_function("state==='play'")
     alice.evaluate('gameTime=40;score=900;end(false)')
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('0 partie restante')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('0 partie restante')")
     assert team['members'][ALICE]['score'] == 1500
 
     # La troisième partie est refusée, sans effacer le record ni interdire le jeu local.
     alice.click('#retry')
     alice.wait_for_function("state==='play'")
     alice.evaluate('gameTime=45;score=1800;end(false)')
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('limite de parties comptabilisées')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('limite de parties comptabilisées')")
     assert len(team['members'][ALICE]['attempts']) == 2
     assert team['members'][ALICE]['score'] == 1500
 
@@ -369,7 +372,7 @@ with sync_playwright() as p:
 
     alice.click('#archivesBack')
     finish_run(alice, 1800)
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('Nouveau highscore')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('Nouveau highscore')")
     assert len(team['members'][ALICE]['attempts']) == 3
     assert team['members'][ALICE]['score'] == 1800
 
