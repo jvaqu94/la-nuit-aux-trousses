@@ -310,6 +310,18 @@ let player={x:400,y:780,shield:0,shieldTime:0,inv:0,dash:0,dashCD:0,slow:0,fire:
 let rng=()=>{seed|=0;seed=(seed+0x6D2B79F5)|0;let z=Math.imul(seed^(seed>>>15),1|seed);z^=z+Math.imul(z^(z>>>7),61|z);return((z^(z>>>14))>>>0)/4294967296};
 function hash(s){let n=2166136261;for(const ch of s)n=Math.imul(n^ch.charCodeAt(0),16777619);return n>>>0}
 function savePrefs(){for(const key of removedSettings)delete prefs[key];if(window.SandboxMode){$('sound').textContent='♪ Son '+(prefs.sound?'ON':'OFF');return}try{localStorage.setItem('minuit-settings',JSON.stringify(prefs))}catch{}$('sound').textContent='♪ Son '+(prefs.sound?'ON':'OFF');window.MinuitCloud?.schedule?.()}
+function scorePlayerName(){
+ const account=String(window.MinuitCloud?.user?.displayName||'').normalize('NFKC').trim();
+ const local=String(prefs?.name||'').normalize('NFKC').trim();
+ return(account||local||'Sorcière').slice(0,24);
+}
+function useAccountPseudo(fallback=''){
+ const account=String(window.MinuitCloud?.user?.displayName||'').normalize('NFKC').trim();
+ const name=(account||String(fallback||'').normalize('NFKC').trim()).slice(0,24);
+ if(!name)return scorePlayerName();
+ if(prefs.name!==name){prefs.name=name;savePrefs()}
+ return name;
+}
 function resize(){const r=c.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);c.width=Math.round(r.width*d);c.height=Math.round(r.height*d);scaleX=c.width/W;scaleY=c.height/H}window.addEventListener('resize',resize);resize();
 let audio=null,master=null,sfxBus=null,musicBus=null,reverb=null,noiseBuffer=null,ambienceGain=null,ambienceSource=null,ambienceFilter=null,ambienceLfo=null,ambienceDepth=null,audioSignature='',musicStage=-1,mp3Music=null;
 const sfxPaths={shot:'audio/sfx-player-shot.mp3',spread:'audio/sfx-player-spread.mp3',missile:'audio/sfx-player-missile.mp3',laser:'audio/sfx-player-laser.mp3',special:'audio/sfx-player-special.mp3',impactLight:'audio/sfx-impact-light.mp3',impactHeavy:'audio/sfx-impact-heavy.mp3',impactBoss:'audio/sfx-impact-boss.mp3',lifeLoss:'audio/sfx-player-life-loss.mp3',obstacleCollision:'audio/sfx-obstacle-collision.mp3',surpriseMonster:'audio/sfx-surprise-monster.mp3'};
@@ -468,8 +480,10 @@ function help(){state='help';overlay(`<div class="eyebrow">LE GRIMOIRE DE VOL</d
 function settings(){
  if(state==='settings')return;
  previousState=state;state='settings';
- overlay(`<div class="eyebrow">À TA FAÇON</div><h2>Réglages</h2><div class="settings-list"><label class="field">Difficulté de l’aventure (défis : Nuit noire)<select id="difficulty"><option value="easy">Clair de lune</option><option value="normal">Nuit noire</option><option value="hard">Cauchemar</option></select></label><label class="field">Pseudo des records locaux<input id="nickname" maxlength="16" type="text"></label><label class="field">Volume<input type="range" min="0" max="1" step=".05" id="volume"></label><label class="field">Musique et ambiance<input type="checkbox" id="opt-music"></label><div class="tiny">Hors choix du niveau de difficulté, ces réglages ne modifient ni les dangers ni leur présentation. Les apparitions et les effets de jeu ne peuvent pas être désactivés.</div><div class="tiny">Reconfigurer : clique sur une action, puis appuie sur une touche.</div><div class="badges" id="bindings"></div></div><br><button class="primary" id="save">Enregistrer et revenir →</button>`);
- $('difficulty').value=prefs.difficulty;$('nickname').value=prefs.name;$('volume').value=prefs.volume;$('opt-music').checked=prefs.music;
+ overlay(`<div class="eyebrow">À TA FAÇON</div><h2>Réglages</h2><div class="settings-list"><label class="field">Difficulté de l’aventure (défis : Nuit noire)<select id="difficulty"><option value="easy">Clair de lune</option><option value="normal">Nuit noire</option><option value="hard">Cauchemar</option></select></label><label class="field">Pseudo des records locaux<input id="nickname" maxlength="24" type="text"></label><label class="field">Volume<input type="range" min="0" max="1" step=".05" id="volume"></label><label class="field">Musique et ambiance<input type="checkbox" id="opt-music"></label><div class="tiny">Hors choix du niveau de difficulté, ces réglages ne modifient ni les dangers ni leur présentation. Les apparitions et les effets de jeu ne peuvent pas être désactivés.</div><div class="tiny">Reconfigurer : clique sur une action, puis appuie sur une touche.</div><div class="badges" id="bindings"></div></div><br><button class="primary" id="save">Enregistrer et revenir →</button>`);
+ $('difficulty').value=prefs.difficulty;$('nickname').value=scorePlayerName();$('volume').value=prefs.volume;$('opt-music').checked=prefs.music;
+ $('nickname').readOnly=!!window.MinuitCloud?.user?.displayName;
+ $('nickname').title=$('nickname').readOnly?'Pseudo du compte connecté, utilisé pour les scores.':'Pseudo utilisé pour les records locaux.';
  const labels={up:'Haut',down:'Bas',left:'Gauche',right:'Droite',focus:'Précision',dash:'Esquive',pause:'Pause',special:'Sort spécial'};
  function binds(){
   $('bindings').innerHTML=Object.entries(labels).map(([k,l])=>`<button class="secondary" data-key="${k}">${l} : ${prefs.keys[k]===' '?'Espace':prefs.keys[k]}</button>`).join('');
@@ -488,7 +502,8 @@ function settings(){
  }
  binds();
  $('save').onclick=()=>{
-  prefs.difficulty=$('difficulty').value;prefs.name=$('nickname').value.trim().slice(0,16)||'Sorcière';prefs.volume=+$('volume').value;prefs.music=$('opt-music').checked;
+  const localName=$('nickname').value.trim().slice(0,24)||'Sorcière';
+  prefs.difficulty=$('difficulty').value;prefs.name=window.MinuitCloud?.user?.displayName?scorePlayerName():localName;prefs.volume=+$('volume').value;prefs.music=$('opt-music').checked;
   savePrefs();syncAudio();
   if(['play','pause'].includes(previousState)){state=previousState;if(state==='pause')pauseScreen();else hideOverlay()}else menu();
  };
@@ -601,7 +616,7 @@ $('localtab').onclick=()=>{boardTab='local';refreshBoard()};$('onlinetab').oncli
 function teamEndRows(data){const rows=(data?.scores||[]).slice(0,10);return rows.length?rows.map(r=>`<div class="team-end-row ${r.isYou?'team-you':''}"><b>#${Number(r.rank)||0}</b><span>${safeText(r.displayName||'Sorcière')}${r.isYou?'<small>TOI</small>':''}</span><strong>${Number(r.score||0).toLocaleString('fr-FR')}</strong></div>`).join(''):'<div class="tiny">Aucun score de team pour le moment.</div>'}
 function renderTeamEnd(data){const slot=$('teamEndPanel');if(!slot)return;if(data?.skipped||!data?.team){slot.remove();return}const mine=(data.scores||[]).find(r=>r.isYou),rank=mine?.rank||'—';slot.innerHTML=`<div class="team-end-heading"><span>🏆 TEAM · ${safeText(data.team.name||'Sans nom')}</span><b>TA POSITION : #${rank}</b></div><div class="team-end-board">${teamEndRows(data)}</div><div class="tiny">Classement du meilleur score de chaque membre · ${Number(data.team.memberCount)||0} membre${Number(data.team.memberCount)>1?'s':''}</div>`;const status=$('teamResultStatus'),result=data.result||{},remaining=result.gamesRemaining??data.team.gamesRemaining;if(status)status.textContent=(result.duplicate?'Vol déjà comptabilisé dans la team.':result.improved?'Nouveau highscore de team !':'Score du vol transmis à la team.')+(remaining===null||remaining===undefined?'':' · '+Number(remaining)+' partie'+(Number(remaining)>1?'s':'')+' restante'+(Number(remaining)>1?'s':''));slot.classList.remove('team-end-reveal');requestAnimationFrame(()=>slot.classList.add('team-end-reveal'));if(prefs.sound){tone(392,.16,'sine',.045,1.22);setTimeout(()=>tone(587,.24,'sine',.035,1.08),110)}}
 function loadTeamEndScore(value){const slot=$('teamEndPanel');if(!slot||!window.MinuitCloud?.finishTeamScore)return;slot.innerHTML='<div class="tiny">Synchronisation du score avec la team…</div>';window.MinuitCloud.finishTeamScore(value).then(renderTeamEnd).catch(()=>{if(slot)slot.innerHTML='<div class="tiny">Score enregistré localement ; classement team momentanément indisponible.</div>'})}
-function end(win){release();if(recorded)return;trackHighScore();saveHighScores();recorded=true;try{localStorage.removeItem('minuit-checkpoint')}catch{}state='end';const result={name:prefs.name,score:Math.floor(score),category:runId,date:dailyDate,stage:stage+1,clears,win,time:Math.floor(gameTime)};window.MinuitLastScore=result;records.push(result);records.sort((a,b)=>b.score-a.score);records=records.slice(0,150);try{localStorage.setItem('minuit-v2-scores',JSON.stringify(records))}catch{}const teamSlot=window.MinuitCloud?.connected&&!window.Journey?.finish?'<section class="team-end-panel" id="teamEndPanel"><div class="tiny">Préparation du classement team…</div></section>':'';overlay(`<div class="eyebrow">${win?'LES CINQ GARDIENS SONT TOMBÉS':'LA NUIT GARDE ENCORE SES SECRETS'}</div><h2>${win?'Enfin, l’aube.':'Vous êtes mort !'}</h2><p>${win?'Tu as traversé les cinq univers. La sorcière peut rentrer.':'Dernier coup reçu : '+lastDamage+'. Chaque nuit t’apprend un nouveau chemin.'}</p>${recordBroken?'<div class="new-record">✦ NOUVEAU HI-SCORE ✦</div>':''}<div class="statsline"><span>Score <b>${Math.floor(score)}</b></span><span>Record <b>${getHighScore()}</b></span><span>Frôlements <b>${graze}</b></span><span>Gardiens <b>${clears}/5</b></span>${mode==='daily'?'<span>Bonus défi <b>+'+dailyBonus+'</b></span>':''}</div>${teamSlot}<div class="tiny" id="submitstatus">Record enregistré sur cet appareil.</div><br><div class="menu-actions"><button class="primary" id="retry">Une autre nuit →</button><button class="secondary" id="return">Menu</button></div>`);$('retry').onclick=()=>start(mode);$('return').onclick=menu;if(teamSlot)loadTeamEndScore({score:Math.floor(score),mode:mode==='daily'?'daily':(window.League?.active?'ranked':'free'),difficulty:prefs.difficulty,stage:stage+1,wave,id:session||runId});refreshBoard()}
+function end(win){release();if(recorded)return;trackHighScore();saveHighScores();recorded=true;try{localStorage.removeItem('minuit-checkpoint')}catch{}state='end';const result={name:scorePlayerName(),score:Math.floor(score),category:runId,date:dailyDate,stage:stage+1,clears,win,time:Math.floor(gameTime)};window.MinuitLastScore=result;records.push(result);records.sort((a,b)=>b.score-a.score);records=records.slice(0,150);try{localStorage.setItem('minuit-v2-scores',JSON.stringify(records))}catch{}const teamSlot=window.MinuitCloud?.connected&&!window.Journey?.finish?'<section class="team-end-panel" id="teamEndPanel"><div class="tiny">Préparation du classement team…</div></section>':'';overlay(`<div class="eyebrow">${win?'LES CINQ GARDIENS SONT TOMBÉS':'LA NUIT GARDE ENCORE SES SECRETS'}</div><h2>${win?'Enfin, l’aube.':'Vous êtes mort !'}</h2><p>${win?'Tu as traversé les cinq univers. La sorcière peut rentrer.':'Dernier coup reçu : '+lastDamage+'. Chaque nuit t’apprend un nouveau chemin.'}</p>${recordBroken?'<div class="new-record">✦ NOUVEAU HI-SCORE ✦</div>':''}<div class="statsline"><span>Score <b>${Math.floor(score)}</b></span><span>Record <b>${getHighScore()}</b></span><span>Frôlements <b>${graze}</b></span><span>Gardiens <b>${clears}/5</b></span>${mode==='daily'?'<span>Bonus défi <b>+'+dailyBonus+'</b></span>':''}</div>${teamSlot}<div class="tiny" id="submitstatus">Record enregistré sur cet appareil.</div><br><div class="menu-actions"><button class="primary" id="retry">Une autre nuit →</button><button class="secondary" id="return">Menu</button></div>`);$('retry').onclick=()=>start(mode);$('return').onclick=menu;if(teamSlot)loadTeamEndScore({score:Math.floor(score),mode:mode==='daily'?'daily':(window.League?.active?'ranked':'free'),difficulty:prefs.difficulty,stage:stage+1,wave,id:session||runId});refreshBoard()}
 
 // Dessin vectoriel original : silhouettes communes mais animations propres à chaque créature.
 function poly(g,pts,fill,stroke){g.beginPath();pts.forEach((p,i)=>i?g.lineTo(...p):g.moveTo(...p));g.closePath();if(fill){g.fillStyle=fill;g.fill()}if(stroke){g.strokeStyle=stroke;g.stroke()}}
@@ -683,7 +698,7 @@ document.querySelector('.sidebar').insertAdjacentHTML('afterbegin','<section cla
 document.querySelector('.arena').insertAdjacentHTML('beforeend','<div class="local-quests hidden" id="questHUD"></div>');
 $('localtab').textContent='Top 10';$('onlinetab').textContent='Cumul local';
 function renderPanel(){const d=dayState();$('localLeaguePanel').innerHTML=`<h3>JEU DIRECT · SANS CONNEXION</h3><div class="local-total">${fmt(total())}<small>POINTS CUMULÉS DANS CE NAVIGATEUR</small></div><div class="local-counters"><div class="local-chip"><b>${Math.max(0,3-d.rankedUsed)} / 3</b>essais Défi score restants</div><div class="local-chip"><b>${Math.max(0,1-d.dailyUsed)} / 1</b>essai Défi primes restant</div></div><div class="local-note">Meilleur du jour : <b>${fmt(d.best)}</b><br>Primes : <b>+${fmt(d.bonus)}</b><br>Remise à zéro à minuit, Paris.<br>${storageOK?(window.MinuitCloud?.connected?'Cumul local · copie cloud disponible dans Sauvegarde.':'Sauvegarde locale uniquement.'):'Stockage indisponible : cette session uniquement.'} Aucun compte requis.</div>`}
-function renderBoard(){if(tab==='records'){boardTab='local';base.board();return}const heading=$('leaderboard').closest('.panel').querySelector('h3');heading.textContent='CUMUL LOCAL';$('best').style.display='none';const days=Object.entries(data.days).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,10);$('leaderboard').innerHTML='<div class="local-board-label">'+safeText(prefs.name)+' · '+fmt(total())+' points<br>Meilleur score du jour + primes uniques.<br>Classement partagé temporairement désactivé.</div>'+days.map(([day,d])=>`<div class="rankrow"><span>${safeText(day)}</span><b>${fmt(d.best+d.bonus)}</b></div>`).join('');$('netstatus').textContent=window.MinuitCloud?.connected?'Cumul local · copie en ligne disponible':'Ce navigateur uniquement · aucun compte'}
+function renderBoard(){if(tab==='records'){boardTab='local';base.board();return}const heading=$('leaderboard').closest('.panel').querySelector('h3');heading.textContent='CUMUL LOCAL';$('best').style.display='none';const days=Object.entries(data.days).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,10);$('leaderboard').innerHTML='<div class="local-board-label">'+safeText(scorePlayerName())+' · '+fmt(total())+' points<br>Meilleur score du jour + primes uniques.<br>Classement partagé temporairement désactivé.</div>'+days.map(([day,d])=>`<div class="rankrow"><span>${safeText(day)}</span><b>${fmt(d.best+d.bonus)}</b></div>`).join('');$('netstatus').textContent=window.MinuitCloud?.connected?'Cumul local · copie en ligne disponible':'Ce navigateur uniquement · aucun compte'}
 refreshBoard=function(){boardTab='local';base.board();renderPanel();renderBoard()};
 fetchScores=async function(){boardTab='local';renderBoard()};
 $('localtab').onclick=()=>{tab='records';$('best').style.display='';$('leaderboard').closest('.panel').querySelector('h3').textContent='HI-SCORE · TOP 10';renderBoard()};$('onlinetab').onclick=()=>{tab='total';renderBoard()};
@@ -1681,6 +1696,7 @@ async function refresh(){
   if(!data?.access_token)throw Error('Impossible de renouveler la session en ligne.');
   session={...session,...data,user:sessionUser(data.user,session.user),refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
   storeSession();
+  window.useAccountPseudo?.();
  })();
  try{return await refreshing}finally{refreshing=null}
 }
@@ -1741,6 +1757,7 @@ function setSession(data){
  };
  if(!session.refresh_token)throw Error('Session en ligne incomplète.');
  storeSession();
+ window.useAccountPseudo?.();
  try{auto=localStorage.getItem(AUTO_KEY)===session.user.id}catch{}
  return true;
 }
@@ -1984,6 +2001,7 @@ async function loadTeam(showError=false){
    const data=await request('/rest/v1/rpc/minuit_team_state',{method:'POST',body:{}});
    if(epoch!==teamEpoch||session?.user.id!==userId)return null;
    teamData=validTeamState(data);
+   window.useAccountPseudo?.(teamData.scores.find(row=>row.isYou)?.displayName||'');
    teamLoaded=true;
    teamLoadError='';
    renderTeam();
@@ -2001,7 +2019,8 @@ async function loadTeam(showError=false){
  return teamLoading;
 }
 function teamInputs(){
- const displayName=String(document.getElementById('teamDisplayName')?.value||'').trim();
+ const accountName=String(session?.user?.displayName||'').trim();
+ const displayName=(accountName||String(document.getElementById('teamDisplayName')?.value||'').trim()).trim();
  if(displayName.length<2||displayName.length>24)throw Error(TEAM_ERRORS.DISPLAY_NAME_INVALID);
  return{displayName};
 }
@@ -2082,6 +2101,7 @@ async function createTeam(){
   const rules=readTeamRules('teamRules');
   const data=await request('/rest/v1/rpc/minuit_create_team',{method:'POST',body:{p_name:name,p_display_name:displayName,...rules}});
   teamData=validTeamState(data);
+  window.useAccountPseudo?.(displayName);
   teamLoaded=true;
   teamLoadError='';
   setTeamBusy(false);
@@ -2102,6 +2122,7 @@ async function joinTeam(){
   teamStatus('Recherche de la team…');
   const data=await request('/rest/v1/rpc/minuit_join_team',{method:'POST',body:{p_code:code,p_display_name:displayName}});
   teamData=validTeamState(data);
+  window.useAccountPseudo?.(displayName);
   teamLoaded=true;
   teamLoadError='';
   clearPendingTeamCode();
@@ -2220,7 +2241,8 @@ function renderTeam(){
   }
   return;
  }
- const displayField=`<label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(session.user.displayName||'')}"></label>`;
+ const accountPseudo=String(session.user.displayName||'');
+ const displayField=`<label>${accountPseudo?'Pseudo du compte utilisé dans la team':'Pseudo dans la team'}<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(accountPseudo)}"${accountPseudo?' readonly':''}></label>`;
  const createFields=`<label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div>`;
  const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div>`;
  if(pendingTeamCode){
@@ -2382,6 +2404,7 @@ window.MinuitCloud={
  get inTeam(){return!!session&&!!teamData.team},
  get user(){return session?.user||null}
 };
+if(enabled&&session)window.useAccountPseudo?.();
 if(enabled&&session&&auto)schedule();
 if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
 })();
@@ -2407,9 +2430,11 @@ settings=function(){
   difficulty:$('difficulty'),nickname:$('nickname'),volume:$('volume'),music:$('opt-music'),bindings:$('bindings'),
   exports:overlay.querySelector('.journey-save-controls'),message:$('saveMessage'),tutorial:$('restartTutorial'),save:$('save')
  };
- overlay.innerHTML=`<section class="settings-page" aria-label="Réglages du jeu"><header class="settings-header"><div><div class="menu-kicker">PRÉPARE TON VOL</div><h2>Réglages</h2><p>Personnalise ton aventure et retrouve chaque option au bon endroit.</p></div><div class="settings-emblem" aria-hidden="true"><span>☾</span><i>⚙</i></div></header><div class="settings-grid"><section class="settings-card"><div class="settings-card-title"><span>01</span><div><h3>Aventure</h3><p>Ton identité et le niveau de l’aventure libre.</p></div></div><label class="settings-field"><span>Difficulté<small>Les défis restent en Nuit noire.</small></span><span id="settingsDifficultySlot"></span></label><label class="settings-field"><span>Pseudo des records<small>16 caractères maximum.</small></span><span id="settingsNicknameSlot"></span></label><div class="settings-note">Aucune option de facilité : les dangers, apparitions et effets de jeu restent identiques.</div></section><section class="settings-card"><div class="settings-card-title"><span>02</span><div><h3>Audio</h3><p>Le volume et les différentes couches sonores.</p></div></div><label class="settings-field settings-volume"><span>Volume général<small id="settingsVolumeValue">35 %</small></span><span id="settingsVolumeSlot"></span></label><label class="settings-field settings-toggle-row"><span>Musique et ambiance<small>Le thème et les boucles des mondes.</small></span><span class="settings-switch" id="settingsMusicSlot"></span></label><div class="settings-audio-status" id="settingsAudioStatus" role="status"></div><button class="secondary settings-sound-toggle" id="settingsSoundToggle" type="button"></button></section><section class="settings-card settings-card-wide"><div class="settings-card-title"><span>03</span><div><h3>Commandes</h3><p class="settings-keyboard-help">Clique sur une action, puis appuie sur la nouvelle touche.</p><p class="settings-touch-help">Les commandes sont adaptées au tactile.</p></div></div><div id="settingsBindingsSlot"></div><div class="settings-touch-controls"><div><span aria-hidden="true">☝</span><p><b>Glisser relatif</b><small>Pose ton doigt et déplace-le pour piloter sans téléporter la sorcière.</small></p></div><div><span aria-hidden="true">✦</span><p><b>Sort et esquive</b><small>Utilise les boutons tactiles, même avec un second doigt pendant le pilotage.</small></p></div></div><div class="settings-guide-row"><span>Les commandes tactiles et la manette restent disponibles.</span><span id="settingsTutorialSlot"></span></div></section><section class="settings-card settings-card-wide settings-save-card"><div class="settings-card-title"><span>04</span><div><h3>Sauvegarde locale</h3><p>Exporte ta progression avant de changer d’appareil.</p></div></div><div id="settingsExportSlot"></div><div id="settingsMessageSlot"></div></section></div><footer class="settings-actions"><button class="secondary" id="settingsCancel" type="button">Retour sans enregistrer</button><span id="settingsSaveSlot"></span></footer></section>`;
+ overlay.innerHTML=`<section class="settings-page" aria-label="Réglages du jeu"><header class="settings-header"><div><div class="menu-kicker">PRÉPARE TON VOL</div><h2>Réglages</h2><p>Personnalise ton aventure et retrouve chaque option au bon endroit.</p></div><div class="settings-emblem" aria-hidden="true"><span>☾</span><i>⚙</i></div></header><div class="settings-grid"><section class="settings-card"><div class="settings-card-title"><span>01</span><div><h3>Aventure</h3><p>Ton identité et le niveau de l’aventure libre.</p></div></div><label class="settings-field"><span>Difficulté<small>Les défis restent en Nuit noire.</small></span><span id="settingsDifficultySlot"></span></label><label class="settings-field"><span>Pseudo des records<small>24 caractères maximum.</small></span><span id="settingsNicknameSlot"></span></label><div class="settings-note">Aucune option de facilité : les dangers, apparitions et effets de jeu restent identiques.</div></section><section class="settings-card"><div class="settings-card-title"><span>02</span><div><h3>Audio</h3><p>Le volume et les différentes couches sonores.</p></div></div><label class="settings-field settings-volume"><span>Volume général<small id="settingsVolumeValue">35 %</small></span><span id="settingsVolumeSlot"></span></label><label class="settings-field settings-toggle-row"><span>Musique et ambiance<small>Le thème et les boucles des mondes.</small></span><span class="settings-switch" id="settingsMusicSlot"></span></label><div class="settings-audio-status" id="settingsAudioStatus" role="status"></div><button class="secondary settings-sound-toggle" id="settingsSoundToggle" type="button"></button></section><section class="settings-card settings-card-wide"><div class="settings-card-title"><span>03</span><div><h3>Commandes</h3><p class="settings-keyboard-help">Clique sur une action, puis appuie sur la nouvelle touche.</p><p class="settings-touch-help">Les commandes sont adaptées au tactile.</p></div></div><div id="settingsBindingsSlot"></div><div class="settings-touch-controls"><div><span aria-hidden="true">☝</span><p><b>Glisser relatif</b><small>Pose ton doigt et déplace-le pour piloter sans téléporter la sorcière.</small></p></div><div><span aria-hidden="true">✦</span><p><b>Sort et esquive</b><small>Utilise les boutons tactiles, même avec un second doigt pendant le pilotage.</small></p></div></div><div class="settings-guide-row"><span>Les commandes tactiles et la manette restent disponibles.</span><span id="settingsTutorialSlot"></span></div></section><section class="settings-card settings-card-wide settings-save-card"><div class="settings-card-title"><span>04</span><div><h3>Sauvegarde locale</h3><p>Exporte ta progression avant de changer d’appareil.</p></div></div><div id="settingsExportSlot"></div><div id="settingsMessageSlot"></div></section></div><footer class="settings-actions"><button class="secondary" id="settingsCancel" type="button">Retour sans enregistrer</button><span id="settingsSaveSlot"></span></footer></section>`;
  const move=(slot,node)=>{if(node)document.querySelector(slot).replaceWith(node)};
  move('#settingsDifficultySlot',nodes.difficulty);move('#settingsNicknameSlot',nodes.nickname);move('#settingsVolumeSlot',nodes.volume);move('#settingsMusicSlot',nodes.music);move('#settingsBindingsSlot',nodes.bindings);move('#settingsExportSlot',nodes.exports);move('#settingsMessageSlot',nodes.message);move('#settingsTutorialSlot',nodes.tutorial);move('#settingsSaveSlot',nodes.save);
+ const nicknameHelp=nodes.nickname.closest('.settings-field')?.querySelector('small');
+ if(nicknameHelp&&nodes.nickname.readOnly)nicknameHelp.textContent='Pseudo du compte connecté · utilisé pour les scores.';
  const updateVolume=()=>{$('settingsVolumeValue').textContent=Math.round(Number(nodes.volume.value)*100)+' %'};
  nodes.volume.addEventListener('input',updateVolume);nodes.music.addEventListener('change',updateAudioSummary);updateVolume();updateAudioSummary();
  $('settingsSoundToggle').onclick=()=>{prefs.sound=!prefs.sound;savePrefs();if(prefs.sound)activateAudio();else{syncAudio();if(audio)audio.suspend().catch(()=>{})}updateAudioSummary();setTimeout(updateAudioSummary,350)};

@@ -166,7 +166,8 @@ Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade
 - Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
 - Lorsque la liste dépasse la fenêtre, elle défile verticalement en boucle. Le survol fait une pause temporaire ; le bouton de défilement, la molette, le toucher et les touches de navigation permettent une consultation manuelle.
 - Avec la préférence système « réduire les animations », le tableau est manuel par défaut. Le défilement peut toujours être activé explicitement.
-- Sur smartphone, trois lignes sont visibles à la fois afin de conserver le titre, les scores et les commandes dans la fenêtre portrait.
+- Sur smartphone, trois à six lignes sont visibles selon la hauteur disponible, avec le titre, les scores et les commandes dans la fenêtre plein écran.
+- Quand un compte avec pseudo est connecté, ce pseudo est automatiquement utilisé pour les nouveaux records au lieu de « Sorcière ». Les scores déjà enregistrés conservent leur nom d’origine.
 - Ces records restent locaux à l’appareil. Le classement amical de team et sa synchronisation optionnelle continuent de fonctionner séparément dans le bilan.
 
 ## Supabase : cloud, teams et avis
@@ -179,7 +180,7 @@ La confirmation d’adresse reste obligatoire **uniquement pour l’inscription 
 
 ### Teams et highscores
 
-Le menu **Compte & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Chaque joueur choisit un pseudo : les adresses e-mail ne sont jamais affichées dans le classement.
+Le menu **Compte & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Le pseudo du compte est utilisé dans la team ; les comptes e-mail sans pseudo peuvent choisir leur nom de team. Les adresses e-mail ne sont jamais affichées dans le classement.
 
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
 - **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.

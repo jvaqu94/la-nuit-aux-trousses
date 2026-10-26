@@ -237,6 +237,7 @@ def finish_run(page, score):
     page.wait_for_function("state==='play'")
     page.evaluate(f'gameTime=35;score={score};end(false)')
     page.wait_for_selector('#teamResultStatus', state='attached')
+    assert page.evaluate("MinuitLastScore.name===prefs.name && MinuitLastScore.name!=='Sorcière'")
 
 
 def score_total(page):
@@ -279,6 +280,7 @@ with sync_playwright() as p:
     assert alice.locator('#teamCopyCode').inner_text() == 'ABCDE-23456'
     assert alice.locator('.team-row').count() == 1
     assert 'Alice' in alice.locator('.team-leaderboard').inner_text()
+    assert alice.evaluate("prefs.name === 'Alice' && scorePlayerName() === 'Alice'")
     assert alice.locator('#teamSaveRules').count() == 1
     assert '0/2 parties' in alice.locator('.team-rules-summary').inner_text()
     assert 'alice@example.com' not in alice.locator('#teamCard').inner_text()
@@ -322,6 +324,7 @@ with sync_playwright() as p:
     bob.click('#teamJoin')
     bob.wait_for_selector('#teamCopyCode')
     assert bob.locator('.team-row').count() == 2
+    assert bob.evaluate("prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
     assert bob.locator('#teamSaveRules').count() == 0
     assert bob.locator('#teamDelete').count() == 0
     assert bob.locator('#teamWhatsApp').is_visible() and bob.locator('#teamMessenger').is_visible()

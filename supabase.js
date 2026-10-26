@@ -95,6 +95,7 @@ async function refresh(){
   if(!data?.access_token)throw Error('Impossible de renouveler la session en ligne.');
   session={...session,...data,user:sessionUser(data.user,session.user),refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
   storeSession();
+  window.useAccountPseudo?.();
  })();
  try{return await refreshing}finally{refreshing=null}
 }
@@ -155,6 +156,7 @@ function setSession(data){
  };
  if(!session.refresh_token)throw Error('Session en ligne incomplète.');
  storeSession();
+ window.useAccountPseudo?.();
  try{auto=localStorage.getItem(AUTO_KEY)===session.user.id}catch{}
  return true;
 }
@@ -398,6 +400,7 @@ async function loadTeam(showError=false){
    const data=await request('/rest/v1/rpc/minuit_team_state',{method:'POST',body:{}});
    if(epoch!==teamEpoch||session?.user.id!==userId)return null;
    teamData=validTeamState(data);
+   window.useAccountPseudo?.(teamData.scores.find(row=>row.isYou)?.displayName||'');
    teamLoaded=true;
    teamLoadError='';
    renderTeam();
@@ -415,7 +418,8 @@ async function loadTeam(showError=false){
  return teamLoading;
 }
 function teamInputs(){
- const displayName=String(document.getElementById('teamDisplayName')?.value||'').trim();
+ const accountName=String(session?.user?.displayName||'').trim();
+ const displayName=(accountName||String(document.getElementById('teamDisplayName')?.value||'').trim()).trim();
  if(displayName.length<2||displayName.length>24)throw Error(TEAM_ERRORS.DISPLAY_NAME_INVALID);
  return{displayName};
 }
@@ -496,6 +500,7 @@ async function createTeam(){
   const rules=readTeamRules('teamRules');
   const data=await request('/rest/v1/rpc/minuit_create_team',{method:'POST',body:{p_name:name,p_display_name:displayName,...rules}});
   teamData=validTeamState(data);
+  window.useAccountPseudo?.(displayName);
   teamLoaded=true;
   teamLoadError='';
   setTeamBusy(false);
@@ -516,6 +521,7 @@ async function joinTeam(){
   teamStatus('Recherche de la team…');
   const data=await request('/rest/v1/rpc/minuit_join_team',{method:'POST',body:{p_code:code,p_display_name:displayName}});
   teamData=validTeamState(data);
+  window.useAccountPseudo?.(displayName);
   teamLoaded=true;
   teamLoadError='';
   clearPendingTeamCode();
@@ -634,7 +640,8 @@ function renderTeam(){
   }
   return;
  }
- const displayField=`<label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(session.user.displayName||'')}"></label>`;
+ const accountPseudo=String(session.user.displayName||'');
+ const displayField=`<label>${accountPseudo?'Pseudo du compte utilisé dans la team':'Pseudo dans la team'}<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(accountPseudo)}"${accountPseudo?' readonly':''}></label>`;
  const createFields=`<label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div>`;
  const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div>`;
  if(pendingTeamCode){
@@ -796,6 +803,7 @@ window.MinuitCloud={
  get inTeam(){return!!session&&!!teamData.team},
  get user(){return session?.user||null}
 };
+if(enabled&&session)window.useAccountPseudo?.();
 if(enabled&&session&&auto)schedule();
 if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
 })();
