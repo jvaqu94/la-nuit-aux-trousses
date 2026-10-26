@@ -65,7 +65,7 @@ Le tir principal est **automatique**.
 - Le bouton **S’entraîner** propose cinq exercices réels : pilotage, esquive sur projectile, sort spécial, relique et bouclier. Le projectile d’apprentissage est entouré et le bouton s’illumine au bon moment. Les consignes illustrées restent affichées jusqu’à validation ; elles ne s’affichent plus automatiquement pendant les vols normaux.
 - Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
-- Le son est désactivé par défaut et s’active avec le bouton **Son**.
+- Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
 
 ## Modes de jeu
 
@@ -233,6 +233,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `nemesis.js` | Rencontres avec le Veilleur. |
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
+| `home.js` | Scène d’accueil avec la sorcière de profil et lancement musical avec déblocage navigateur. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `arcade-scores.js` | Top 10 arcade, catégories locales, surlignage du dernier vol et défilement contrôlable. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
@@ -293,6 +294,7 @@ python tests/test_supabase.py
 python tests/test_teams.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py
+python tests/test_home.py
 python tests/test_arcade_scores.py
 python tests/test_arsenal_browser.py
 python tests/test_adventure.py
