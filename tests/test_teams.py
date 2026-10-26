@@ -333,23 +333,23 @@ with sync_playwright() as p:
     # Deux parties par jour : le score faible compte quand même comme une tentative.
     alice.click('#archivesBack')
     finish_run(alice, 1500)
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('1 partie restante')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('1 partie restante')")
 
     bob.click('#archivesBack')
     finish_run(bob, 2200)
-    bob.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('Nouveau highscore')")
+    bob.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('Nouveau highscore')")
 
     alice.click('#retry')
     alice.wait_for_function("state==='play'")
     alice.evaluate('gameTime=40;score=900;end(false)')
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('0 partie restante')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('0 partie restante')")
     assert team['members'][ALICE]['score'] == 1500
 
     # La troisième partie est refusée, sans effacer le record ni interdire le jeu local.
     alice.click('#retry')
     alice.wait_for_function("state==='play'")
     alice.evaluate('gameTime=45;score=1800;end(false)')
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('limite de parties comptabilisées')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('limite de parties comptabilisées')")
     assert len(team['members'][ALICE]['attempts']) == 2
     assert team['members'][ALICE]['score'] == 1500
 
@@ -369,7 +369,7 @@ with sync_playwright() as p:
 
     alice.click('#archivesBack')
     finish_run(alice, 1800)
-    alice.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('Nouveau highscore')")
+    alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('Nouveau highscore')")
     assert len(team['members'][ALICE]['attempts']) == 3
     assert team['members'][ALICE]['score'] == 1800
 

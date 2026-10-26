@@ -157,6 +157,16 @@ Le menu **Sauvegarde**, également accessible depuis les réglages, permet d’e
 
 > **Avant de changer de navigateur ou d’appareil sans cloud, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
 
+### Highscores arcade
+
+Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
+
+- Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
+- Lorsque la liste dépasse la fenêtre, elle défile verticalement en boucle. Le survol fait une pause temporaire ; le bouton de défilement, la molette, le toucher et les touches de navigation permettent une consultation manuelle.
+- Avec la préférence système « réduire les animations », le tableau est manuel par défaut. Le défilement peut toujours être activé explicitement.
+- Sur smartphone, trois lignes sont visibles à la fois afin de conserver le titre, les scores et les commandes dans la fenêtre portrait.
+- Ces records restent locaux à l’appareil. Le classement amical de team et sa synchronisation optionnelle continuent de fonctionner séparément dans le bilan.
+
 ## Supabase : cloud, teams et avis
 
 La configuration publique du projet est déjà renseignée dans `supabase-config.js` et le schéma `supabase/schema.sql` est appliqué avec ses règles RLS. Le menu **Sauvegarde & team** permet de créer un compte e-mail, d’envoyer sa progression et de la récupérer sur un autre appareil. Après un premier envoi manuel, les modifications sont synchronisées automatiquement au maximum toutes les 30 secondes.
@@ -224,6 +234,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
+| `arcade-scores.js` | Top 10 arcade, catégories locales, surlignage du dernier vol et défilement contrôlable. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
 | `viewport.js` | Adaptation du terrain, des commandes tactiles et de l’affichage à la fenêtre. |
 | `supabase.js` | Client REST Supabase optionnel, authentification, cloud, teams, highscores et avis. |
@@ -282,6 +293,7 @@ python tests/test_supabase.py
 python tests/test_teams.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py
+python tests/test_arcade_scores.py
 python tests/test_arsenal_browser.py
 python tests/test_adventure.py
 python tests/test_encounters.py
