@@ -32,6 +32,10 @@ for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'onli
                 'surpriseMonster': 'audio/sfx-surprise-monster.mp3',
                 'pickup': 'audio/sfx-pickup-bonus.mp3',
                 'bossDive': 'audio/sfx-boss-dive.mp3',
+                'obstacleHit': 'audio/sfx-obstacle-hit.mp3',
+                'obstacleBreak': 'audio/sfx-obstacle-break.mp3',
+                'chestTouch': 'audio/sfx-chest-touch.mp3',
+                'chestOpen': 'audio/sfx-chest-open.mp3',
             }.items()
         }
         code = 'window.MinuitSfxData=' + json.dumps(sfx, separators=(',', ':')) + ';\n' + code
