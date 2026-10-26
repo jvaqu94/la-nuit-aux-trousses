@@ -67,7 +67,7 @@ Le tir principal est **automatique**.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
 - Sur smartphone, l’accueil occupe toute la zone disponible. **Compte & team** et la section **Ton vol** sont visibles sans défilement, y compris à 360×640 ; le reste du menu défile dans la même fenêtre.
-- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages** occupent toute la hauteur et présentent les commandes tactiles à la place des raccourcis clavier.
+- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages**, la fenêtre **Compte & team** et le classement de team occupent toute la hauteur disponible ; les Réglages présentent les commandes tactiles à la place des raccourcis clavier.
 
 ## Modes de jeu
 
@@ -155,7 +155,7 @@ Par défaut, la progression est enregistrée dans le **`localStorage` du navigat
 - Le Laboratoire préserve la progression et le point de reprise du vol en cours.
 - Effacer les données du site ou du navigateur peut effacer définitivement la progression locale.
 
-Les **Réglages** conservent les exports et imports locaux, tandis que le compte et la team sont placés hors de cet écran. On retrouve aussi ces exports dans **Compte & team**. Le fichier JSON contient notamment la progression, les records, les réglages et le point de reprise.
+Les **Réglages** conservent les exports et imports locaux, tandis que le compte et la team sont placés hors de cet écran. Depuis l’accueil, **Compte & team** ouvre deux onglets : le premier reste réservé à la connexion et à la team ; **Vols & sauvegarde** regroupe les exports/imports, l’annulation du dernier import, les derniers vols et leurs avis locaux. Le fichier JSON contient notamment la progression, les records, les réglages et le point de reprise.
 
 > **Avant de changer de navigateur ou d’appareil sans cloud, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
 

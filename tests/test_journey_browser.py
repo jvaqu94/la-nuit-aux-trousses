@@ -20,22 +20,22 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
  page.evaluate('(cp)=>localStorage.setItem("minuit-checkpoint",cp)',cp);page.reload();page.wait_for_selector('#localResume');page.click('#localResume');page.wait_for_timeout(100);assert page.evaluate("state==='league-menu'");assert page.evaluate('Journey.state.xp')==after
  page.evaluate("localStorage.removeItem('minuit-checkpoint')");page.click('#playAdventure');page.wait_for_function("state==='play'");page.click('#pause');page.click('#panelCollection');page.wait_for_selector('[data-item="night"]');page.click('[data-item="night"]');page.click('[data-item="emerald"]');page.click('#collectionBack');assert page.evaluate("state==='pause'")
  page.click('#quit');page.wait_for_selector('#playAdventure');assert not page.locator('#localResume').count()
- # Trois jours dans la même semaine : prime hebdomadaire et série conservée.
- # Le jour réel précédent peut déjà appartenir à la série, donc au moins trois.
- for day in ['2026-10-26','2026-10-27','2026-10-28']:
+ # Trois jours d’une semaine future : aucun chevauchement avec le vol réel précédent.
+ days=page.evaluate("""()=>{const monday=new Date(dateKey()+'T00:00:00Z');monday.setUTCDate(monday.getUTCDate()+7);monday.setUTCDate(monday.getUTCDate()-((monday.getUTCDay()+6)%7));return [0,1,2].map(offset=>{const day=new Date(monday);day.setUTCDate(day.getUTCDate()+offset);return day.toISOString().slice(0,10)})}""")
+ for day in days:
   page.evaluate('(day)=>{dateKey=()=>day}',day);page.click('#playAdventure');page.wait_for_function("state==='play'");page.evaluate("League.event('waves',1);gameTime=20;end(false)");page.click('#return')
- assert page.evaluate("Journey.state.weeks.includes('2026-10-26')&&Journey.state.streak>=3")
+ assert page.evaluate("(week)=>Journey.state.weeks.includes(week)&&Journey.state.streak>=3",days[0])
  assert page.evaluate("Journey.state.achievements.includes('regular')")
  # Export réel puis import dans un autre navigateur logique.
- page.click('#archives');page.wait_for_selector('#exportJourney')
+ page.click('#archives');page.click('#archiveLocalTab');page.wait_for_selector('#exportJourney')
  with page.expect_download() as download:page.click('#exportJourney')
  file=Path(tmp)/'save.json';download.value.save_as(file);payload=json.loads(file.read_text());assert payload['format']=='MinuitProgression';assert 'password' not in payload['saves'];assert set(payload['saves'])=={'minuit-settings','minuit-highscores','minuit-v2-scores','minuit-checkpoint','minuit-local-league-v1','minuit-journey-v1'}
  exported_xp=payload['saves']['minuit-journey-v1']['xp']
- mobile_context=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True);mobile=mobile_context.new_page();mobile.on('dialog',lambda d:d.accept());mobile.on('pageerror',lambda e:errors.append(str(e)));mobile.goto('http://localhost:3000');mobile.wait_for_selector('#playAdventure');mobile.click('#archives');mobile.set_input_files('#importJourney',str(file));mobile.wait_for_selector('#playAdventure');assert mobile.evaluate('Journey.state.xp')==exported_xp;assert mobile.evaluate("Journey.state.selected.outfit==='emerald'");assert mobile.evaluate('document.documentElement.scrollWidth<=390')
+ mobile_context=b.new_context(viewport={'width':390,'height':844},is_mobile=True,has_touch=True);mobile=mobile_context.new_page();mobile.on('dialog',lambda d:d.accept());mobile.on('pageerror',lambda e:errors.append(str(e)));mobile.goto('http://localhost:3000');mobile.wait_for_selector('#playAdventure');mobile.click('#archives');mobile.click('#archiveLocalTab');mobile.set_input_files('#importJourney',str(file));mobile.wait_for_selector('#playAdventure');assert mobile.evaluate('Journey.state.xp')==exported_xp;assert mobile.evaluate("Journey.state.selected.outfit==='emerald'");assert mobile.evaluate('document.documentElement.scrollWidth<=390')
  mobile.screenshot(path=str(ROOT/'tests/journey-mobile.png'),full_page=True)
- mobile.click('#archives');bad=Path(tmp)/'bad.json';payload['saves']['minuit-journey-v1']['xp']=-10;bad.write_text(json.dumps(payload));mobile.set_input_files('#importJourney',str(bad));mobile.wait_for_function("document.querySelector('#saveMessage').textContent.includes('invalide')");assert mobile.evaluate('Journey.state.xp')==exported_xp
+ mobile.click('#archives');mobile.click('#archiveLocalTab');bad=Path(tmp)/'bad.json';payload['saves']['minuit-journey-v1']['xp']=-10;bad.write_text(json.dumps(payload));mobile.set_input_files('#importJourney',str(bad));mobile.wait_for_function("document.querySelector('#saveMessage').textContent.includes('invalide')");assert mobile.evaluate('Journey.state.xp')==exported_xp
  mobile.click('#archivesBack');mobile.click('#playAdventure');mobile.wait_for_function("state==='play'");mobile.evaluate('player.inv=999;League.tick(1.1)');assert not mobile.locator('#questHUD').is_visible();mobile.evaluate('score=200;gameTime=20;end(false)');assert mobile.evaluate('document.documentElement.scrollWidth<=390');mobile.locator('#retry').scroll_into_view_if_needed();assert mobile.locator('#retry').is_visible()
- mobile.click('#return');mobile.click('#archives');mobile.click('#rollbackImport');mobile.wait_for_selector('#playAdventure');assert mobile.evaluate('Journey.state.xp')==0
+ mobile.click('#return');mobile.click('#archives');mobile.click('#archiveLocalTab');mobile.click('#rollbackImport');mobile.wait_for_selector('#playAdventure');assert mobile.evaluate('Journey.state.xp')==0
  mobile.click('#playAdventure');mobile.wait_for_function("state==='play'");mobile.click('#settings');mobile.wait_for_selector('#exportJourney');assert mobile.locator('#restartTutorial').count()==1;mobile.click('#settings');assert mobile.locator('#exportJourney').count()==1;mobile.click('#save');mobile.wait_for_function("state==='play'")
  assert not errors,errors;assert not api,api
  print('OK : aventure illimitée, tutoriel, XP/contrats uniques, reprise anti-double récompense, collection équipée, bilan, feedback, série/hebdo, export-import inter-navigateurs, rejet import invalide, mobile et absence de comptes/API.')

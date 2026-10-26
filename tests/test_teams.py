@@ -329,6 +329,20 @@ with sync_playwright() as p:
     assert bob.evaluate('document.documentElement.scrollWidth<=390')
     assert 'bob@example.com' not in bob.locator('#teamCard').inner_text()
 
+    # Le classement dédié occupe aussi tout l’écran du téléphone.
+    bob.click('#teamBoardOpen')
+    bob.wait_for_selector('.account-team-board')
+    board = bob.evaluate("""() => ({
+        rows:document.querySelectorAll('.account-team-board .team-row').length,
+        overlay:document.querySelector('#overlay').getBoundingClientRect().height,
+        holder:document.querySelector('.layout>div:first-child').getBoundingClientRect().height,
+        overflow:document.documentElement.scrollWidth>390
+    })""")
+    assert board['rows'] == 2 and board['overlay'] + 2 >= board['holder'], board
+    assert not board['overflow'], board
+    bob.click('#teamBoardBack')
+    bob.wait_for_selector('#teamCopyCode')
+
     alice.click('#teamRefresh')
     alice.wait_for_function("document.querySelectorAll('.team-row').length===2")
     assert 'Bob' in alice.locator('.team-leaderboard').inner_text()

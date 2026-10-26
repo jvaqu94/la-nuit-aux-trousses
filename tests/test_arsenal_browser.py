@@ -33,7 +33,7 @@ with sync_playwright() as p:
   with page.expect_download() as dl:page.click('#exportJourney')
   save=Path(tmp)/'combat.json';dl.value.save_as(save);payload=json.loads(save.read_text());assert payload['saves']['minuit-checkpoint']['journey']['combat']['spell']=='sunray'
   bad=json.loads(save.read_text());bad['saves']['minuit-journey-v1']['combat']['live']={'bad':{'cooldown':'oops','petTimer':0}};assert page.evaluate('b=>{try{Journey.validate(b);return false}catch{return true}}',bad)
-  mobile.on('dialog',lambda d:d.accept());mobile.evaluate('end(false)');mobile.click('#return');mobile.click('#archives');mobile.set_input_files('#importJourney',str(save));mobile.wait_for_selector('#localResume');mobile.click('#localResume');mobile.wait_for_function("state==='play'");assert mobile.evaluate("Arsenal.active.spell==='sunray'&&Arsenal.active.pet==='hunter-bat'&&Arsenal.active.cooldown>0")
+  mobile.on('dialog',lambda d:d.accept());mobile.evaluate('end(false)');mobile.click('#return');mobile.click('#archives');mobile.click('#archiveLocalTab');mobile.set_input_files('#importJourney',str(save));mobile.wait_for_selector('#localResume');mobile.click('#localResume');mobile.wait_for_function("state==='play'");assert mobile.evaluate("Arsenal.active.spell==='sunray'&&Arsenal.active.pet==='hunter-bat'&&Arsenal.active.cooldown>0")
  assert not errors,errors
  print('OK : objectifs sans hasard, trois sorts actifs et recharges, dégâts/dissipation, balais et compromis, aimant, compagnon tireur, boss protégés, choix figé/reprise, remappage, défis normalisés et bouton tactile. Aucune erreur JS.')
  b.close()
