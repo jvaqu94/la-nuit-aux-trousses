@@ -159,11 +159,11 @@ Le menu **Sauvegarde**, également accessible depuis les réglages, permet d’e
 
 ## Supabase : cloud, teams et avis
 
-La configuration publique du projet est déjà renseignée dans `supabase-config.js` et le schéma `supabase/schema.sql` est appliqué avec ses règles RLS. Le menu **Sauvegarde & team** permet de créer un compte e-mail, d’envoyer sa progression et de la récupérer sur un autre appareil. Après un premier envoi manuel, les modifications sont synchronisées automatiquement au maximum toutes les 30 secondes.
+La configuration publique du projet est déjà renseignée dans `supabase-config.js` et le schéma `supabase/schema.sql` est appliqué avec ses règles RLS. Le menu **Sauvegarde & team** permet de créer un accès avec **un pseudo et un mot de passe, sans adresse e-mail**, d’envoyer sa progression et de la récupérer sur un autre appareil. Les comptes e-mail existants restent utilisables via la section dépliable prévue à cet effet. Après un premier envoi manuel, les modifications sont synchronisées automatiquement au maximum toutes les 30 secondes.
 
-La sauvegarde cloud est **optionnelle** : le jeu local et les exports restent disponibles sans compte ou hors ligne. Un compte possède un emplacement, remplacé à chaque envoi. Le mot de passe n’est pas stocké par le jeu et la session Supabase n’est jamais incluse dans les exports.
+La sauvegarde cloud est **optionnelle** : le jeu local et les exports restent disponibles sans compte ou hors ligne. Un accès possède un emplacement, remplacé à chaque envoi. Le mot de passe n’est pas stocké par le jeu et la session Supabase n’est jamais incluse dans les exports. Sans adresse e-mail, le joueur doit conserver son mot de passe : aucune récupération par message n’est possible.
 
-La confirmation d’adresse reste obligatoire. Les nouveaux liens aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, du code HTML brut ou des accents corrompus, saisir son adresse dans **Sauvegarde & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
+La confirmation d’adresse reste obligatoire **uniquement pour l’inscription avec e-mail**, pas pour l’accès par pseudo. Les nouveaux liens e-mail aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, du code HTML brut ou des accents corrompus, ouvrir **Utiliser une adresse e-mail** dans **Sauvegarde & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
 
 ### Teams et highscores
 
@@ -172,7 +172,7 @@ Le menu **Sauvegarde & team** permet, après connexion, de créer une team ou de
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
 - **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
 - Seul l’administrateur peut modifier ces règles ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
-- Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` préremplit le code dans **Sauvegarde & team**, sans inclure de jeton de session.
+- Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Sauvegarde & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team, ou ignorer l’invitation.
 - Après chaque vol, le score est transmis automatiquement. Chaque vol comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
 - La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol reste jouable localement mais ne compte pas pour la team.
 - Seul le **meilleur score de chaque membre** est conservé ; le tableau affiche aussi le total de ces records et les parties restantes.
@@ -226,7 +226,8 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
 | `viewport.js` | Adaptation du terrain, des commandes tactiles et de l’affichage à la fenêtre. |
-| `supabase.js` | Client REST Supabase optionnel, authentification, cloud, teams, highscores et avis. |
+| `supabase.js` | Client REST Supabase optionnel, accès pseudo/e-mail, invitations, cloud, teams, highscores et avis. |
+| `supabase/functions/pseudo-auth/index.ts` | Fonction serveur d’inscription et connexion par pseudo, sans e-mail ni clé secrète dans le navigateur. |
 | `supabase-config.js` | URL et clé publiable du projet ; des valeurs vides désactivent le cloud pour un fonctionnement local. |
 | `supabase/` | Schéma SQL RLS et guide de configuration. |
 | `server.py` | Serveur HTTP local et ancien backend SQLite de ligue. |
@@ -280,6 +281,7 @@ python tests/test_soundtrack.py
 python tests/test_music_mp3.py
 python tests/test_supabase.py
 python tests/test_teams.py
+python tests/test_pseudo_invite.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py
 python tests/test_arsenal_browser.py

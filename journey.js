@@ -62,7 +62,12 @@ $('sendGameFeedback').onclick=async()=>{const button=$('sendGameFeedback'),messa
 if(window.MinuitCloud?.connected&&$('teamEndPanel')){
  const teamMessage=$('teamResultStatus');
  const finishTeam=window.MinuitCloud.finishTeamScore?window.MinuitCloud.finishTeamScore({id:r.id,score:r.score,mode:r.mode,difficulty:prefs.difficulty,stage:r.stage,wave:r.wave}):window.MinuitCloud.submitTeamScore({id:r.id,score:r.score,mode:r.mode,difficulty:prefs.difficulty,stage:r.stage,wave:r.wave}).then(result=>({result,skipped:!result}));
- finishTeam.then(data=>{if(data?.skipped||!data?.team){$('teamEndPanel')?.remove();return}if(typeof renderTeamEnd==='function')renderTeamEnd(data);else teamMessage.textContent='Classement de team actualisé.'}).catch(error=>{teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove()});
+ finishTeam.then(data=>{
+  if(data?.skipped||!data?.team){$('teamEndPanel')?.remove();return}
+  const result=data.result||{},remaining=result.gamesRemaining;
+  teamMessage.textContent=(result.improved?'Nouveau highscore de team.':'Highscore de team conservé.')+(Number.isFinite(remaining)?' '+remaining+' partie'+(remaining>1?'s':'')+' restante'+(remaining>1?'s':''):'');
+  if(typeof renderTeamEnd==='function')renderTeamEnd(data);else teamMessage.textContent+=' Classement de team actualisé.';
+ }).catch(error=>{teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove()});
 }
 }
 function renderResult(r){

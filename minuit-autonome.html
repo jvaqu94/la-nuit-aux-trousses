@@ -777,7 +777,12 @@ $('sendGameFeedback').onclick=async()=>{const button=$('sendGameFeedback'),messa
 if(window.MinuitCloud?.connected&&$('teamEndPanel')){
  const teamMessage=$('teamResultStatus');
  const finishTeam=window.MinuitCloud.finishTeamScore?window.MinuitCloud.finishTeamScore({id:r.id,score:r.score,mode:r.mode,difficulty:prefs.difficulty,stage:r.stage,wave:r.wave}):window.MinuitCloud.submitTeamScore({id:r.id,score:r.score,mode:r.mode,difficulty:prefs.difficulty,stage:r.stage,wave:r.wave}).then(result=>({result,skipped:!result}));
- finishTeam.then(data=>{if(data?.skipped||!data?.team){$('teamEndPanel')?.remove();return}if(typeof renderTeamEnd==='function')renderTeamEnd(data);else teamMessage.textContent='Classement de team actualisé.'}).catch(error=>{teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove()});
+ finishTeam.then(data=>{
+  if(data?.skipped||!data?.team){$('teamEndPanel')?.remove();return}
+  const result=data.result||{},remaining=result.gamesRemaining;
+  teamMessage.textContent=(result.improved?'Nouveau highscore de team.':'Highscore de team conservé.')+(Number.isFinite(remaining)?' '+remaining+' partie'+(remaining>1?'s':'')+' restante'+(remaining>1?'s':''):'');
+  if(typeof renderTeamEnd==='function')renderTeamEnd(data);else teamMessage.textContent+=' Classement de team actualisé.';
+ }).catch(error=>{teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove()});
 }
 }
 function renderResult(r){
@@ -1530,7 +1535,8 @@ const enabled=!!(url&&key);
 const confirmationUrl=enabled?url+'/functions/v1/email-confirmation':'';
 const SESSION_KEY='minuit-supabase-session-v1';
 const AUTO_KEY='minuit-supabase-auto-v1';
-const GAME_VERSION='2026.10.25-9';
+const INVITE_KEY='minuit-team-invite-v1';
+const GAME_VERSION='2026.10.26-10';
 const EMPTY_TEAM=()=>({team:null,scores:[]});
 
 let session=null;
@@ -1552,8 +1558,16 @@ let teamEpoch=0;
 let pendingTeamCode='';
 let teamInviteRecipient='';
 try{
- const value=normalizeTeamCode(new URLSearchParams(location.search).get('team'));
- if(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(value)){pendingTeamCode=value;cleanInvitationUrl()}
+ const fromUrl=normalizeTeamCode(new URLSearchParams(location.search).get('team'));
+ let value=fromUrl;
+ if(!value)try{value=normalizeTeamCode(sessionStorage.getItem(INVITE_KEY))}catch{}
+ if(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{10}$/.test(value)){
+  pendingTeamCode=value;
+  if(fromUrl){
+   try{sessionStorage.setItem(INVITE_KEY,value)}catch{}
+   cleanInvitationUrl();
+  }
+ }
 }catch{}
 
 try{
@@ -1584,6 +1598,15 @@ function teamStatus(text,error=false){
  if(element){element.textContent=text;element.classList.toggle('cloud-error',error)}
 }
 function errorMessage(data,fallback){return data?.msg||data?.error_description||data?.message||data?.error||fallback}
+function sessionUser(user,fallback={}){
+ const source=user||fallback,metadata=source?.user_metadata||{};
+ return{
+  id:source?.id||fallback?.id,
+  email:source?.email||fallback?.email||'',
+  displayName:metadata.display_name||source?.displayName||fallback?.displayName||'',
+  authProvider:metadata.auth_provider||source?.authProvider||fallback?.authProvider||(source?.email?'email':'')
+ };
+}
 
 async function refresh(){
  if(!session?.refresh_token)throw Error('Session en ligne expirée. Reconnecte-toi.');
@@ -1591,7 +1614,7 @@ async function refresh(){
  refreshing=(async()=>{
   const data=await request('/auth/v1/token?grant_type=refresh_token',{method:'POST',auth:false,body:{refresh_token:session.refresh_token}},false);
   if(!data?.access_token)throw Error('Impossible de renouveler la session en ligne.');
-  session={...session,...data,user:data.user||session.user,refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
+  session={...session,...data,user:sessionUser(data.user,session.user),refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
   storeSession();
  })();
  try{return await refreshing}finally{refreshing=null}
@@ -1649,7 +1672,7 @@ function setSession(data){
   access_token:data.access_token,
   refresh_token:data.refresh_token||'',
   expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600),
-  user:{id:data.user.id,email:data.user.email||''}
+  user:sessionUser(data.user)
  };
  if(!session.refresh_token)throw Error('Session en ligne incomplète.');
  storeSession();
@@ -1662,6 +1685,42 @@ function credentials(){
  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>180)throw Error('Saisis une adresse e-mail valide.');
  if(password.length<8||password.length>128)throw Error('Le mot de passe doit contenir 8 à 128 caractères.');
  return{email,password};
+}
+function pseudoCredentials(){
+ const username=String(document.getElementById('cloudPseudo')?.value||'').normalize('NFKC').trim();
+ const password=String(document.getElementById('cloudPseudoPassword')?.value||'');
+ const length=Array.from(username).length,passwordLength=Array.from(password).length;
+ if(length<2||length>24||!/^[\p{L}\p{N}\p{M} ._'-]+$/u.test(username))throw Error('Le pseudo doit contenir 2 à 24 caractères, sans symboles spéciaux.');
+ if(passwordLength<8||passwordLength>128)throw Error('Le mot de passe doit contenir 8 à 128 caractères.');
+ return{username,password};
+}
+const PSEUDO_ERRORS={
+ PSEUDO_INVALID:'Le pseudo doit contenir 2 à 24 caractères, sans symboles spéciaux.',
+ PASSWORD_INVALID:'Le mot de passe doit contenir 8 à 128 caractères.',
+ PSEUDO_UNAVAILABLE:'Ce pseudo est déjà utilisé. Connecte-toi ou choisis un autre pseudo.',
+ AUTH_INVALID:'Pseudo ou mot de passe incorrect.',
+ AUTH_UNAVAILABLE:'Le service de connexion est indisponible. Réessaie dans un moment.'
+};
+function pseudoErrorMessage(error){
+ const message=String(error?.message||error||'Connexion impossible.');
+ for(const [code,text] of Object.entries(PSEUDO_ERRORS))if(message.includes(code))return text;
+ if(/invalid.*(credentials|grant)/i.test(message))return PSEUDO_ERRORS.AUTH_INVALID;
+ return message;
+}
+async function authenticatePseudo(signup){
+ if(busy)return;
+ busy=true;
+ const invited=!!pendingTeamCode;
+ status(signup?'Création de ton accès…':'Connexion…');
+ try{
+  const body=pseudoCredentials();
+  const data=await request('/functions/v1/pseudo-auth',{method:'POST',auth:false,body:{action:signup?'register':'login',...body}});
+  if(!setSession(data))throw Error('AUTH_INVALID');
+  renderPanel();
+  status(signup?'Accès créé, sans e-mail ni confirmation.':'Connexion réussie.');
+  if(invited)await joinPendingTeam(body.username);
+ }catch(error){status(pseudoErrorMessage(error),true)}
+ finally{busy=false}
 }
 async function authenticate(signup){
  if(busy)return;
@@ -1832,7 +1891,11 @@ function cleanInvitationUrl(){
   history.replaceState(null,'',target.pathname+(target.searchParams.size?'?'+target.searchParams:''));
  }catch{}
 }
-function clearPendingTeamCode(){pendingTeamCode='';cleanInvitationUrl()}
+function clearPendingTeamCode(){
+ pendingTeamCode='';
+ try{sessionStorage.removeItem(INVITE_KEY)}catch{}
+ cleanInvitationUrl();
+}
 function teamNumber(value){return Math.max(0,Number(value)||0).toLocaleString('fr-FR')}
 function validTeamState(value){
  if(!value||typeof value!=='object')throw Error('Réponse de team invalide.');
@@ -1985,6 +2048,24 @@ async function joinTeam(){
   teamStatus(teamErrorMessage(error),true);
  }
 }
+async function joinPendingTeam(displayName){
+ const code=pendingTeamCode;
+ if(!code||!session)return;
+ const data=await loadTeam(false);
+ if(!data||code!==pendingTeamCode)return;
+ if(teamData.team){
+  if(teamData.team.code===code){
+   clearPendingTeamCode();
+   teamStatus('Tu es déjà membre de cette team.');
+  }else teamStatus('Tu appartiens déjà à « '+(teamData.team.name||'une autre team')+' ». Quitte-la avant de répondre à cette invitation.',true);
+  return;
+ }
+ const name=document.getElementById('teamDisplayName'),codeInput=document.getElementById('teamCode');
+ if(!name||!codeInput)return;
+ name.value=String(displayName||'').slice(0,24);
+ codeInput.value=formatTeamCode(code);
+ await joinTeam();
+}
 async function leaveTeam(){
  if(teamBusy||!session)return;
  const wasLast=Number(teamData.team?.memberCount)===1;
@@ -2074,13 +2155,17 @@ function renderTeam(){
   }
   return;
  }
- card.innerHTML=`<h3>🏆 TEAM & HIGHSCORE</h3><p>Crée une team ou rejoins-la avec son code. Le classement réunit le meilleur score de chaque membre et leur total, sans afficher les e-mails.</p><label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile"></label><label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div><div class="team-separator"><span>OU REJOINDRE AVEC UN CODE</span></div><label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="secondary" id="teamJoin">Rejoindre la team</button></div><div class="cloud-status" id="teamStatus" role="status">Le créateur devient administrateur. Un compte e-mail est nécessaire pour retrouver ta team et compter chaque joueur une seule fois.</div>`;
+ const displayField=`<label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(session.user.displayName||'')}"></label>`;
+ const createFields=`<label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div>`;
+ const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div>`;
+ if(pendingTeamCode){
+  card.innerHTML=`<h3>🏆 INVITATION À UNE TEAM</h3><div class="team-invite-callout"><span>CODE DE L’INVITATION</span><b>${safeText(formatTeamCode(pendingTeamCode))}</b></div><p>Choisis ton pseudo dans la team, puis rejoins les autres joueurs. Aucune adresse e-mail n’est demandée.</p>${displayField}${joinFields}<details class="team-create-alternative"><summary>Créer plutôt une nouvelle team</summary>${createFields}</details><div class="cloud-status" id="teamStatus" role="status">L’invitation est prête : le code est déjà rempli.</div>`;
+ }else{
+  card.innerHTML=`<h3>🏆 TEAM & HIGHSCORE</h3><p>Crée une team ou rejoins-la avec son code. Le classement réunit le meilleur score de chaque membre et leur total, sans afficher les identifiants de connexion.</p>${displayField}${createFields}<div class="team-separator"><span>OU REJOINDRE AVEC UN CODE</span></div>${joinFields}<div class="cloud-status" id="teamStatus" role="status">Le créateur devient administrateur. Ton accès par pseudo ou e-mail permet de retrouver ta team et de compter chaque joueur une seule fois.</div>`;
+ }
  document.getElementById('teamCreate').onclick=createTeam;
  document.getElementById('teamJoin').onclick=joinTeam;
- if(pendingTeamCode){
-  document.getElementById('teamCode').value=formatTeamCode(pendingTeamCode);
-  teamStatus('Lien d’invitation détecté : le code est prérempli. Choisis ton pseudo puis rejoins la team.');
- }
+ if(pendingTeamCode)document.getElementById('teamCode').value=formatTeamCode(pendingTeamCode);
 }
 function openTeamBoard(){
  if(!teamData.team)return;
@@ -2119,13 +2204,22 @@ function renderPanel(target=mount){
   return;
  }
  if(!session){
-  mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>Compte e-mail optionnel, pour retrouver ta progression sur un autre appareil ou rejoindre une team. Le jeu local reste disponible sans compte.</p><label>E-mail<input id="cloudEmail" type="email" autocomplete="email" maxlength="180"></label><label>Mot de passe<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="128"></label><div class="cloud-actions"><button class="secondary" id="cloudLogin">Se connecter</button><button class="secondary" id="cloudRegister">Créer un compte</button><button class="secondary" id="cloudResend">Renvoyer la confirmation</button></div><div class="cloud-status" id="cloudStatus" role="status">Le mot de passe part uniquement vers le service de connexion et n’est jamais enregistré par le jeu.</div></section>`;
+  const invited=!!pendingTeamCode;
+  mount.innerHTML=`<section class="cloud-card${invited?' team-invite-access':''}"${invited?' id="teamInviteCard"':''}>${invited?`<div class="team-invite-badge">INVITATION À REJOINDRE UNE TEAM</div><div class="team-invite-callout"><span>CODE DE L’INVITATION</span><b>${safeText(formatTeamCode(pendingTeamCode))}</b></div>`:''}<h3>${invited?'PSEUDO + MOT DE PASSE, PUIS TU JOUES AVEC EUX':'ACCÈS EN LIGNE'}</h3><p>${invited?'Crée simplement ton accès avec un pseudo et un mot de passe : tu rejoindras la team juste après, sans adresse e-mail.':'Un pseudo et un mot de passe suffisent pour la sauvegarde et les teams. Le jeu local reste disponible sans accès.'}</p><label>Pseudo<input id="cloudPseudo" type="text" autocomplete="username" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile"></label><label>Mot de passe<input id="cloudPseudoPassword" type="password" autocomplete="current-password" maxlength="128"></label><div class="cloud-actions"><button class="secondary" id="cloudPseudoLogin">${invited?'Me connecter et rejoindre':'Se connecter'}</button><button class="${invited?'primary':'secondary'}" id="cloudPseudoRegister">${invited?'Créer mon accès et rejoindre':'Créer mon accès'}</button></div><details class="cloud-email-access"><summary>Utiliser une adresse e-mail (optionnel)</summary><label>E-mail<input id="cloudEmail" type="email" autocomplete="email" maxlength="180"></label><label>Mot de passe<input id="cloudPassword" type="password" autocomplete="current-password" maxlength="128"></label><div class="cloud-actions"><button class="secondary" id="cloudLogin">Se connecter avec e-mail</button><button class="secondary" id="cloudRegister">Créer un compte e-mail</button><button class="secondary" id="cloudResend">Renvoyer la confirmation</button></div></details><div class="cloud-status" id="cloudStatus" role="status">Le mot de passe n’est jamais enregistré par le jeu. Sans e-mail, conserve-le soigneusement : aucune récupération par message.</div>${invited?'<div class="cloud-actions"><button class="team-invite-dismiss" id="teamInviteDismiss" type="button">Ignorer cette invitation</button></div>':''}</section>`;
+  document.getElementById('cloudPseudoLogin').onclick=()=>authenticatePseudo(false);
+  document.getElementById('cloudPseudoRegister').onclick=()=>authenticatePseudo(true);
+  document.getElementById('cloudPseudoPassword').addEventListener('keydown',event=>{if(event.key==='Enter')authenticatePseudo(false)});
   document.getElementById('cloudLogin').onclick=()=>authenticate(false);
   document.getElementById('cloudRegister').onclick=()=>authenticate(true);
   document.getElementById('cloudResend').onclick=resendConfirmation;
+  if(invited){
+   document.getElementById('teamInviteDismiss').onclick=()=>{clearPendingTeamCode();renderPanel()};
+   requestAnimationFrame(()=>document.getElementById('teamInviteCard')?.scrollIntoView({block:'nearest'}));
+  }
   return;
  }
- mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>Compte : <b>${safeText(session.user.email||'compte en ligne')}</b><br>Un emplacement cloud par compte ; le dernier envoi remplace le précédent.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée après chaque changement.':'Premier envoi manuel, puis synchronisation automatique.'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
+ const identity=session.user.displayName||session.user.email||'accès en ligne',identityLabel=session.user.displayName?'Pseudo':'Compte';
+ mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>${identityLabel} : <b>${safeText(identity)}</b><br>Un emplacement cloud par accès ; le dernier envoi remplace le précédent.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée après chaque changement.':'Premier envoi manuel, puis synchronisation automatique.'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
  document.getElementById('cloudSync').onclick=()=>syncNow();
  document.getElementById('cloudRestore').onclick=restore;
  document.getElementById('cloudLogout').onclick=logout;
@@ -2141,6 +2235,19 @@ css.textContent=`
 .cloud-card label{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:10px;margin:8px 0;font-size:11px;color:#d3c8e2}
 .cloud-card input,.cloud-card select{min-width:0;width:100%;padding:9px;background:#251f36;color:#f2eaff;border:1px solid #65577c;border-radius:6px}
 .cloud-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.cloud-card .cloud-actions .primary{padding:11px 14px;font-size:11px}
+.team-invite-access{border-color:#d6ae6d99;background:linear-gradient(145deg,#2d2438,#172436);box-shadow:0 12px 35px #09061255}
+.team-invite-badge{margin-bottom:10px;color:#ffd18e;font-size:9px;font-weight:700;letter-spacing:1.2px}
+.team-invite-callout{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:10px 12px;border:1px dashed #d9b77399;border-radius:8px;background:#33284088}
+.team-invite-callout span{color:#c6b6d2;font-size:8px;letter-spacing:1px}
+.team-invite-callout b{color:#ffe0a0;font:700 15px ui-monospace,monospace;letter-spacing:2px;white-space:nowrap}
+.cloud-email-access{margin-top:13px;padding-top:10px;border-top:1px solid #ffffff12}
+.cloud-email-access summary{cursor:pointer;color:#aebdD2;font-size:10px;line-height:1.6}
+.cloud-email-access[open] summary{margin-bottom:10px}
+.team-create-alternative{margin-top:12px;padding-top:9px;border-top:1px solid #ffffff12}
+.team-create-alternative summary{cursor:pointer;color:#b7a8c5;font-size:10px}
+.team-create-alternative[open] summary{margin-bottom:10px}
+.team-invite-dismiss{padding:6px 0;border:0;background:transparent;color:#aa9bb8;font-size:9px;text-decoration:underline}
 .team-mobile-share{display:none;margin:10px 0;padding:10px;border:1px solid #79b99a44;border-radius:8px;background:#18302755}
 .team-mobile-share>span{color:#a9d8c5;font-size:9px;letter-spacing:1px}
 .team-mobile-share a{text-decoration:none;text-align:center}
@@ -2209,6 +2316,6 @@ window.MinuitCloud={
  get user(){return session?.user||null}
 };
 if(enabled&&session&&auto)schedule();
-if(enabled&&pendingTeamCode)setTimeout(()=>{if(typeof archives==='function')archives()},0);
+if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
 })();
 </script></body></html>
