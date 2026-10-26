@@ -7,30 +7,31 @@ with sync_playwright() as p:
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto('http://localhost:3000', wait_until='networkidle')
-    page.wait_for_selector('#localSettings')
+    page.wait_for_selector('.home-account-access')
+    assert 'Compte & team' in page.locator('#archives').inner_text()
+    page.click('#archives')
+    page.wait_for_selector('#cloudPseudo', state='visible')
+    assert page.locator('.settings-page').count() == 0
+    assert page.locator('#exportJourney').count() == 1
+    page.click('#archivesBack')
+    page.wait_for_selector('.home-menu #localSettings')
     page.locator('#localSettings').scroll_into_view_if_needed()
     page.click('#localSettings')
     page.wait_for_selector('.settings-page #save')
 
     assert page.locator('.settings-grid > .settings-card').count() == 4
-    assert page.locator('.settings-card-title h3').all_text_contents() == ['Aventure', 'Audio', 'Commandes', 'Sauvegarde']
+    assert page.locator('.settings-card-title h3').all_text_contents() == ['Aventure', 'Audio', 'Commandes', 'Sauvegarde locale']
     for selector in ['#difficulty', '#nickname', '#volume', '#opt-music', '#bindings',
-                     '#exportJourney', '#importJourney', '#saveMessage', '#supabaseMount',
+                     '#exportJourney', '#importJourney', '#saveMessage',
                      '#restartTutorial', '#save', '#settingsCancel']:
         assert page.locator(selector).count() == 1, selector
     assert page.locator('#bindings button').count() == 8
     assert page.evaluate("document.querySelector('#overlay').scrollTop") == 0
     assert page.evaluate("document.querySelector('#overlay').scrollHeight === document.querySelector('#overlay').clientHeight")
 
-    # Le compte reste présent, sans imposer son formulaire dans la page principale.
-    assert not page.locator('.settings-cloud').evaluate('(node) => node.open')
-    page.click('.settings-cloud summary')
-    page.wait_for_selector('#cloudPseudo', state='visible')
-    assert not page.locator('#cloudEmail').is_visible()
-    page.click('.cloud-email-access summary')
-    page.wait_for_selector('#cloudEmail', state='visible')
-    assert page.locator('.settings-cloud #supabaseMount').count() == 1
-    page.click('.settings-cloud summary')
+    # Le compte et la team ont leur accès direct sur l’accueil, pas dans les Réglages.
+    assert page.locator('.settings-cloud').count() == 0
+    assert page.locator('.settings-page #supabaseMount').count() == 0
 
     # Les nœuds déplacés gardent leurs handlers : volume, pseudo, musique et touches.
     page.select_option('#difficulty', 'easy')
@@ -127,15 +128,13 @@ with sync_playwright() as p:
         assert layout[key]['left'] >= layout['footer']['left'] and layout[key]['right'] <= layout['footer']['right'], layout
     assert layout['footer']['top'] < layout['overlayBottom'], layout
     assert layout['bindingHeight'] >= 43, layout
-    mobile.click('.settings-cloud summary')
-    mobile.wait_for_selector('#cloudPseudo', state='visible')
-    mobile.click('.cloud-email-access summary')
-    mobile.wait_for_selector('#cloudEmail', state='visible')
+    assert mobile.locator('.settings-page #supabaseMount').count() == 0
+    assert mobile.locator('.settings-cloud').count() == 0
     assert mobile.evaluate('document.body.scrollWidth <= innerWidth')
     mobile.click('#settingsCancel')
     mobile.wait_for_selector('.home-menu #playAdventure')
 
     assert not errors, errors
     assert not mobile_errors, mobile_errors
-    print('OK : réglages hiérarchisés, contrôles conservés, sauvegarde/compte accessibles, retours menu/pause et mobile validés.')
+    print('OK : compte accessible depuis l’accueil et exclu des Réglages, contrôles conservés, exports locaux, retours menu/pause et mobile validés.')
     browser.close()

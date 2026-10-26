@@ -68,7 +68,7 @@ Laisser les deux valeurs vides désactive toutes les requêtes Supabase.
 
 ## 4. Utiliser le cloud dans le jeu
 
-Ouvrir **Sauvegarde & team** dans le menu ou les réglages :
+Ouvrir **Compte & team** dans le menu ou les réglages :
 
 1. créer un accès avec un pseudo et un mot de passe, ou se connecter avec un compte e-mail existant ;
 2. cliquer sur **Envoyer ma progression** une première fois ;

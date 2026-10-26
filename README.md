@@ -66,6 +66,7 @@ Le tir principal est **automatique**.
 - Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
+- Sur smartphone, l’accueil occupe toute la zone disponible. **Compte & team** et la section **Ton vol** sont visibles sans défilement, y compris à 360×640 ; le reste du menu défile dans la même fenêtre.
 
 ## Modes de jeu
 
@@ -145,7 +146,7 @@ Cette fonction n’enregistre ni vidéo ni son. Elle ne modifie ni la partie ter
 
 ## Progression et sauvegardes
 
-Par défaut, la progression est enregistrée dans le **`localStorage` du navigateur**, sans compte. Une synchronisation Supabase optionnelle peut être activée dans **Sauvegarde** pour la retrouver sur un autre appareil.
+Par défaut, la progression est enregistrée dans le **`localStorage` du navigateur**, sans compte. Une synchronisation Supabase optionnelle peut être activée depuis **Compte & team**, directement sur l’accueil, pour la retrouver sur un autre appareil.
 
 - Un point de reprise est enregistré au début des vagues.
 - Les records sont séparés par difficulté et par date pour les défis.
@@ -153,7 +154,7 @@ Par défaut, la progression est enregistrée dans le **`localStorage` du navigat
 - Le Laboratoire préserve la progression et le point de reprise du vol en cours.
 - Effacer les données du site ou du navigateur peut effacer définitivement la progression locale.
 
-Le menu **Sauvegarde**, également accessible depuis les réglages, permet d’exporter un fichier JSON contenant notamment la progression, les records, les réglages et le point de reprise.
+Les **Réglages** conservent les exports et imports locaux, tandis que le compte et la team sont placés hors de cet écran. On retrouve aussi ces exports dans **Compte & team**. Le fichier JSON contient notamment la progression, les records, les réglages et le point de reprise.
 
 > **Avant de changer de navigateur ou d’appareil sans cloud, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
 
@@ -169,20 +170,20 @@ Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade
 
 ## Supabase : cloud, teams et avis
 
-La configuration publique du projet est déjà renseignée dans `supabase-config.js` et le schéma `supabase/schema.sql` est appliqué avec ses règles RLS. Le menu **Sauvegarde & team** permet de créer un accès avec **un pseudo et un mot de passe, sans adresse e-mail**, d’envoyer sa progression et de la récupérer sur un autre appareil. Les comptes e-mail existants restent utilisables via la section dépliable prévue à cet effet. Après un premier envoi manuel, les modifications sont synchronisées automatiquement au maximum toutes les 30 secondes.
+La configuration publique du projet est déjà renseignée dans `supabase-config.js` et le schéma `supabase/schema.sql` est appliqué avec ses règles RLS. Le menu **Compte & team** permet de créer un accès avec **un pseudo et un mot de passe, sans adresse e-mail**, d’envoyer sa progression et de la récupérer sur un autre appareil. Les comptes e-mail existants restent utilisables via la section dépliable prévue à cet effet. Après un premier envoi manuel, les modifications sont synchronisées automatiquement au maximum toutes les 30 secondes.
 
 La sauvegarde cloud est **optionnelle** : le jeu local et les exports restent disponibles sans compte ou hors ligne. Un accès possède un emplacement, remplacé à chaque envoi. Le mot de passe n’est pas stocké par le jeu et la session Supabase n’est jamais incluse dans les exports. Sans adresse e-mail, le joueur doit conserver son mot de passe : aucune récupération par message n’est possible.
 
-La confirmation d’adresse reste obligatoire **uniquement pour l’inscription avec e-mail**, pas pour l’accès par pseudo. Les nouveaux liens e-mail aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, du code HTML brut ou des accents corrompus, ouvrir **Utiliser une adresse e-mail** dans **Sauvegarde & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
+La confirmation d’adresse reste obligatoire **uniquement pour l’inscription avec e-mail**, pas pour l’accès par pseudo. Les nouveaux liens e-mail aboutissent à la page Supabase **`email-confirmation`**, indépendante de la prévisualisation Arena : après confirmation, revenir dans le jeu et se connecter. Si un ancien e-mail affiche **Missing traffic access token**, du code HTML brut ou des accents corrompus, ouvrir **Utiliser une adresse e-mail** dans **Compte & team**, puis choisir **Renvoyer la confirmation** et ouvrir uniquement le nouveau lien.
 
 ### Teams et highscores
 
-Le menu **Sauvegarde & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Chaque joueur choisit un pseudo : les adresses e-mail ne sont jamais affichées dans le classement.
+Le menu **Compte & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Chaque joueur choisit un pseudo : les adresses e-mail ne sont jamais affichées dans le classement.
 
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
 - **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
 - Seul l’administrateur peut modifier ces règles ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
-- Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Sauvegarde & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team, ou ignorer l’invitation.
+- Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team, ou ignorer l’invitation.
 - Après chaque vol, le score est transmis automatiquement. Chaque vol comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
 - La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol reste jouable localement mais ne compte pas pour la team.
 - Seul le **meilleur score de chaque membre** est conservé ; le tableau affiche aussi le total de ces records et les parties restantes.
@@ -233,8 +234,8 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `nemesis.js` | Rencontres avec le Veilleur. |
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
-| `home.js` | Scène d’accueil avec la sorcière de profil et lancement musical avec déblocage navigateur. |
-| `settings-page.js` | Cartes de réglages, audio, commandes, sauvegarde et compte en ligne dépliable. |
+| `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
+| `settings-page.js` | Cartes de réglages, audio, commandes et sauvegarde locale, sans compte imbriqué. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `arcade-scores.js` | Top 10 arcade, catégories locales, surlignage du dernier vol et défilement contrôlable. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
