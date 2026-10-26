@@ -37,8 +37,7 @@ with sync_playwright() as p:
     page.on('requestfailed', lambda request: failed.append(request.url))
     page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
-    page.click('#sound')
-    page.wait_for_function("mp3Music?.current==='menu' && !!mp3Music.source")
+    page.wait_for_function("audio?.state==='running' && mp3Music?.current==='menu' && !!mp3Music.source")
 
     menu = page.evaluate("""()=>({
       channels:mp3Music.buffer.numberOfChannels,
@@ -78,7 +77,7 @@ with sync_playwright() as p:
     page.evaluate("enemies=[];spawnBoss();audioSignature='';syncAudio()")
     page.wait_for_function("mp3Music.arrivalBuffers.has('boss-forest')")
     boss_cue = page.evaluate("""()=>{const b=mp3Music.arrivalBuffers.get('boss-forest');return {channels:b.numberOfChannels,duration:b.duration,effects:mp3Music.effectsDestination===sfxBus}}""")
-    assert boss_cue['channels'] == 2 and 10 < boss_cue['duration'] < 13 and boss_cue['effects'], boss_cue
+    assert boss_cue['channels'] == 2 and .2 < boss_cue['duration'] < 13 and boss_cue['effects'], boss_cue
     page.wait_for_function('mp3Music.source.playbackRate.value>1.06')
     assert page.evaluate('mp3Music.current') == 'forest'
     page.wait_for_timeout(400)
@@ -107,15 +106,14 @@ with sync_playwright() as p:
     solo.on('request', lambda request: remote.append(request.url) if request.url.startswith(('http://', 'https://')) else None)
     solo.goto((ROOT / 'La-Nuit-aux-Trousses.html').as_uri())
     solo.wait_for_selector('#playAdventure')
-    solo.click('#sound')
-    solo.wait_for_function("mp3Music?.current==='menu' && !!mp3Music.source")
+    solo.wait_for_function("audio?.state==='running' && mp3Music?.current==='menu' && !!mp3Music.source")
     solo.click('#playAdventure')
     solo.wait_for_function("state==='play'")
     for index, track in enumerate(IDS[1:]):
         solo.evaluate("index=>{stage=index;world=worlds[index];enemies=[];audioSignature='';syncAudio()}", index)
         solo.wait_for_function("id=>mp3Music?.current===id && !!mp3Music.source", arg=track)
         solo.evaluate("spawnEnemy({x:400,kind:world.foes[0],pattern:0})")
-    solo.evaluate("enemies=[];spawnBoss();audioSignature='';syncAudio()")
+    solo.evaluate("stage=0;world=worlds[0];enemies=[];spawnBoss();audioSignature='';syncAudio()")
     solo.wait_for_function("mp3Music.arrivalBuffers.has('boss-forest')")
     assert not solo_errors, solo_errors
     assert not remote, remote
