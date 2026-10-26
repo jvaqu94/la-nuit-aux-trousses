@@ -234,6 +234,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
 | `home.js` | Scène d’accueil avec la sorcière de profil et lancement musical avec déblocage navigateur. |
+| `settings-page.js` | Cartes de réglages, audio, commandes, sauvegarde et compte en ligne dépliable. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `arcade-scores.js` | Top 10 arcade, catégories locales, surlignage du dernier vol et défilement contrôlable. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
@@ -288,6 +289,7 @@ node tests/balance-node.cjs
 
 ```bash
 python tests/test_settings_audio.py
+python tests/test_settings_page.py
 python tests/test_soundtrack.py
 python tests/test_music_mp3.py
 python tests/test_supabase.py
