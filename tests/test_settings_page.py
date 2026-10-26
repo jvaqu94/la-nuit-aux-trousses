@@ -99,7 +99,7 @@ with sync_playwright() as p:
     page.wait_for_selector('#resume')
     assert page.evaluate("state === 'pause' && prefs.volume === .4")
 
-    # Mobile : ouverture en haut, pas de débordement et deux actions distinctes.
+    # Mobile : pleine hauteur, commandes tactiles et deux actions distinctes.
     mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     mobile_errors = []
     mobile.on('pageerror', lambda error: mobile_errors.append(str(error)))
@@ -109,6 +109,7 @@ with sync_playwright() as p:
     mobile.wait_for_selector('.settings-page #save')
     layout = mobile.evaluate("""() => {
         const overlay = document.querySelector('#overlay');
+        const holder = document.querySelector('.layout>div:first-child').getBoundingClientRect();
         const header = document.querySelector('.settings-header').getBoundingClientRect();
         const footer = document.querySelector('.settings-actions').getBoundingClientRect();
         const cancel = document.querySelector('#settingsCancel').getBoundingClientRect();
@@ -119,7 +120,7 @@ with sync_playwright() as p:
             save:{left:save.left,right:save.right,width:save.width},
             footer:{left:footer.left,right:footer.right,top:footer.top,bottom:footer.bottom},
             overlayBottom:overlay.getBoundingClientRect().bottom,
-            bindingHeight:document.querySelector('#bindings button').getBoundingClientRect().height};
+            overlayHeight:overlay.getBoundingClientRect().height, holderHeight:holder.height};
     }""")
     assert layout['scroll'] == 0 and layout['headerTop'] >= layout['overlayTop'], layout
     assert layout['body'] <= layout['viewport'], layout
@@ -127,7 +128,12 @@ with sync_playwright() as p:
         assert layout[key]['width'] >= 120, layout
         assert layout[key]['left'] >= layout['footer']['left'] and layout[key]['right'] <= layout['footer']['right'], layout
     assert layout['footer']['top'] < layout['overlayBottom'], layout
-    assert layout['bindingHeight'] >= 43, layout
+    assert layout['overlayHeight'] + 2 >= layout['holderHeight'], layout
+    assert not mobile.locator('#bindings').is_visible()
+    assert mobile.locator('.settings-touch-controls').is_visible()
+    assert 'Glisser relatif' in mobile.locator('.settings-touch-controls').inner_text()
+    assert 'second doigt' in mobile.locator('.settings-touch-controls').inner_text()
+    assert not mobile.locator('#fullView').is_visible()
     assert mobile.locator('.settings-page #supabaseMount').count() == 0
     assert mobile.locator('.settings-cloud').count() == 0
     assert mobile.evaluate('document.body.scrollWidth <= innerWidth')
@@ -136,5 +142,5 @@ with sync_playwright() as p:
 
     assert not errors, errors
     assert not mobile_errors, mobile_errors
-    print('OK : compte accessible depuis l’accueil et exclu des Réglages, contrôles conservés, exports locaux, retours menu/pause et mobile validés.')
+    print('OK : Réglages pleine hauteur sur téléphone, commandes tactiles adaptées, contrôles desktop conservés, exports locaux et retours menu/pause validés.')
     browser.close()
