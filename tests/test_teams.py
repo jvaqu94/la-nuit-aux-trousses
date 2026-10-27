@@ -297,6 +297,10 @@ with sync_playwright() as p:
     assert 'Alice' in alice.locator('.team-leaderboard').inner_text()
     assert alice.evaluate("prefs.name === 'Alice' && scorePlayerName() === 'Alice'")
     assert alice.locator('#teamSaveRules').count() == 1
+    assert not alice.locator('.team-admin-panel').evaluate('node=>node.open')
+    assert alice.locator('.team-campaign-reset').is_visible()
+    assert alice.locator('#teamResetCampaign').is_visible()
+    assert alice.evaluate("document.querySelector('.team-campaign-reset').compareDocumentPosition(document.querySelector('.team-email-share')) & Node.DOCUMENT_POSITION_FOLLOWING")
     assert '0/2 parties' in alice.locator('.team-rules-summary').inner_text()
     assert 'alice@example.com' not in alice.locator('#teamCard').inner_text()
     assert 'Supabase' not in alice.locator('body').inner_text()
@@ -310,6 +314,32 @@ with sync_playwright() as p:
     messenger_link = parse_qs(urlsplit(messenger).query)['u'][0]
     assert parse_qs(urlsplit(messenger_link).query)['team'] == [CODE]
     assert all(secret not in whatsapp + messenger for secret in ['access_token', 'refresh_token', 'traffic_access_token'])
+
+    # Sur téléphone, l’admin voit aussi la campagne sans ouvrir les règles.
+    admin_session = alice.evaluate("localStorage.getItem('minuit-supabase-session-v1')")
+    mobile_admin_context = browser.new_context(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
+    mobile_admin_context.route('**/supabase-config.js*', lambda route: route.fulfill(
+        content_type='application/javascript',
+        body=f"window.MINUIT_SUPABASE_CONFIG={{url:'{BASE}',publishableKey:'sb_publishable_test'}};",
+    ))
+    mobile_admin_context.route(BASE + '/**', handle)
+    mobile_admin = mobile_admin_context.new_page()
+    mobile_admin.on('pageerror', lambda error: errors.append(str(error)))
+    mobile_admin.goto('http://localhost:3000')
+    mobile_admin.evaluate('(value)=>localStorage.setItem(\'minuit-supabase-session-v1\',value)', admin_session)
+    mobile_admin.reload()
+    mobile_admin.wait_for_selector('#playAdventure')
+    mobile_admin.click('#archives')
+    mobile_admin.wait_for_selector('#teamResetCampaign')
+    assert mobile_admin.locator('.team-campaign-reset').is_visible()
+    assert not mobile_admin.locator('.team-admin-panel').evaluate('node=>node.open')
+    mobile_admin.locator('#teamResetCampaign').scroll_into_view_if_needed()
+    reset_box = mobile_admin.locator('#teamResetCampaign').bounding_box()
+    assert reset_box['x'] >= 0 and reset_box['x'] + reset_box['width'] <= 390
+    assert reset_box['y'] >= 0 and reset_box['y'] + reset_box['height'] <= 844
+    assert mobile_admin.evaluate('document.documentElement.scrollWidth<=390')
+    mobile_admin.screenshot(path='/tmp/team-reset-mobile.png')
+    mobile_admin_context.close()
 
     # L’invitation e-mail prépare le destinataire, l’objet, le code et le même lien sans jeton.
     assert alice.locator('#teamEmailInvite').is_visible()
@@ -341,6 +371,8 @@ with sync_playwright() as p:
     assert bob.locator('.team-row').count() == 2
     assert bob.evaluate("prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
     assert bob.locator('#teamSaveRules').count() == 0
+    assert bob.locator('#teamResetCampaign').count() == 0
+    assert bob.locator('.team-campaign-reset').count() == 0
     assert bob.locator('#teamDelete').count() == 0
     assert bob.locator('#teamWhatsApp').is_visible() and bob.locator('#teamMessenger').is_visible()
     assert bob.locator('#teamEmailInvite').is_visible() and bob.locator('#teamInviteEmail').is_visible()
@@ -425,10 +457,11 @@ with sync_playwright() as p:
         return response.status;
     }""")
     assert unauthorized == 400 and score_total(alice) == 4000
-    if not alice.locator('.team-admin-panel').evaluate('node=>node.open'):
-        alice.click('.team-admin-panel summary')
+    assert not alice.locator('.team-admin-panel').evaluate('node=>node.open')
+    assert alice.locator('.team-campaign-reset').is_visible()
     alice.click('#teamResetCampaign')
     alice.wait_for_function("document.querySelector('#teamStatus').textContent.includes('Campagne réinitialisée')")
+    assert 'tous les scores et toutes les parties sont à zéro' in alice.locator('#teamResetStatus').inner_text()
     assert score_total(alice) == 0
     assert '0/3 parties' in alice.locator('.team-rules-summary').inner_text()
     assert alice.locator('.team-score').all_inner_texts() == ['0', '0']
