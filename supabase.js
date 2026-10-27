@@ -95,6 +95,7 @@ async function refresh(){
   if(!data?.access_token)throw Error('Impossible de renouveler la session en ligne.');
   session={...session,...data,user:sessionUser(data.user,session.user),refresh_token:data.refresh_token||session.refresh_token,expires_at:Math.floor(Date.now()/1000)+(data.expires_in||3600)};
   storeSession();
+  window.useAccountPseudo?.();
  })();
  try{return await refreshing}finally{refreshing=null}
 }
@@ -155,6 +156,7 @@ function setSession(data){
  };
  if(!session.refresh_token)throw Error('Session en ligne incomplète.');
  storeSession();
+ window.useAccountPseudo?.();
  try{auto=localStorage.getItem(AUTO_KEY)===session.user.id}catch{}
  return true;
 }
@@ -382,7 +384,7 @@ function validTeamState(value){
 }
 function setTeamBusy(value){
  teamBusy=value;
- for(const id of ['teamCreate','teamJoin','teamRefresh','teamLeave','teamSaveRules','teamDelete']){
+ for(const id of ['teamCreate','teamJoin','teamRefresh','teamLeave','teamSaveRules','teamResetCampaign','teamDelete']){
   const button=document.getElementById(id);
   if(button)button.disabled=value;
  }
@@ -398,6 +400,7 @@ async function loadTeam(showError=false){
    const data=await request('/rest/v1/rpc/minuit_team_state',{method:'POST',body:{}});
    if(epoch!==teamEpoch||session?.user.id!==userId)return null;
    teamData=validTeamState(data);
+   window.useAccountPseudo?.(teamData.scores.find(row=>row.isYou)?.displayName||'');
    teamLoaded=true;
    teamLoadError='';
    renderTeam();
@@ -415,7 +418,8 @@ async function loadTeam(showError=false){
  return teamLoading;
 }
 function teamInputs(){
- const displayName=String(document.getElementById('teamDisplayName')?.value||'').trim();
+ const accountName=String(session?.user?.displayName||'').trim();
+ const displayName=(accountName||String(document.getElementById('teamDisplayName')?.value||'').trim()).trim();
  if(displayName.length<2||displayName.length>24)throw Error(TEAM_ERRORS.DISPLAY_NAME_INVALID);
  return{displayName};
 }
@@ -496,6 +500,7 @@ async function createTeam(){
   const rules=readTeamRules('teamRules');
   const data=await request('/rest/v1/rpc/minuit_create_team',{method:'POST',body:{p_name:name,p_display_name:displayName,...rules}});
   teamData=validTeamState(data);
+  window.useAccountPseudo?.(displayName);
   teamLoaded=true;
   teamLoadError='';
   setTeamBusy(false);
@@ -516,6 +521,7 @@ async function joinTeam(){
   teamStatus('Recherche de la team…');
   const data=await request('/rest/v1/rpc/minuit_join_team',{method:'POST',body:{p_code:code,p_display_name:displayName}});
   teamData=validTeamState(data);
+  window.useAccountPseudo?.(displayName);
   teamLoaded=true;
   teamLoadError='';
   clearPendingTeamCode();
@@ -564,6 +570,24 @@ async function leaveTeam(){
   teamStatus(teamErrorMessage(error),true);
  }
 }
+async function resetTeamCampaign(){
+ if(teamBusy||!session||!teamData.team?.isAdmin)return;
+ if(!confirm('Réinitialiser la campagne pour TOUS les membres ? Tous les scores, highscores et parties comptabilisées seront définitivement effacés. Les membres et les règles seront conservés.'))return;
+ setTeamBusy(true);
+ teamStatus('Réinitialisation de la campagne…');
+ try{
+  const data=await request('/rest/v1/rpc/minuit_reset_team_campaign',{method:'POST',body:{}});
+  teamData=validTeamState(data);
+  teamLoaded=true;
+  teamLoadError='';
+  setTeamBusy(false);
+  renderTeam();
+  teamStatus('Campagne réinitialisée : scores, highscores et parties sont à zéro.');
+ }catch(error){
+  setTeamBusy(false);
+  teamStatus(teamErrorMessage(error),true);
+ }
+}
 async function deleteTeam(){
  if(teamBusy||!session||!teamData.team?.isAdmin)return;
  if(!confirm('Supprimer définitivement cette team pour tous ses membres ? Le classement, les scores et les règles seront effacés. Cette action est irréversible.'))return;
@@ -604,7 +628,7 @@ function renderTeam(){
  if(teamData.team){
   const info=teamData.team;
   const rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isAdmin?'<small class="team-role">ADMIN</small>':''}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
-  const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div></details>`:'';
+  const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div><section class="team-campaign-reset"><b>RÉINITIALISER LA CAMPAGNE</b><p>Efface les scores, highscores et parties comptabilisées de tous les membres. La team, ses membres, son code et ses règles sont conservés.</p><div class="cloud-actions"><button class="secondary team-danger" id="teamResetCampaign">Remettre les scores et les parties à zéro</button></div></section></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
   card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque vol comptabilisé utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
@@ -630,11 +654,13 @@ function renderTeam(){
   updateEmailInvitation();
   if(info.isAdmin){
    document.getElementById('teamSaveRules').onclick=updateTeamRules;
+   document.getElementById('teamResetCampaign').onclick=resetTeamCampaign;
    document.getElementById('teamDelete').onclick=deleteTeam;
   }
   return;
  }
- const displayField=`<label>Pseudo dans la team<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(session.user.displayName||'')}"></label>`;
+ const accountPseudo=String(session.user.displayName||'');
+ const displayField=`<label>${accountPseudo?'Pseudo du compte utilisé dans la team':'Pseudo dans la team'}<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(accountPseudo)}"${accountPseudo?' readonly':''}></label>`;
  const createFields=`<label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div>`;
  const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div>`;
  if(pendingTeamCode){
@@ -750,6 +776,7 @@ css.textContent=`
 .team-admin-panel{margin:10px 0;padding:10px;border:1px solid #b8996655;border-radius:8px;background:#251d3388}
 .team-admin-panel summary{cursor:pointer;color:#ffd08e;font-size:10px;letter-spacing:.5px}
 .team-admin-panel[open] summary{margin-bottom:10px}
+.team-campaign-reset{margin-top:14px;padding-top:12px;border-top:1px solid #a65e5e44}.team-campaign-reset>b{color:#f0afa8;font-size:9px;letter-spacing:.8px}.team-campaign-reset>p{margin:7px 0;color:#c4b3ca;font-size:9px;line-height:1.6}.team-campaign-reset .cloud-actions button{flex:1 1 100%;line-height:1.4}
 .team-role{margin-left:7px;color:#ffd08e!important;font-size:7px!important;letter-spacing:1px}
 .account-team-board{width:min(720px,100%);margin:0 auto;text-align:center}.account-team-board .team-leaderboard{width:100%;margin:14px 0;max-height:min(420px,50vh)}.account-team-board .tiny{display:block;margin:8px 0}.account-team-board .menu-actions{margin-top:auto;padding-top:12px}
 @media(max-width:850px){.account-team-board{display:flex;flex-direction:column}.account-team-board .menu-actions button{min-height:42px}}
@@ -796,6 +823,7 @@ window.MinuitCloud={
  get inTeam(){return!!session&&!!teamData.team},
  get user(){return session?.user||null}
 };
+if(enabled&&session)window.useAccountPseudo?.();
 if(enabled&&session&&auto)schedule();
 if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
 })();

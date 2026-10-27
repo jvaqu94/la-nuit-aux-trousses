@@ -117,6 +117,25 @@ with sync_playwright() as p:
     mobile.evaluate(SEED)
     mobile.click('#arcadeScores')
     mobile.wait_for_selector('.arcade-score-screen')
+
+    def assert_full_screen(target):
+        layout = target.evaluate('''()=>{
+          const overlay=document.querySelector('#overlay');
+          const back=document.querySelector('#arcadeScoresBack').getBoundingClientRect();
+          return {
+            holder:document.querySelector('.layout>div:first-child').getBoundingClientRect().height,
+            overlay:overlay.getBoundingClientRect().height,
+            screen:document.querySelector('.arcade-score-screen').getBoundingClientRect().height,
+            backBottom:back.bottom,viewport:innerHeight,
+            overflow:document.documentElement.scrollWidth>innerWidth||overlay.scrollWidth>overlay.clientWidth
+          };
+        }''')
+        assert layout['overlay'] + 2 >= layout['holder'], layout
+        assert layout['screen'] + 24 >= layout['overlay'], layout
+        assert layout['backBottom'] <= layout['viewport'] + 1, layout
+        assert not layout['overflow'], layout
+
+    assert_full_screen(mobile)
     assert mobile.evaluate('document.documentElement.scrollWidth<=innerWidth')
     bounds = mobile.evaluate('''()=>{const table=document.querySelector('.arcade-score-table').getBoundingClientRect();const score=document.querySelector('.arcade-score-row .arcade-points').getBoundingClientRect();return {tableRight:table.right,scoreRight:score.right,left:table.left}}''')
     assert bounds['left'] >= 0 and bounds['scoreRight'] <= bounds['tableRight'] + 1, bounds
@@ -125,6 +144,18 @@ with sync_playwright() as p:
     mobile.locator('.arcade-score-viewport').evaluate('e=>e.scrollTop=100')
     assert mobile.locator('.arcade-score-viewport').evaluate('e=>e.scrollTop') == 100
     mobile.screenshot(path='/tmp/arcade-mobile.png', full_page=True)
+
+    small = browser.new_page(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
+    small_errors = []
+    small.on('pageerror', lambda error: small_errors.append(str(error)))
+    small.goto('http://localhost:3000')
+    small.wait_for_selector('#arcadeScores')
+    small.evaluate(SEED)
+    small.click('#arcadeScores')
+    small.wait_for_selector('.arcade-score-screen')
+    assert_full_screen(small)
+    small.click('#arcadeScoresBack')
+    small.wait_for_selector('#arcadeScores')
 
     reduced = browser.new_context(viewport={'width': 1000, 'height': 800}, reduced_motion='reduce')
     calm = reduced.new_page()
@@ -142,7 +173,8 @@ with sync_playwright() as p:
 
     assert not errors, errors
     assert not mobile_errors, mobile_errors
+    assert not small_errors, small_errors
     assert not calm_errors, calm_errors
     reduced.close()
     browser.close()
-    print('Highscores arcade OK : Top 10 trié, catégories isolées, défilement fluide et manuel, dernier vol, mobile et mouvement réduit.')
+    print('Highscores arcade OK : Top 10 trié, catégories isolées, défilement fluide et manuel, dernier vol, plein écran mobile à 390×844 et 360×640, retour et mouvement réduit.')

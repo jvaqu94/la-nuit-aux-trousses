@@ -147,7 +147,34 @@ with sync_playwright() as p:
     alice.wait_for_selector('#teamCreate')
     assert alice.evaluate("MinuitCloud.connected && MinuitCloud.user.displayName === 'Alice'")
     assert alice.input_value('#teamDisplayName') == 'Alice'
+    assert alice.locator('#teamDisplayName').get_attribute('readonly') is not None
+    assert alice.evaluate("prefs.name === 'Alice' && scorePlayerName() === 'Alice'")
+    assert alice.evaluate("JSON.parse(localStorage.getItem('minuit-settings')).name === 'Alice'")
     assert 'players.minuit.invalid' not in alice.locator('#supabaseMount').inner_text()
+
+    # Le pseudo du compte remplace « Sorcière » dans les nouveaux records locaux.
+    alice.click('#archivesBack')
+    alice.click('#localSettings')
+    alice.wait_for_selector('.settings-page #nickname')
+    assert alice.input_value('#nickname') == 'Alice'
+    assert alice.locator('#nickname').get_attribute('readonly') is not None
+    assert 'Pseudo du compte connecté' in alice.locator('#nickname').evaluate("node=>node.closest('.settings-field').innerText")
+    alice.click('#settingsCancel')
+    alice.wait_for_selector('#playAdventure')
+    alice.click('#playAdventure')
+    alice.wait_for_function("state==='play'")
+    alice.evaluate('gameTime=25;score=4321;end(false)')
+    alice.wait_for_function("window.MinuitLastScore?.score===4321")
+    assert alice.evaluate("MinuitLastScore.name === 'Alice' && records[0].name === 'Alice'")
+    alice.wait_for_selector('#return', state='visible')
+    alice.click('#return')
+    alice.click('#arcadeScores')
+    alice.wait_for_selector('.arcade-score-screen')
+    assert alice.locator('.arcade-score-group').first.locator('.arcade-player').first.inner_text() == 'Alice'
+    alice.click('#arcadeScoresBack')
+    alice.click('#archives')
+    alice.wait_for_selector('#teamCreate')
+
     alice.fill('#teamName', 'Les Balais de minuit')
     alice.click('#teamCreate')
     alice.wait_for_selector('#teamCopyCode')
@@ -187,6 +214,7 @@ with sync_playwright() as p:
     assert bob.locator('.team-row').count() == 2
     assert 'Bob' in bob.locator('.team-leaderboard').inner_text()
     assert bob.evaluate("MinuitCloud.user.displayName === 'Bob'")
+    assert bob.evaluate("prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
     assert bob.evaluate("sessionStorage.getItem('minuit-team-invite-v1') === null")
     assert not bob.locator('#teamInviteCard').count()
     joins = [call for call in calls if call['path'].endswith('/minuit_join_team')]
@@ -202,6 +230,12 @@ with sync_playwright() as p:
     bob.fill('#cloudPseudo', 'Bob')
     bob.fill('#cloudPseudoPassword', 'mot-de-passe-bob')
     bob.click('#cloudPseudoLogin')
+    bob.wait_for_selector('#teamCopyCode')
+    assert bob.locator('.team-row').count() == 2
+    bob.reload()
+    bob.wait_for_selector('#playAdventure')
+    assert bob.evaluate("MinuitCloud.user.displayName === 'Bob' && prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
+    bob.click('#archives')
     bob.wait_for_selector('#teamCopyCode')
     assert bob.locator('.team-row').count() == 2
 

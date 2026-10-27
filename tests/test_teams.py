@@ -191,6 +191,16 @@ def handle(route):
                     'gamesToday': len(member['attempts']),
                     'gamesRemaining': games_remaining(member),
                 }
+    elif path == '/rest/v1/rpc/minuit_reset_team_campaign':
+        if not team or team['adminId'] != user_id:
+            payload, status = {'message': 'TEAM_ADMIN_REQUIRED'}, 400
+        else:
+            for member in team['members'].values():
+                member['attempts'].clear()
+                member['runs'].clear()
+                for key in ['score', 'mode', 'difficulty', 'stage', 'wave', 'updatedAt']:
+                    member.pop(key, None)
+            payload = member_state(user_id)
     elif path == '/rest/v1/rpc/minuit_delete_team':
         if not team or team['adminId'] != user_id:
             payload, status = {'message': 'TEAM_ADMIN_REQUIRED'}, 400
@@ -237,6 +247,7 @@ def finish_run(page, score):
     page.wait_for_function("state==='play'")
     page.evaluate(f'gameTime=35;score={score};end(false)')
     page.wait_for_selector('#teamResultStatus', state='attached')
+    assert page.evaluate("MinuitLastScore.name===prefs.name && MinuitLastScore.name!=='Sorcière'")
 
 
 def score_total(page):
@@ -272,13 +283,19 @@ with sync_playwright() as p:
     alice.fill('#teamDisplayName', 'Alice')
     alice.fill('#teamName', 'Les Balais de minuit')
     alice.select_option('#teamRulesDailyLimit', '2')
-    alice.fill('#teamRulesStartsAt', '2026-10-24T00:00')
-    alice.fill('#teamRulesEndsAt', '2026-10-27T00:00')
+    period = alice.evaluate("""()=>{
+        const format=value=>new Date(value.getTime()-value.getTimezoneOffset()*60000).toISOString().slice(0,16);
+        const now=new Date();
+        return {starts:format(new Date(now.getTime()-86400000)),ends:format(new Date(now.getTime()+86400000))};
+    }""")
+    alice.fill('#teamRulesStartsAt', period['starts'])
+    alice.fill('#teamRulesEndsAt', period['ends'])
     alice.click('#teamCreate')
     alice.wait_for_selector('#teamCopyCode')
     assert alice.locator('#teamCopyCode').inner_text() == 'ABCDE-23456'
     assert alice.locator('.team-row').count() == 1
     assert 'Alice' in alice.locator('.team-leaderboard').inner_text()
+    assert alice.evaluate("prefs.name === 'Alice' && scorePlayerName() === 'Alice'")
     assert alice.locator('#teamSaveRules').count() == 1
     assert '0/2 parties' in alice.locator('.team-rules-summary').inner_text()
     assert 'alice@example.com' not in alice.locator('#teamCard').inner_text()
@@ -322,6 +339,7 @@ with sync_playwright() as p:
     bob.click('#teamJoin')
     bob.wait_for_selector('#teamCopyCode')
     assert bob.locator('.team-row').count() == 2
+    assert bob.evaluate("prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
     assert bob.locator('#teamSaveRules').count() == 0
     assert bob.locator('#teamDelete').count() == 0
     assert bob.locator('#teamWhatsApp').is_visible() and bob.locator('#teamMessenger').is_visible()
@@ -398,16 +416,43 @@ with sync_playwright() as p:
     assert 'Alice' in alice.locator('.team-row').nth(1).inner_text()
     assert score_total(alice) == 4000
 
-    # Le départ retire le membre, ses tentatives et son highscore du total.
+    # Seul l’admin peut remettre toute la campagne à zéro, highscores compris.
+    unauthorized = bob.evaluate("""async () => {
+        const session=JSON.parse(localStorage.getItem('minuit-supabase-session-v1'));
+        const response=await fetch('https://night-test.supabase.co/rest/v1/rpc/minuit_reset_team_campaign',{
+            method:'POST',headers:{apikey:'sb_publishable_test',Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:'{}'
+        });
+        return response.status;
+    }""")
+    assert unauthorized == 400 and score_total(alice) == 4000
+    if not alice.locator('.team-admin-panel').evaluate('node=>node.open'):
+        alice.click('.team-admin-panel summary')
+    alice.click('#teamResetCampaign')
+    alice.wait_for_function("document.querySelector('#teamStatus').textContent.includes('Campagne réinitialisée')")
+    assert score_total(alice) == 0
+    assert '0/3 parties' in alice.locator('.team-rules-summary').inner_text()
+    assert alice.locator('.team-score').all_inner_texts() == ['0', '0']
+    assert team['dailyGameLimit'] == 3 and len(team['members']) == 2
+    for member in team['members'].values():
+        assert member['attempts'] == [] and not member['runs'] and 'score' not in member
+    reset_calls = [call for call in calls if call['path'].endswith('/minuit_reset_team_campaign')]
+    assert [(call['user_id'], call['status']) for call in reset_calls] == [(BOB, 400), (ALICE, 200)]
+
+    # Le départ retire ensuite le membre, sans faire réapparaître les scores effacés.
     bob.click('#return')
     bob.click('#archives')
     bob.wait_for_selector('#teamLeave')
+    bob.click('#teamRefresh')
+    bob.wait_for_function("document.querySelector('#teamStatus').textContent.includes('Classement actualisé')")
+    assert bob.locator('#teamResetCampaign').count() == 0
+    assert score_total(bob) == 0
+    assert '0/3 parties' in bob.locator('.team-rules-summary').inner_text()
     bob.click('#teamLeave')
     bob.wait_for_selector('#teamJoin')
     alice.click('#teamRefresh')
     alice.wait_for_function("document.querySelectorAll('.team-row').length===1")
     assert 'Bob' not in alice.locator('.team-leaderboard').inner_text()
-    assert score_total(alice) == 1800
+    assert score_total(alice) == 0
 
     # Le départ du dernier membre efface la team et ses données.
     alice.click('#teamLeave')
@@ -445,7 +490,7 @@ with sync_playwright() as p:
     assert all(call['body']['p_mode'] == 'free' and call['body']['p_run_id'] for call in submissions)
     assert len({(call['user_id'], call['body']['p_run_id']) for call in submissions}) == 5
     assert not errors, errors
-    print('OK : admin, règles, limite, invitations préremplies, e-mail/WhatsApp/Messenger, départ du dernier membre, suppression admin et mobile.')
+    print('OK : admin, règles, réinitialisation complète de la campagne, refus non-admin, invitations, départ du dernier membre, suppression admin et mobile.')
     context_a.close()
     context_b.close()
     browser.close()
@@ -453,13 +498,17 @@ with sync_playwright() as p:
 schema = (ROOT / 'supabase/teams.sql').read_text()
 rules = (ROOT / 'supabase/team_rules.sql').read_text()
 assert schema.count('security definer') == 5
-assert rules.count('security definer') == 6
+assert rules.count('security definer') == 7
 assert 'revoke all on table public.team_scores from anon, authenticated' in schema
 assert 'revoke all on table public.team_score_attempts from anon, authenticated' in rules
 assert "set search_path = ''" in rules
 assert 'minuit_update_team_rules' in rules and 'TEAM_DAILY_LIMIT' in rules
 assert 'TEAM_PERIOD_NOT_STARTED' in rules and 'TEAM_PERIOD_ENDED' in rules
 assert 'grant execute on function public.minuit_update_team_rules(integer, timestamptz, timestamptz) to authenticated' in rules
+assert 'grant execute on function public.minuit_reset_team_campaign() to authenticated' in rules
+assert 'delete from public.team_score_attempts ta where ta.team_id = v_team_id' in rules
+assert 'delete from public.team_scores ts where ts.team_id = v_team_id' in rules
+assert 'perform tm.user_id from public.team_members tm' in rules
 assert 'grant execute on function public.minuit_delete_team() to authenticated' in rules
 assert 'delete from public.teams t' in rules and 't.created_by = v_uid' in rules
 assert not any('to anon' in line for line in (schema + rules).splitlines() if line.strip().startswith('grant execute'))

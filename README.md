@@ -67,7 +67,7 @@ Le tir principal est **automatique**.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
 - Sur smartphone, l’accueil occupe toute la zone disponible. **Compte & team** et la section **Ton vol** sont visibles sans défilement, y compris à 360×640 ; le reste du menu défile dans la même fenêtre.
-- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages**, la fenêtre **Compte & team** et le classement de team occupent toute la hauteur disponible ; les Réglages présentent les commandes tactiles à la place des raccourcis clavier.
+- Sur téléphone, le plein écran et le son sont tentés dès l’ouverture. Si le navigateur impose un geste utilisateur, le premier toucher les active automatiquement, sans panneau supplémentaire. Les **Réglages**, la fenêtre **Compte & team**, le **Hi-score** et le classement de team occupent toute la hauteur disponible ; les Réglages présentent les commandes tactiles à la place des raccourcis clavier.
 
 ## Modes de jeu
 
@@ -166,7 +166,8 @@ Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade
 - Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
 - Lorsque la liste dépasse la fenêtre, elle défile verticalement en boucle. Le survol fait une pause temporaire ; le bouton de défilement, la molette, le toucher et les touches de navigation permettent une consultation manuelle.
 - Avec la préférence système « réduire les animations », le tableau est manuel par défaut. Le défilement peut toujours être activé explicitement.
-- Sur smartphone, trois lignes sont visibles à la fois afin de conserver le titre, les scores et les commandes dans la fenêtre portrait.
+- Sur smartphone, trois à six lignes sont visibles selon la hauteur disponible, avec le titre, les scores et les commandes dans la fenêtre plein écran.
+- Quand un compte avec pseudo est connecté, ce pseudo est automatiquement utilisé pour les nouveaux records au lieu de « Sorcière ». Les scores déjà enregistrés conservent leur nom d’origine.
 - Ces records restent locaux à l’appareil. Le classement amical de team et sa synchronisation optionnelle continuent de fonctionner séparément dans le bilan.
 
 ## Supabase : cloud, teams et avis
@@ -179,11 +180,12 @@ La confirmation d’adresse reste obligatoire **uniquement pour l’inscription 
 
 ### Teams et highscores
 
-Le menu **Compte & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Chaque joueur choisit un pseudo : les adresses e-mail ne sont jamais affichées dans le classement.
+Le menu **Compte & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Le pseudo du compte est utilisé dans la team ; les comptes e-mail sans pseudo peuvent choisir leur nom de team. Les adresses e-mail ne sont jamais affichées dans le classement.
 
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
 - **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
-- Seul l’administrateur peut modifier ces règles ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
+- Seul l’administrateur peut modifier ces règles, réinitialiser la campagne ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
+- Depuis **Règles administrateur**, **Remettre les scores et les parties à zéro** demande une confirmation puis supprime toutes les tentatives et tous les highscores de la team pour tous les membres. La team, ses membres, son code et ses règles sont conservés ; les autres appareils voient la remise à zéro après actualisation.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team, ou ignorer l’invitation.
 - Après chaque vol, le score est transmis automatiquement. Chaque vol comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
 - La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol reste jouable localement mais ne compte pas pour la team.
