@@ -283,8 +283,13 @@ with sync_playwright() as p:
     alice.fill('#teamDisplayName', 'Alice')
     alice.fill('#teamName', 'Les Balais de minuit')
     alice.select_option('#teamRulesDailyLimit', '2')
-    alice.fill('#teamRulesStartsAt', '2026-10-24T00:00')
-    alice.fill('#teamRulesEndsAt', '2026-10-27T00:00')
+    period = alice.evaluate("""()=>{
+        const format=value=>new Date(value.getTime()-value.getTimezoneOffset()*60000).toISOString().slice(0,16);
+        const now=new Date();
+        return {starts:format(new Date(now.getTime()-86400000)),ends:format(new Date(now.getTime()+86400000))};
+    }""")
+    alice.fill('#teamRulesStartsAt', period['starts'])
+    alice.fill('#teamRulesEndsAt', period['ends'])
     alice.click('#teamCreate')
     alice.wait_for_selector('#teamCopyCode')
     assert alice.locator('#teamCopyCode').inner_text() == 'ABCDE-23456'
