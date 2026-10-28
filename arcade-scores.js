@@ -174,8 +174,10 @@ function enhanceResult(){
   board.insertAdjacentHTML('beforeend',table(category,{compact:true,highlight:true,day:dailyDate}));
   board.insertAdjacentHTML('beforeend',`<div class="arcade-result-caption">TOP 10 · ${esc(label(category))}${category==='daily'?' · '+esc(dailyDate):''} · la ligne dorée est ton dernier vol.</div>`);
   teamNodes.forEach(node=>board.appendChild(node));
-  const grid=document.querySelector('#overlay > .journey-result-grid');
-  if(grid)grid.insertAdjacentElement('afterend',board);
+  const deathNote=document.querySelector('#overlay .journey-result-screen .death-note');
+  const grid=document.querySelector('#overlay .journey-result-screen .journey-result-grid, #overlay > .journey-result-grid');
+  const anchor=deathNote||grid;
+  if(anchor)anchor.insertAdjacentElement('afterend',board);
   document.querySelector('#overlay > .rankline')?.remove();
   wire(board);
 }

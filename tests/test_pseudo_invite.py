@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -28,20 +29,25 @@ def team_state(user_id):
     if not team or user_id not in team['members']:
         return {'team': None, 'scores': []}
     members = team['members']
+    member = members[user_id]
+    ordered = sorted(members.items(), key=lambda item: (-item[1].get('score', 0), item[1]['displayName']))
+    games_today = len(member.get('attempts', []))
     return {
         'team': {
             'id': 'team-test', 'name': team['name'], 'code': CODE,
-            'memberCount': len(members), 'totalScore': 0,
+            'memberCount': len(members),
+            'totalScore': sum(row.get('score', 0) for row in members.values()),
             'isAdmin': team['admin'] == user_id, 'rulesConfigured': True,
             'dailyGameLimit': 3, 'startsAt': None, 'endsAt': None,
-            'gamesToday': 0, 'gamesRemaining': 3,
+            'gamesToday': games_today, 'gamesRemaining': max(0, 3 - games_today),
         },
         'scores': [
-            {'rank': rank, 'displayName': member['displayName'], 'score': 0,
-             'mode': None, 'difficulty': None, 'stage': None, 'wave': None,
-             'updatedAt': None, 'isYou': member_id == user_id,
+            {'rank': rank, 'displayName': row['displayName'], 'score': row.get('score', 0),
+             'mode': row.get('mode'), 'difficulty': row.get('difficulty'),
+             'stage': row.get('stage'), 'wave': row.get('wave'),
+             'updatedAt': row.get('updatedAt'), 'isYou': member_id == user_id,
              'isAdmin': team['admin'] == member_id}
-            for rank, (member_id, member) in enumerate(members.items(), 1)
+            for rank, (member_id, row) in enumerate(ordered, 1)
         ],
     }
 
@@ -96,15 +102,37 @@ def handle(route):
     elif path == '/rest/v1/rpc/minuit_create_team':
         team = {
             'name': body['p_name'], 'admin': user_id,
-            'members': {user_id: {'displayName': body['p_display_name']}},
+            'members': {user_id: {'displayName': body['p_display_name'], 'score': 0, 'attempts': []}},
         }
         payload = team_state(user_id)
     elif path == '/rest/v1/rpc/minuit_join_team':
         if not team or body['p_code'] != CODE:
             payload, status = {'message': 'TEAM_NOT_FOUND'}, 400
         else:
-            team['members'][user_id] = {'displayName': body['p_display_name']}
+            team['members'][user_id] = {'displayName': body['p_display_name'], 'score': 0, 'attempts': []}
             payload = team_state(user_id)
+    elif path == '/rest/v1/rpc/minuit_submit_team_score':
+        if not team or user_id not in team['members']:
+            payload, status = {'message': 'NOT_IN_TEAM'}, 400
+        else:
+            member = team['members'][user_id]
+            if len(member['attempts']) >= 3:
+                payload, status = {'message': 'TEAM_DAILY_LIMIT'}, 400
+            else:
+                previous = member.get('score', 0)
+                member['attempts'].append(body['p_score'])
+                if body['p_score'] > previous:
+                    member.update({
+                        'score': body['p_score'], 'mode': body['p_mode'],
+                        'difficulty': body['p_difficulty'], 'stage': body['p_stage'],
+                        'wave': body['p_wave'], 'updatedAt': '2026-10-27T12:00:00Z',
+                    })
+                payload = {
+                    'bestScore': member.get('score', 0),
+                    'improved': body['p_score'] > previous,
+                    'duplicate': False, 'gamesToday': len(member['attempts']),
+                    'gamesRemaining': max(0, 3 - len(member['attempts'])),
+                }
     else:
         payload, status = {'message': 'route inattendue'}, 404
 
@@ -220,10 +248,56 @@ with sync_playwright() as p:
     assert bob.evaluate('MinuitCloud.inTeam && MinuitCloud.connected')
     assert bob.evaluate("document.querySelector('#overlay').scrollTop === 0")
     bob.screenshot(path='/tmp/invite-home-mobile.png')
+
+    # Le premier vol de l’invité compte immédiatement, avant la fin du décompte de mort.
+    bob.click('#playAdventure')
+    bob.wait_for_function("state==='play'")
+    bob.evaluate('gameTime=35;score=2345;end(false)')
+    bob.wait_for_selector('.death-transition')
+    assert bob.locator('#deathCountdown').is_visible()
+    assert 'HI-SCORES' in bob.locator('#deathCountdownLabel').inner_text()
+    deadline = time.monotonic() + 2
+    submissions = []
+    while time.monotonic() < deadline:
+        submissions = [call for call in calls if call['path'].endswith('/minuit_submit_team_score')]
+        if submissions:
+            break
+        bob.wait_for_timeout(50)
+    assert submissions, 'Le score doit être envoyé pendant le décompte, pas après.'
+    assert bob.locator('.death-transition').count() == 1
+    assert submissions[0]['user_id'] == 'user-bob'
+    assert submissions[0]['body']['p_score'] == 2345
+    assert submissions[0]['body']['p_mode'] == 'free'
+    bob.screenshot(path='/tmp/death-countdown-mobile.png')
+    bob.wait_for_selector('.journey-result-screen')
+    bob.wait_for_selector('.journey-result-screen .arcade-score-table')
+    bob.wait_for_function("document.querySelector('#teamResultStatus').textContent.includes('2 parties restantes')")
+    assert team['members']['user-bob']['attempts'] == [2345]
+    assert team['members']['user-bob']['score'] == 2345
+    result_metrics = bob.evaluate("""() => ({
+        overlay:document.querySelector('#overlay').getBoundingClientRect().height,
+        holder:document.querySelector('.layout>div:first-child').getBoundingClientRect().height,
+        arena:document.querySelector('.arena').getBoundingClientRect().width,
+        holderWidth:document.querySelector('.layout>div:first-child').getBoundingClientRect().width,
+        sidebar:getComputedStyle(document.querySelector('.sidebar')).display,
+        overflow:document.documentElement.scrollWidth>390,
+        boardAfterDeath:!!(document.querySelector('.death-note').compareDocumentPosition(document.querySelector('.scoreboard-window')) & Node.DOCUMENT_POSITION_FOLLOWING),
+        boardBeforeGrid:!!(document.querySelector('.scoreboard-window').compareDocumentPosition(document.querySelector('.journey-result-grid')) & Node.DOCUMENT_POSITION_FOLLOWING)
+    })""")
+    assert result_metrics['overlay'] + 2 >= result_metrics['holder'], result_metrics
+    assert result_metrics['arena'] + 2 >= result_metrics['holderWidth'], result_metrics
+    assert result_metrics['sidebar'] == 'none' and not result_metrics['overflow'], result_metrics
+    assert result_metrics['boardAfterDeath'] and result_metrics['boardBeforeGrid'], result_metrics
+    bob.screenshot(path='/tmp/death-highscores-mobile.png')
+    bob.click('#return')
+    bob.wait_for_selector('#playAdventure')
     bob.click('#archives')
     bob.wait_for_selector('#teamCopyCode')
     assert bob.locator('.team-row').count() == 2
     assert 'Bob' in bob.locator('.team-leaderboard').inner_text()
+    assert int(re.sub(r'\D', '', bob.locator('.team-summary b').last.inner_text())) == 2345
+    assert int(re.sub(r'\D', '', bob.locator('.team-row.team-you .team-score').inner_text())) == 2345
+    assert '1/3 parties' in bob.locator('.team-rules-summary').inner_text()
     assert bob.evaluate("MinuitCloud.user.displayName === 'Bob'")
     assert bob.evaluate("prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
     assert bob.evaluate("sessionStorage.getItem('minuit-team-invite-v1') === null")
@@ -281,7 +355,7 @@ with sync_playwright() as p:
     assert failed_join.evaluate("sessionStorage.getItem('minuit-team-invite-v1') === 'ABCDE23456'")
 
     assert not errors, errors
-    print('OK : invitation, inscription, jointure puis retour à l’accueil ; échec explicite conservé et mot de passe non stocké.')
+    print('OK : invitation, retour à l’accueil, décompte de mort, HI-SCORES plein écran et premier vol compté dans la team.')
     context_a.close()
     context_b.close()
     context_c.close()

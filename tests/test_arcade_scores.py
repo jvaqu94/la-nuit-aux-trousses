@@ -96,7 +96,8 @@ with sync_playwright() as p:
     assert last.get_attribute('data-last-score') == 'true'
     assert 'DERNIER VOL' in last.inner_text() and '023456' in last.inner_text()
     assert 'is-auto' in page.locator('.scoreboard-window .arcade-score-table').get_attribute('class')
-    assert page.evaluate("document.querySelector('.journey-result-grid').nextElementSibling===document.querySelector('.scoreboard-window')")
+    assert page.evaluate("document.querySelector('.death-note').nextElementSibling===document.querySelector('.scoreboard-window')")
+    assert page.evaluate("document.querySelector('.scoreboard-window').nextElementSibling===document.querySelector('.journey-result-grid')")
     assert page.locator('.scoreboard-window > .scoreboard-row').count() == 0
     assert page.locator('#teamResultStatus').count() == 1
 

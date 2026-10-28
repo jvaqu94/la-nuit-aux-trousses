@@ -161,7 +161,9 @@ Les **Réglages** conservent les exports et imports locaux, tandis que le compte
 
 ### Highscores arcade
 
-Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
+Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
+
+Après une défaite, une transition affiche un **compte à rebours visible** avant l’ouverture du bilan. Elle dure au moins trois secondes et s’adapte à la durée du jingle, avec un repli identique si l’audio est indisponible. Le score de team est envoyé dès la fin du vol, sans attendre cette transition. La page **HI-SCORES / bilan du vol** utilise ensuite toute la zone de jeu : elle conserve le score, le record, le Top 10 local, le classement de team et les actions pour rejouer ou revenir au menu.
 
 - Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
 - Lorsque la liste dépasse la fenêtre, elle défile verticalement en boucle. Le survol fait une pause temporaire ; le bouton de défilement, la molette, le toucher et les touches de navigation permettent une consultation manuelle.
