@@ -41,6 +41,14 @@ css.textContent+=`
  .account-team-board{width:100%;min-height:100%}
 }
 `;
+css.textContent+=`
+/* Le bilan et ses HI-SCORES utilisent toute la surface disponible. */
+body:has(.journey-result-screen) .layout{grid-template-columns:minmax(0,1fr)!important}
+body:has(.journey-result-screen) .sidebar,body:has(.journey-result-screen) .touchbar{display:none!important}
+body:has(.journey-result-screen) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+.overlay:has(.journey-result-screen){justify-content:flex-start;padding:14px}
+@media(max-width:850px){.overlay:has(.journey-result-screen){padding:10px}}
+`;
 document.head.appendChild(css);
 const holder=document.querySelector('.layout>div:first-child'),arena=document.querySelector('.arena'),aside=document.querySelector('.sidebar'),bar=document.querySelector('.touchbar');
 arena.insertAdjacentHTML('beforeend','<div class="touch-stick hidden" id="touchStick" aria-hidden="true"><i></i></div>');

@@ -21,11 +21,11 @@ const championProfiles={
  zombie:['REVENANT PESTILENT','projectiles de poison'],demon:['DÉMON DES BRUMES','malédictions et éclats'],
  ghost:['SPECTRE ERRANT','trajectoire flottante'],bat:['ESSAIM NOCTURNE','vol et tirs sanguins'],lantern:['PORTE-LANTERNE','malédictions de formation']
 };
-const quick={rocket:'GUIDÉS · 10 s',fragment:'ROQUETTE → 8 TIRS',chain:'+1 EXPLOSION',flame:'POISON + TOILES',poison:'DÉGÂTS CONTINUS',spread:'POISON CONTAGIEUX',fire:'TIR RENFORCÉ',familiar:'+1 COMPAGNON',pierce:'+1 TRAVERSÉE',laser:'RAYON AUTOMATIQUE'};
+const quick={rocket:'GUIDÉS · '+MINUIT_BALANCE.missiles.duration+' s',fragment:'ROQUETTE → 8 TIRS',chain:'+1 EXPLOSION',flame:'POISON + TOILES',poison:'DÉGÂTS CONTINUS',spread:'POISON CONTAGIEUX',fire:'TIR RENFORCÉ',familiar:'+1 COMPAGNON',pierce:'+1 TRAVERSÉE',laser:'RAYON AUTOMATIQUE'};
 function shortEffect(key){return quick[key]||'EFFET MAGIQUE'}
 function effect(key){
  const rank=upgrades[key]||0;
- if(key==='rocket')return rank+' missile'+(rank>1?'s':'')+' guidé'+(rank>1?'s':'')+' toutes les 2,25 s · 10 s';
+ if(key==='rocket')return rank+' missile'+(rank>1?'s':'')+' guidé'+(rank>1?'s':'')+' toutes les 2,25 s · '+MINUIT_BALANCE.missiles.duration+' s';
  if(key==='fragment')return 'chaque roquette libère 8 tirs en cercle';
  if(key==='chain')return 'une seconde explosion frappe un ennemi proche';
  if(key==='flame')return 'les explosions empoisonnent et brûlent les toiles';

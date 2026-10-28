@@ -46,7 +46,7 @@ with sync_playwright() as p:
       toastTime=0;
       say('Fragmentation · chaque roquette libère 8 tirs en cercle',.2);
       const first={text:$('toast').innerText,time:toastTime,icon:$('toast').querySelector('img')?.src};
-      say('Bouclier spectral · 12 secondes',.2);
+      say('Bouclier spectral · 6 secondes',.2);
       const queued=$('toast').innerText;update(1);const afterOne=$('toast').innerText;
       for(let i=0;i<6&&!$('toast').innerText.includes('Bouclier spectral');i++){toastTime=0;update(0)}
       return {first,queued,afterOne,second:$('toast').innerText,

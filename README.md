@@ -105,7 +105,7 @@ La campagne comprend notamment :
 - des barrières, des passages, des rochers et des obstacles destructibles ;
 - des charges de boss propres à chaque gardien ;
 - des séquences de terrain propres aux cinq univers ;
-- **le Veilleur**, un chasseur récurrent qui intervient pendant les quatrièmes vagues ;
+- **le Veilleur**, un chasseur récurrent qui intervient pendant les quatrièmes vagues ; sa prime de points tombe à sa position et doit être ramassée, sans crédit automatique ;
 - une scène de victoire à l’aube après le dernier gardien.
 
 Les transitions utilisent des fondus sans interrompre le combat : les ennemis, projectiles et objets déjà présents ne sont pas supprimés arbitrairement.
@@ -122,9 +122,20 @@ Ces éléments et leurs variantes se débloquent par objectifs cumulatifs. Les c
 
 Pendant une partie, les reliques ramassées renforcent temporairement l’armement : cadence, projectiles, poison, missiles, familiers, tirs traversants ou rayon. Leur effet est résumé sous leur nom et expliqué au ramassage. Elles ne remplacent pas le sort actif. La plupart de ces améliorations se déchargent au changement d’univers.
 
+### Équilibrage des dangers et des bonus
+
+- Les **rochers et coffres ordinaires sont tous destructibles** : un rocher ne peut plus devenir aléatoirement un mur infranchissable qui protège indéfiniment une créature. Les gardes et le sceau d’un coffre scellé conservent leurs règles explicites ; les barrières de parcours restent des passages à franchir.
+- Les monstres qui approchent une barrière sont ramenés vers son passage au lieu de rester cachés dans la pierre. Si un chevauchement subsiste, le tir touche le monstre avant d’être absorbé par le mur ; une barrière vide bloque toujours les projectiles.
+- Quand deux reliques sont proposées, elles apparaissent ensemble dans une **zone dégagée devant la sorcière**, avec un espacement suffisant pour lire et atteindre chaque choix.
+- Le bouclier spectral dure **6 s**, le bouclier d’un bonbon turquoise **5 s** et la protection de transition **3 s**.
+- Les roquettes spectrales durent **15 s** et le triple tir des bonbons **12 s**.
+- L’**Onde améthyste** (touche **F**) atteint un rayon de **260**, inflige **10 dégâts** et se recharge en **18 s**. La variante **Onde diffuse** utilise un rayon de **320**, **6 dégâts** et **20 s** de recharge. **Cadence concentrée** conserve ses malus automatiques de dégâts et de recharge.
+
 ### Confort de combat
 
-Sur téléphone, les textes essentiels sont agrandis sans réduire le terrain ni les cibles tactiles. Les projectiles ennemis possèdent des couleurs distinctes, un contour sombre et un repère lumineux ; ces ajouts graphiques ne changent pas leur hitbox. Les impacts renforcent le flash et l’impulsion déjà présents, avec au plus un son de dégât toutes les 65 ms pour éviter la saturation. Il n’y a ni secousse d’écran ni option de facilité.
+Sur téléphone, les textes essentiels sont agrandis sans réduire le terrain ni les cibles tactiles. Les projectiles ennemis possèdent des couleurs distinctes, un contour sombre et un repère lumineux ; ces ajouts graphiques ne changent pas leur hitbox. Les impacts renforcent le flash et l’impulsion déjà présents, avec au plus un son de dégât toutes les 65 ms pour éviter la saturation. Il n’y a ni secousse d’écran ni option de facilité.
+
+Une perte effective de vie fait clignoter la sorcière en rouge pendant l’invulnérabilité, avec un anneau d’alerte et un léger voile qui s’estompe. Le bouclier, l’esquive et l’invulnérabilité initiale ne déclenchent pas ce signal réservé aux vies perdues.
 
 Les bonbons apportent de l’XP, des points ou un bouclier. Des cœurs peuvent restaurer une vie. Les coffres scellés doivent être dégagés de leurs rochers puis ouverts avant de récupérer leur butin.
 
@@ -161,7 +172,9 @@ Les **Réglages** conservent les exports et imports locaux, tandis que le compte
 
 ### Highscores arcade
 
-Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
+Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
+
+Après une défaite, une transition affiche un **compte à rebours visible** avant l’ouverture du bilan. Elle dure au moins trois secondes et s’adapte à la durée du jingle, avec un repli identique si l’audio est indisponible. Le score de team est envoyé dès la fin du vol, sans attendre cette transition. La page **HI-SCORES / bilan du vol** utilise ensuite toute la zone de jeu : elle conserve le score, le record, le Top 10 local, le classement de team et les actions pour rejouer ou revenir au menu.
 
 - Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
 - Lorsque la liste dépasse la fenêtre, elle défile verticalement en boucle. Le survol fait une pause temporaire ; le bouton de défilement, la molette, le toucher et les touches de navigation permettent une consultation manuelle.
