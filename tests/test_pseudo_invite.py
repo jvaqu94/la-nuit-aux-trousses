@@ -210,6 +210,17 @@ with sync_playwright() as p:
     bob.fill('#cloudPseudo', 'Bob')
     bob.fill('#cloudPseudoPassword', 'mot-de-passe-bob')
     bob.click('#cloudPseudoRegister')
+    bob.wait_for_selector('.home-menu')
+    bob.wait_for_selector('#playAdventure', state='visible')
+    assert not bob.locator('#teamCopyCode').count()
+    assert 'Compte créé' in bob.locator('#archives b').inner_text()
+    assert 'Tu es dans la team' in bob.locator('#archives b').inner_text()
+    assert 'Ton prochain score comptera' in bob.locator('#archives small').inner_text()
+    assert bob.locator('#archives').evaluate("node=>node.classList.contains('home-account-welcome')")
+    assert bob.evaluate('MinuitCloud.inTeam && MinuitCloud.connected')
+    assert bob.evaluate("document.querySelector('#overlay').scrollTop === 0")
+    bob.screenshot(path='/tmp/invite-home-mobile.png')
+    bob.click('#archives')
     bob.wait_for_selector('#teamCopyCode')
     assert bob.locator('.team-row').count() == 2
     assert 'Bob' in bob.locator('.team-leaderboard').inner_text()
@@ -256,11 +267,25 @@ with sync_playwright() as p:
     assert not guest.locator('#teamInviteCard').count()
     assert guest.evaluate("sessionStorage.getItem('minuit-team-invite-v1') === null")
 
+    # Une jointure refusée ne renvoie pas à l’accueil et conserve l’invitation.
+    team = None
+    context_d, failed_join = make_page(mobile=True, url=invitation)
+    failed_join.wait_for_selector('#teamInviteCard', state='visible')
+    failed_join.fill('#cloudPseudo', 'Carole')
+    failed_join.fill('#cloudPseudoPassword', 'mot-de-passe-carole')
+    failed_join.click('#cloudPseudoRegister')
+    failed_join.wait_for_function("document.querySelector('#teamStatus')?.textContent.includes('Aucune team')")
+    assert failed_join.locator('#teamJoin').is_visible()
+    assert not failed_join.locator('.home-menu').count()
+    assert failed_join.evaluate('MinuitCloud.connected && !MinuitCloud.inTeam')
+    assert failed_join.evaluate("sessionStorage.getItem('minuit-team-invite-v1') === 'ABCDE23456'")
+
     assert not errors, errors
-    print('OK : invitation visible et persistante, inscription/connexion par pseudo, jointure directe, mot de passe non stocké et refus possible.')
+    print('OK : invitation, inscription, jointure puis retour à l’accueil ; échec explicite conservé et mot de passe non stocké.')
     context_a.close()
     context_b.close()
     context_c.close()
+    context_d.close()
     browser.close()
 
 source = (ROOT / 'supabase/functions/pseudo-auth/index.ts').read_text()

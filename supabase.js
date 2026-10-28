@@ -188,6 +188,18 @@ function pseudoErrorMessage(error){
  if(/invalid.*(credentials|grant)/i.test(message))return PSEUDO_ERRORS.AUTH_INVALID;
  return message;
 }
+function returnHomeAfterInvite(signup){
+ if(window.LocalLeague?.menu)window.LocalLeague.menu();else window.Journey?.menu?.();
+ const account=document.getElementById('archives');
+ if(account){
+  account.classList.add('home-account-welcome');
+  const title=account.querySelector('b'),detail=account.querySelector('small');
+  if(title)title.textContent=signup?'✓ Compte créé · Tu es dans la team':'✓ Connexion réussie · Tu es dans la team';
+  if(detail)detail.textContent='Ton prochain score comptera pour la team.';
+ }
+ const overlayNode=document.getElementById('overlay');
+ if(overlayNode)overlayNode.scrollTop=0;
+}
 async function authenticatePseudo(signup){
  if(busy)return;
  busy=true;
@@ -199,7 +211,10 @@ async function authenticatePseudo(signup){
   if(!setSession(data))throw Error('AUTH_INVALID');
   renderPanel();
   status(signup?'Accès créé, sans e-mail ni confirmation.':'Connexion réussie.');
-  if(invited)await joinPendingTeam(body.username);
+  if(invited){
+   const joined=await joinPendingTeam(body.username);
+   if(joined)returnHomeAfterInvite(signup);
+  }
  }catch(error){status(pseudoErrorMessage(error),true)}
  finally{busy=false}
 }
@@ -512,7 +527,7 @@ async function createTeam(){
  }
 }
 async function joinTeam(){
- if(teamBusy||!session)return;
+ if(teamBusy||!session)return false;
  try{
   const {displayName}=teamInputs();
   const code=normalizeTeamCode(document.getElementById('teamCode')?.value);
@@ -528,28 +543,32 @@ async function joinTeam(){
   setTeamBusy(false);
   renderTeam();
   teamStatus('Tu as rejoint la team ! Ton prochain meilleur score sera ajouté.');
+  return true;
  }catch(error){
   setTeamBusy(false);
   teamStatus(teamErrorMessage(error),true);
+  return false;
  }
 }
 async function joinPendingTeam(displayName){
  const code=pendingTeamCode;
- if(!code||!session)return;
+ if(!code||!session)return false;
  const data=await loadTeam(false);
- if(!data||code!==pendingTeamCode)return;
+ if(!data||code!==pendingTeamCode)return false;
  if(teamData.team){
   if(teamData.team.code===code){
    clearPendingTeamCode();
    teamStatus('Tu es déjà membre de cette team.');
-  }else teamStatus('Tu appartiens déjà à « '+(teamData.team.name||'une autre team')+' ». Quitte-la avant de répondre à cette invitation.',true);
-  return;
+   return true;
+  }
+  teamStatus('Tu appartiens déjà à « '+(teamData.team.name||'une autre team')+' ». Quitte-la avant de répondre à cette invitation.',true);
+  return false;
  }
  const name=document.getElementById('teamDisplayName'),codeInput=document.getElementById('teamCode');
- if(!name||!codeInput)return;
+ if(!name||!codeInput)return false;
  name.value=String(displayName||'').slice(0,24);
  codeInput.value=formatTeamCode(code);
- await joinTeam();
+ return joinTeam();
 }
 async function leaveTeam(){
  if(teamBusy||!session)return;
@@ -769,6 +788,8 @@ css.textContent=`
 .team-email-row input{flex:1;min-width:0}
 .team-email-row a{display:flex;align-items:center;justify-content:center;text-align:center;text-decoration:none;white-space:nowrap}
 .team-email-share small{display:block;margin-top:7px;color:#aeb8cc;font-size:9px;line-height:1.55}
+.home-account-access.home-account-welcome{border-color:#79b99a99;background:linear-gradient(110deg,#263d37,#211a31)}
+.home-account-access.home-account-welcome b{color:#b9edcf}.home-account-access.home-account-welcome small{color:#c4d8ca}
 .team-danger{color:#f0afa8!important;border-color:#a65e5e88!important}
 .cloud-status{min-height:18px;margin-top:9px;font-size:10px;line-height:1.6;color:#a9d8c5}
 .cloud-status.cloud-error{color:#f0afa8}
