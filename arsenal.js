@@ -3,7 +3,7 @@
 'use strict';
 const defaults={spell:'pulse',broom:'bruyere',pet:'solo'},j=Journey.state;
 const catalog=[
-{id:'pulse',kind:'spell',name:'Onde améthyste',metric:null,target:0,color:'#d5b2ff',cooldown:12,desc:'Onde de proximité : 5 dégâts dans un rayon de 150 et dissipation des projectiles proches.',trade:'Portée courte. Recharge : 12 s.'},
+{id:'pulse',kind:'spell',name:'Onde améthyste',metric:null,target:0,color:'#d5b2ff',cooldown:MINUIT_BALANCE.pulse.cooldown,desc:`Onde de proximité : ${MINUIT_BALANCE.pulse.damage} dégâts dans un rayon de ${MINUIT_BALANCE.pulse.radius} et dissipation des projectiles proches.`,trade:`Zone élargie. Recharge : ${MINUIT_BALANCE.pulse.cooldown} s.`},
 {id:'tidewave',kind:'spell',name:'Marée spectrale',metric:'waves',target:3,color:'#85ead8',cooldown:14,desc:'Vague large devant toi : 4 dégâts, repousse les créatures ordinaires de 70 et dissipe les tirs dans la zone.',trade:'N’atteint que la zone devant toi (340 × 340). Recharge : 14 s.'},
 {id:'sunray',kind:'spell',name:'Lance solaire',metric:'bosses',target:2,color:'#ffd080',cooldown:18,desc:'Ligne magique vers le haut : 14 dégâts et dissipation des tirs dans un couloir de 90 de large.',trade:'Visée étroite. Recharge : 18 s. Armure et phases des boss respectées.'},
 {id:'bruyere',kind:'broom',name:'Bruyère équilibrée',metric:null,target:0,color:'#c7ac81',desc:'Pilotage habituel. Esquive : 0,32 s, protection 0,45 s, recharge 4 s.',trade:'Un choix sans pénalité.'},
@@ -29,7 +29,7 @@ const oldFinish=Journey.finish;Journey.finish=function(win){oldFinish(win);effec
 const oldRestore=Journey.restore;Journey.restore=function(cp){oldRestore(cp);const r=Journey.run;if(!r)return;r.combat??={...defaults,cooldown:0,petTimer:2.5,standard:r.mode!=='free'};for(const k in defaults)if(!catalog.some(i=>i.id===r.combat[k]&&i.kind===k))r.combat[k]=defaults[k];const live=j.combat.live[r.id];r.combat.cooldown=Math.max(r.combat.cooldown||0,live?.cooldown||0);r.combat.petTimer=Math.max(r.combat.petTimer||0,live?.petTimer||0);effects=[];renderHUD()};
 const oldEvent=Journey.event;Journey.event=function(metric,n){oldEvent(metric,n);unlock()};
 function speed(focus){const a=active();if(a?.broom==='comet-flight')return 1.12;if(a?.broom==='aurora-flight')return focus?.85:.9;return 1}
-function cast(){const a=active();if(state!=='play'||!a||transition>0||recorded)return false;if(a.cooldown>0)return false;const item=equipped('spell'),tune=window.Adventure?.tuning?.(item)||{radius:150,width:90,damage:item.id==='sunray'?14:item.id==='pulse'?5:4,push:70},x=player.x,y=player.y;const oldObstacles=new Set(obstacles.filter(o=>!o.dead));
+function cast(){const a=active();if(state!=='play'||!a||transition>0||recorded)return false;if(a.cooldown>0)return false;const item=equipped('spell'),tune=window.Adventure?.tuning?.(item)||{radius:MINUIT_BALANCE.pulse.radius,width:90,damage:item.id==='sunray'?14:item.id==='pulse'?MINUIT_BALANCE.pulse.damage:4,push:70},x=player.x,y=player.y;const oldObstacles=new Set(obstacles.filter(o=>!o.dead));
  a.cooldown=cooldown();remember();League.event('specials',1);window.Encounters?.beginCast?.();
  const inside=(px,py)=>item.id==='pulse'?Math.hypot(px-x,py-y)<=tune.radius:item.id==='tidewave'?Math.abs(px-x)<=170&&py>=y-340&&py<=y+15:Math.abs(px-x)<=tune.width/2&&py<y;
  hostile=hostile.filter(b=>!inside(b.x,b.y));
