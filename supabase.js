@@ -34,6 +34,8 @@ let teamLoading=null;
 let teamLoadError='';
 let teamBusy=false;
 let teamEpoch=0;
+let teamStatsDays=30;
+let teamStatsEpoch=0;
 let pendingTeamCode='';
 let teamInviteRecipient='';
 try{
@@ -138,6 +140,7 @@ async function request(path,options={},canRetry=true){
 }
 function resetTeam(){
  teamEpoch++;
+ teamStatsEpoch++;
  teamData=EMPTY_TEAM();
  teamLoaded=false;
  teamLoading=null;
@@ -353,7 +356,8 @@ const TEAM_ERRORS={
  TEAM_PERIOD_NOT_STARTED:'La période de la team n’a pas encore commencé. Ce vol ne compte pas pour la team.',
  TEAM_PERIOD_ENDED:'La période de la team est terminée. Ce vol ne compte pas pour la team.',
  TEAM_DAILY_LIMIT:'Ta limite de parties comptabilisées est atteinte pour aujourd’hui. Tu peux continuer à jouer localement, mais ce vol ne compte pas pour la team.',
- RUN_ID_INVALID:'Identifiant de vol invalide.'
+ RUN_ID_INVALID:'Identifiant de vol invalide.',
+ STATS_PERIOD_INVALID:'La période de statistiques demandée n’est pas valide.'
 };
 function teamErrorMessage(error){
  const message=String(error?.message||error||'Team indisponible.');
@@ -399,7 +403,7 @@ function validTeamState(value){
 }
 function setTeamBusy(value){
  teamBusy=value;
- for(const id of ['teamCreate','teamJoin','teamRefresh','teamLeave','teamSaveRules','teamResetCampaign','teamDelete']){
+ for(const id of ['teamCreate','teamJoin','teamRefresh','teamLeave','teamSaveRules','teamResetCampaign','teamDelete','teamStatsOpen']){
   const button=document.getElementById(id);
   if(button)button.disabled=value;
  }
@@ -653,10 +657,11 @@ function renderTeam(){
   const info=teamData.team;
   const rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isAdmin?'<small class="team-role">ADMIN</small>':''}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
   const campaignReset=info.isAdmin?`<section class="team-campaign-reset" aria-label="Administration de la campagne"><b>ADMINISTRATION · CAMPAGNE</b><p>Efface tous les scores, highscores et parties comptabilisées des membres. La team, son code et ses règles sont conservés.</p><div class="cloud-actions"><button class="secondary team-danger" id="teamResetCampaign">Remettre les scores et les parties à zéro</button></div><div class="cloud-status" id="teamResetStatus" role="status"></div></section>`:'';
+  const statsAccess=info.isAdmin?'<div class="cloud-actions team-stats-access"><button class="secondary" id="teamStatsOpen">Statistiques de la team</button></div>':'';
   const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque vol comptabilisé utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque vol comptabilisé utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
   document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
@@ -678,6 +683,7 @@ function renderTeam(){
   });
   updateEmailInvitation();
   if(info.isAdmin){
+   document.getElementById('teamStatsOpen').onclick=openTeamStats;
    document.getElementById('teamSaveRules').onclick=updateTeamRules;
    document.getElementById('teamResetCampaign').onclick=resetTeamCampaign;
    document.getElementById('teamDelete').onclick=deleteTeam;
@@ -702,6 +708,72 @@ function openTeamBoard(){
  const info=teamData.team,rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
  overlay(`<section class="account-team-board"><div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div></section>`);
  $('teamBoardBack').onclick=()=>window.Journey?.archives?.();$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
+}
+function validTeamStats(value){
+ if(!value||typeof value!=='object'||!value.summary||typeof value.summary!=='object'||!Array.isArray(value.daily)||!Array.isArray(value.members)||!Array.isArray(value.runs))throw Error('Réponse de statistiques invalide.');
+ return value;
+}
+function teamStatsDay(value){
+ const raw=String(value||'').slice(0,10),date=new Date(raw+'T12:00:00');
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(raw)||!Number.isFinite(date.getTime()))return 'Date inconnue';
+ return date.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+}
+function teamStatsProgress(value){
+ const progress=Math.max(0,Math.floor(Number(value)||0));
+ if(!progress)return '—';
+ const stage=Math.max(1,Math.min(5,Math.floor(progress/10)));
+ const wave=Math.max(1,Math.min(5,progress-stage*10));
+ const worldName=typeof worlds!=='undefined'&&worlds[stage-1]?.name?worlds[stage-1].name:'';
+ return 'M'+stage+' · V'+wave+(worldName?' — '+worldName:'');
+}
+function teamStatsRunProgress(row){
+ const stage=Math.max(1,Math.min(5,Math.floor(Number(row?.stage)||1)));
+ const wave=Math.max(1,Math.min(5,Math.floor(Number(row?.wave)||1)));
+ return teamStatsProgress(stage*10+wave);
+}
+function teamStatsMode(row){
+ const mode=({free:'Aventure libre',ranked:'Partie classée',daily:'Défi du jour'})[row?.mode]||'Vol';
+ const difficulty=({easy:'facile',normal:'normal',hard:'difficile'})[row?.difficulty];
+ return mode+(difficulty?' · '+difficulty:'');
+}
+function teamStatsError(error){
+ const message=String(error?.message||error||'Statistiques indisponibles.');
+ if(message.includes('TEAM_ADMIN_REQUIRED'))return 'Seul le créateur de la team peut consulter ces statistiques.';
+ return teamErrorMessage(error);
+}
+function teamStatsTable(kind,headers,rows,empty){
+ if(!rows)return '<div class="team-stats-empty" data-stats-empty="'+kind+'">'+safeText(empty)+'</div>';
+ return '<div class="team-stats-table-wrap" tabindex="0" role="region" aria-label="'+safeText(headers.join(' · '))+'"><table class="team-stats-table team-stats-'+kind+'"><thead><tr>'+headers.map(label=>'<th scope="col">'+safeText(label)+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function renderTeamStats(data){
+ const summary=data.summary;
+ const card=(key,label,value,note,extra='')=>'<div class="team-stats-card'+extra+'"><span>'+safeText(label)+'</span><b data-stat="'+key+'">'+safeText(value)+'</b><small>'+safeText(note)+'</small></div>';
+ const dailyRows=data.daily.map(row=>`<tr class="team-stats-day"><td>${safeText(teamStatsDay(row.playedOn))}</td><td>${teamNumber(row.games)}</td><td>${safeText(teamStatsProgress(row.bestProgress))}</td><td class="team-stats-points">${teamNumber(row.points)}</td><td>${teamNumber(row.bestScore)}</td></tr>`).join('');
+ const memberRows=data.members.map(row=>`<tr class="team-stats-member${row.isYou?' team-stats-you':''}"><td><b>${safeText(row.displayName||'Sorcière')}</b>${row.isAdmin?'<small class="team-role">ADMIN</small>':''}</td><td>${teamNumber(row.games)}</td><td>${safeText(teamStatsProgress(row.bestProgress))}</td><td class="team-stats-points">${teamNumber(row.points)}</td><td>${teamNumber(row.bestScore)}</td><td>${safeText(row.lastPlayedAt?teamDate(row.lastPlayedAt):'Aucun vol')}</td></tr>`).join('');
+ const runRows=data.runs.map(row=>`<tr class="team-stats-run${row.isYou?' team-stats-you':''}"><td>${safeText(teamDate(row.playedAt)||teamStatsDay(row.playedOn))}</td><td>${safeText(row.displayName||'Sorcière')}</td><td>${safeText(teamStatsRunProgress(row))}<small>${safeText(teamStatsMode(row))}</small></td><td class="team-stats-points">${teamNumber(row.score)}</td></tr>`).join('');
+ return `<div class="team-stats-summary" aria-label="Synthèse de la période">${card('games','Parties',teamNumber(summary.games),'vols comptabilisés')}${card('points','Points gagnés',teamNumber(summary.points),'somme de tous les vols',' team-stats-points-card')}${card('bestScore','Meilleur score',teamNumber(summary.bestScore),'record d’un vol')}${card('bestProgress','Monde maximum',teamStatsProgress(summary.bestProgress),'monde et vague atteints',' team-stats-progress-card')}${card('activePlayers','Joueurs actifs',teamNumber(summary.activePlayers),'sur '+teamNumber(data.members.length)+' membre'+(data.members.length>1?'s':''))}</div><p class="team-stats-explanation"><b>Points gagnés</b> = somme des scores de tous les vols comptabilisés, pas seulement des highscores. Les vols refusés par les règles et les données locales non transmises sont exclus.</p><section class="team-stats-section"><h3>PARTIES ET POINTS PAR JOUR</h3>${teamStatsTable('daily',['Date','Parties','Monde atteint','Points gagnés','Record'],dailyRows,'Aucun vol comptabilisé sur cette période.')}</section><section class="team-stats-section"><h3>ACTIVITÉ PAR MEMBRE</h3>${teamStatsTable('members',['Membre','Parties','Monde atteint','Points gagnés','Record','Dernier vol'],memberRows,'Aucun membre dans la team.')}</section><section class="team-stats-section"><h3>DERNIERS VOLS COMPTABILISÉS</h3>${teamStatsTable('runs',['Date','Membre','Monde atteint et mode','Points gagnés'],runRows,'Aucun vol à afficher sur cette période.')}<p class="team-stats-limit">Les 50 vols les plus récents de la période sont affichés.</p></section>`;
+}
+async function openTeamStats(){
+ if(!enabled||!session||!teamData.team?.isAdmin)return;
+ if(![7,30,90,365].includes(teamStatsDays))teamStatsDays=30;
+ const info=teamData.team,epoch=++teamStatsEpoch;
+ const option=days=>`<option value="${days}"${teamStatsDays===days?' selected':''}>${days} jours</option>`;
+ overlay(`<section class="account-team-stats" aria-label="Statistiques privées de la team"><button class="secondary team-stats-back" id="teamStatsBack">← Compte & team</button><header class="team-stats-header"><div class="eyebrow">STATISTIQUES · CRÉATEUR DE LA TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><p>Activité des vols comptabilisés, réservée à l’administrateur. Aucun identifiant de connexion n’est affiché.</p></header><div class="team-stats-toolbar"><label for="teamStatsDays">Période analysée<select id="teamStatsDays">${option(7)}${option(30)}${option(90)}${option(365)}</select></label><button class="secondary" id="teamStatsRefresh">Actualiser</button></div><div id="teamStatsContent"><div class="team-stats-loading" role="status">Chargement des statistiques de la team…</div></div></section>`);
+ $('teamStatsBack').onclick=()=>{teamStatsEpoch++;window.Journey?.archives?.()};
+ $('teamStatsDays').onchange=event=>{teamStatsDays=Number(event.target.value);openTeamStats()};
+ $('teamStatsRefresh').onclick=openTeamStats;
+ $('teamStatsRefresh').disabled=true;
+ try{
+  const data=validTeamStats(await request('/rest/v1/rpc/minuit_team_stats',{method:'POST',body:{p_days:teamStatsDays}}));
+  if(epoch!==teamStatsEpoch||!$('teamStatsContent'))return;
+  $('teamStatsContent').innerHTML=renderTeamStats(data);
+ }catch(error){
+  if(epoch!==teamStatsEpoch||!$('teamStatsContent'))return;
+  $('teamStatsContent').innerHTML='<div class="team-stats-error" role="alert">'+safeText(teamStatsError(error))+'</div><div class="cloud-actions"><button class="secondary" id="teamStatsRetry">Réessayer</button></div>';
+  $('teamStatsRetry').onclick=openTeamStats;
+ }finally{
+  if(epoch===teamStatsEpoch&&$('teamStatsRefresh'))$('teamStatsRefresh').disabled=false;
+ }
 }
 async function finishTeamScore(value){if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result}}
 async function submitTeamScore(value){
@@ -807,6 +879,50 @@ css.textContent=`
 .team-role{margin-left:7px;color:#ffd08e!important;font-size:7px!important;letter-spacing:1px}
 .account-team-board{width:min(720px,100%);margin:0 auto;text-align:center}.account-team-board .team-leaderboard{width:100%;margin:14px 0;max-height:min(420px,50vh)}.account-team-board .tiny{display:block;margin:8px 0}.account-team-board .menu-actions{margin-top:auto;padding-top:12px}
 @media(max-width:850px){.account-team-board{display:flex;flex-direction:column}.account-team-board .menu-actions button{min-height:42px}}
+.team-stats-access button{flex:1 1 100%;border-color:#b8996688;color:#ffe0ae}
+.overlay:has(.account-team-stats){justify-content:flex-start}
+.account-team-stats{width:min(1080px,100%);min-width:0;margin:0 auto;text-align:left}
+.team-stats-back{margin-bottom:12px;padding:10px 14px}
+.team-stats-header{display:block;height:auto;min-height:0;padding:0;border:0;background:none;box-shadow:none}
+.account-team-stats .team-stats-header h2{margin:6px 0!important;font-size:clamp(26px,4vw,44px)!important}
+.account-team-stats .team-stats-header p{max-width:720px;margin:0;font-size:11px;line-height:1.6;color:#b9a8c8}
+.team-stats-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:16px 0 12px;padding:11px 12px;border:1px solid #6e587755;border-radius:10px;background:#1b1527cc}
+.team-stats-toolbar label{display:flex;flex-direction:column;gap:5px;color:#cbb8d7;font-size:10px}
+.team-stats-toolbar select{min-width:150px;padding:9px 30px 9px 10px;border:1px solid #80678d;border-radius:7px;background:#251c32;color:#f1e5f7;font:11px Arial}
+.team-stats-toolbar button{padding:10px 15px}
+#teamStatsContent{width:100%;min-width:0}
+.team-stats-summary{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;width:100%}
+.team-stats-card{min-width:0;padding:13px 11px;border:1px solid #80658755;border-radius:10px;background:linear-gradient(145deg,#2b2039dd,#1a1527dd)}
+.team-stats-card>span{display:block;color:#bca9ca;font-size:8px;letter-spacing:1px;text-transform:uppercase}
+.team-stats-card>b{display:block;margin:7px 0 4px;color:#ffd08e;font-size:24px;line-height:1.15;overflow-wrap:anywhere}
+.team-stats-card>small{display:block;margin:0;color:#a99ab7;font-size:8px;line-height:1.45;letter-spacing:0}
+.team-stats-card.team-stats-progress-card>b{font-size:13px;line-height:1.5}
+.account-team-stats .team-stats-explanation{max-width:none;margin:10px 0 14px;padding:10px 12px;border-left:2px solid #bd925c;background:#2a203733;color:#bcaac8;font-size:10px;line-height:1.6}
+.team-stats-explanation b{color:#ead1ad}
+.team-stats-section{margin:12px 0;padding:12px;border:1px solid #6e587744;border-radius:10px;background:#17122099}
+.team-stats-section h3{margin:0 0 10px;color:#d9bb92;font-size:10px;letter-spacing:1px}
+.team-stats-table-wrap{width:100%;max-width:100%;overflow-x:auto;border:1px solid #6d5a7c44;border-radius:8px}
+.team-stats-table{width:100%;min-width:660px;border-collapse:collapse;font-size:10px;line-height:1.5}
+.team-stats-table th{padding:9px 10px;background:#291f36;color:#bba7c8;font-size:8px;letter-spacing:.7px;text-align:left;white-space:nowrap}
+.team-stats-table td{padding:10px;border-top:1px solid #ffffff0b;color:#d8c8df;vertical-align:top}
+.team-stats-table td.team-stats-points{color:#ffd08e;font-weight:700;white-space:nowrap}
+.team-stats-table td>small{display:block;margin:4px 0 0;color:#9f8ead;font-size:8px;letter-spacing:0}
+.team-stats-table tr.team-stats-you{background:#7c583b18}
+.team-stats-empty,.team-stats-loading,.team-stats-error{padding:22px 14px;border:1px dashed #79638466;border-radius:8px;color:#b9a8c5;font-size:11px;line-height:1.6;text-align:center}
+.team-stats-error{border-color:#b56e6e88;color:#efb4b4}
+.account-team-stats .team-stats-limit{max-width:none;margin:8px 0 0;color:#94849f;font-size:9px;line-height:1.5}
+@media(max-width:850px){
+ .account-team-stats{width:100%;min-height:100%}
+ .team-stats-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .team-stats-card{padding:11px 9px}
+ .team-stats-card>b{font-size:21px}
+ .team-stats-card.team-stats-progress-card>b{font-size:12px}
+ .team-stats-section{padding:10px}
+ .team-stats-toolbar{flex-wrap:wrap}
+ .team-stats-toolbar label{flex:1 1 160px}
+ .team-stats-toolbar select{width:100%}
+}
+@media(max-width:480px){.team-stats-toolbar button{width:100%}.team-stats-back{min-height:42px}}
 .team-leaderboard{max-height:280px;overflow:auto;border:1px solid #6d5a7c55;border-radius:8px;background:#110e1c88}
 .team-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto minmax(74px,auto);align-items:center;gap:8px;padding:9px 8px;border-bottom:1px solid #ffffff09;font-size:11px}
 .team-row:last-child{border-bottom:0}
@@ -843,6 +959,7 @@ window.MinuitCloud={
  submitTeamScore,
  finishTeamScore,
  openTeamBoard,
+ openTeamStats,
  renderPanel,
  refreshTeam:()=>loadTeam(true),
  get configured(){return enabled},

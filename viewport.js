@@ -36,9 +36,9 @@ css.textContent+=`
 `;
 css.textContent+=`
 @media(max-width:850px){
- body:has(.account-page) .arena:has(.overlay:not(.hidden)),body:has(.account-team-board) .arena:has(.overlay:not(.hidden)),body:has(.arcade-score-screen) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
- .overlay:has(.account-page),.overlay:has(.account-team-board),.overlay:has(.arcade-score-screen){justify-content:flex-start;padding:10px}
- .account-team-board{width:100%;min-height:100%}
+ body:has(.account-page) .arena:has(.overlay:not(.hidden)),body:has(.account-team-board) .arena:has(.overlay:not(.hidden)),body:has(.account-team-stats) .arena:has(.overlay:not(.hidden)),body:has(.arcade-score-screen) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+ .overlay:has(.account-page),.overlay:has(.account-team-board),.overlay:has(.account-team-stats),.overlay:has(.arcade-score-screen){justify-content:flex-start;padding:10px}
+ .account-team-board,.account-team-stats{width:100%;min-height:100%}
 }
 `;
 css.textContent+=`
