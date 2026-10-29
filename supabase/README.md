@@ -4,7 +4,7 @@ Le jeu reste utilisable localement sans Supabase. Le cloud ajoute une sauvegarde
 
 ## État de cette installation
 
-Le projet `fkdijgrmgnbpybcfowpr` est configuré dans `supabase-config.js`. Les migrations `20261025104836_la_nuit_cloud_saves_feedback`, `20261025110755_minuit_teams_and_highscores`, `20261025112049_minuit_team_admin_rules` et `20261025125012_minuit_team_deletion` sont appliquées ; toutes les tables ont RLS activé. L’authentification e-mail et la confirmation d’adresse restent activées pour les comptes e-mail existants. La fonction **`pseudo-auth` version 1 est déployée et active avec `verify_jwt=false`** pour les accès par pseudo sans e-mail. Seule la clé publiable est utilisée par le navigateur ; la clé `service_role` reste dans l’environnement privé de la fonction.
+Le projet `fkdijgrmgnbpybcfowpr` est configuré dans `supabase-config.js`. Les migrations `20261025104836_la_nuit_cloud_saves_feedback`, `20261025110755_minuit_teams_and_highscores`, `20261025112049_minuit_team_admin_rules`, `20261025125012_minuit_team_deletion` et `20261029132000_minuit_team_stats` sont appliquées ; toutes les tables ont RLS activé. L’authentification e-mail et la confirmation d’adresse restent activées pour les comptes e-mail existants. La fonction **`pseudo-auth` version 1 est déployée et active avec `verify_jwt=false`** pour les accès par pseudo sans e-mail. Seule la clé publiable est utilisée par le navigateur ; la clé `service_role` reste dans l’environnement privé de la fonction.
 
 Les sections suivantes servent de procédure de maintenance ou de réinstallation sur un autre projet.
 
@@ -19,7 +19,7 @@ Il crée :
 
 Les avis n’ont **aucune politique de lecture publique**. Ils se consultent depuis le tableau de bord Supabase ou avec une clé secrète conservée sur un serveur d’administration.
 
-Pour activer les teams, exécuter également [`teams.sql`](teams.sql), puis [`team_rules.sql`](team_rules.sql). Ils créent `teams`, `team_members`, `team_scores` et `team_score_attempts`, toutes protégées par RLS et sans accès direct pour `anon` ou `authenticated`. Seules sept fonctions authentifiées sont exposées : consulter sa team, créer, rejoindre, quitter, modifier les règles en tant qu’admin, supprimer la team en tant qu’admin et transmettre un score.
+Pour activer les teams, exécuter également [`teams.sql`](teams.sql), puis [`team_rules.sql`](team_rules.sql) et [`team_stats.sql`](team_stats.sql). Ils créent `teams`, `team_members`, `team_scores` et `team_score_attempts`, toutes protégées par RLS et sans accès direct pour `anon` ou `authenticated`. Seules des fonctions authentifiées sont exposées : consulter sa team, créer, rejoindre, quitter, modifier les règles en tant qu’admin, réinitialiser la campagne, supprimer la team en tant qu’admin, transmettre un score et consulter les statistiques en tant qu’admin.
 
 ## 2. Activer les accès par pseudo ou e-mail
 
@@ -90,6 +90,8 @@ Après connexion, le panneau **Team & highscore** permet de :
 5. consulter le meilleur score de chaque membre, le total et les parties restantes.
 
 Le créateur est **administrateur**. Lui seul peut ouvrir **Règles administrateur** pour modifier la limite de 1 à 100 parties par jour, ou illimité, et les dates/heures de début et de fin. Il peut aussi choisir **Supprimer la team** : le RPC `minuit_delete_team()` vérifie `created_by = auth.uid()` et les cascades effacent membres, scores et tentatives. S’il quitte la team sans la supprimer, le membre le plus ancien devient administrateur.
+
+Le bouton **Statistiques de la team**, visible uniquement par l’administrateur, ouvre une synthèse sur 7, 30, 90 ou 365 jours : nombre de parties et points par jour, meilleur monde et vague, activité de chaque membre et 50 derniers vols. Le RPC `minuit_team_stats(integer)` revérifie `teams.created_by = auth.uid()` avant chaque lecture. Les **points gagnés** sont la somme des scores de tous les vols comptabilisés dans `team_score_attempts`, pas la somme des highscores. Les membres sans vol restent visibles avec des compteurs à zéro ; aucun e-mail ou identifiant de connexion n’est inclus.
 
 La limite suit le jour **Europe/Paris**. Chaque vol accepté consomme une tentative, même si son score n’améliore pas le record. Son `run_id` est unique dans la team pour éviter un double comptage lors d’un renvoi réseau. Hors période ou au-delà de la limite, le score est refusé mais le jeu local reste accessible.
 

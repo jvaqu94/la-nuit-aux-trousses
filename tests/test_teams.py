@@ -1,7 +1,8 @@
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from playwright.sync_api import sync_playwright
@@ -13,7 +14,9 @@ BOB = '84f2f696-f9f4-4e6f-a25f-62746c598315'
 CODE = 'ABCDE23456'
 users = {'alice@example.com': ALICE, 'bob@example.com': BOB}
 team = None
+stats_error_once = False
 calls = []
+PARIS = ZoneInfo('Europe/Paris')
 
 
 def games_remaining(member):
@@ -63,6 +66,72 @@ def member_state(user_id):
     }
 
 
+def team_stats_state(user_id, days):
+    until = datetime.now(PARIS).date()
+    since = until - timedelta(days=days - 1)
+    rows = []
+    for member_id, member in team['members'].items():
+        for attempt in member['attempts']:
+            played_on = datetime.fromisoformat(attempt['playedOn']).date()
+            if since <= played_on <= until:
+                rows.append({
+                    **attempt,
+                    'userId': member_id,
+                    'displayName': member['displayName'],
+                })
+
+    def progress(attempts):
+        return max((row['stage'] * 10 + row['wave'] for row in attempts), default=0)
+
+    daily = []
+    for played_on in sorted({row['playedOn'] for row in rows}, reverse=True):
+        attempts = [row for row in rows if row['playedOn'] == played_on]
+        daily.append({
+            'playedOn': played_on,
+            'games': len(attempts),
+            'points': sum(row['score'] for row in attempts),
+            'bestScore': max(row['score'] for row in attempts),
+            'bestProgress': progress(attempts),
+        })
+
+    members = []
+    for member_id, member in team['members'].items():
+        attempts = [row for row in rows if row['userId'] == member_id]
+        members.append({
+            'displayName': member['displayName'],
+            'games': len(attempts),
+            'points': sum(row['score'] for row in attempts),
+            'bestScore': max((row['score'] for row in attempts), default=0),
+            'bestProgress': progress(attempts),
+            'lastPlayedAt': max((row['playedAt'] for row in attempts), default=None),
+            'isAdmin': member_id == team['adminId'],
+            'isYou': member_id == user_id,
+        })
+    members.sort(key=lambda row: (-row['points'], row['displayName'].lower()))
+
+    recent = []
+    for row in sorted(rows, key=lambda item: (item['playedAt'], item['runId']), reverse=True)[:50]:
+        recent.append({
+            key: row[key]
+            for key in ['playedAt', 'playedOn', 'displayName', 'score', 'stage', 'wave', 'mode', 'difficulty']
+        } | {'isYou': row['userId'] == user_id})
+
+    return {
+        'team': {'name': team['name']},
+        'period': {'days': days, 'since': since.isoformat(), 'until': until.isoformat()},
+        'summary': {
+            'games': len(rows),
+            'points': sum(row['score'] for row in rows),
+            'bestScore': max((row['score'] for row in rows), default=0),
+            'bestProgress': progress(rows),
+            'activePlayers': len({row['userId'] for row in rows}),
+        },
+        'daily': daily,
+        'members': members,
+        'runs': recent,
+    }
+
+
 def request_user(request):
     authorization = request.headers.get('authorization', '')
     if authorization.startswith('Bearer access-'):
@@ -77,7 +146,7 @@ def parse_date(value):
 
 
 def handle(route):
-    global team
+    global team, stats_error_once
     request = route.request
     path = urlsplit(request.url).path
     method = request.method
@@ -174,7 +243,16 @@ def handle(route):
                 previous = member.get('score')
                 improved = previous is None or body['p_score'] > previous
                 member['runs'].add(run_id)
-                member['attempts'].append(body['p_score'])
+                member['attempts'].append({
+                    'playedOn': datetime.now(PARIS).date().isoformat(),
+                    'playedAt': datetime.now(timezone.utc).isoformat(),
+                    'score': body['p_score'],
+                    'mode': body['p_mode'],
+                    'difficulty': body['p_difficulty'],
+                    'stage': body['p_stage'],
+                    'wave': body['p_wave'],
+                    'runId': run_id,
+                })
                 if improved:
                     member.update({
                         'score': body['p_score'],
@@ -191,6 +269,19 @@ def handle(route):
                     'gamesToday': len(member['attempts']),
                     'gamesRemaining': games_remaining(member),
                 }
+    elif path == '/rest/v1/rpc/minuit_team_stats':
+        days = body.get('p_days')
+        if not team or user_id not in team['members']:
+            payload, status = {'message': 'NOT_IN_TEAM'}, 400
+        elif team['adminId'] != user_id:
+            payload, status = {'message': 'TEAM_ADMIN_REQUIRED'}, 400
+        elif not isinstance(days, int) or isinstance(days, bool) or not 1 <= days <= 365:
+            payload, status = {'message': 'STATS_PERIOD_INVALID'}, 400
+        elif stats_error_once:
+            stats_error_once = False
+            payload, status = {'message': 'Statistiques temporairement indisponibles.'}, 503
+        else:
+            payload = team_stats_state(user_id, days)
     elif path == '/rest/v1/rpc/minuit_reset_team_campaign':
         if not team or team['adminId'] != user_id:
             payload, status = {'message': 'TEAM_ADMIN_REQUIRED'}, 400
@@ -241,11 +332,11 @@ def login(page, email):
     page.wait_for_selector('#cloudSync')
 
 
-def finish_run(page, score):
+def finish_run(page, score, stage_number=1, wave_number=1):
     if page.locator('#playAdventure').count():
         page.click('#playAdventure')
     page.wait_for_function("state==='play'")
-    page.evaluate(f'gameTime=35;score={score};end(false)')
+    page.evaluate(f'gameTime=35;score={score};stage={stage_number - 1};wave={wave_number};end(false)')
     page.wait_for_selector('#teamResultStatus', state='attached')
     assert page.evaluate("MinuitLastScore.name===prefs.name && MinuitLastScore.name!=='Sorcière'")
 
@@ -297,6 +388,7 @@ with sync_playwright() as p:
     assert 'Alice' in alice.locator('.team-leaderboard').inner_text()
     assert alice.evaluate("prefs.name === 'Alice' && scorePlayerName() === 'Alice'")
     assert alice.locator('#teamSaveRules').count() == 1
+    assert alice.locator('#teamStatsOpen').is_visible()
     assert not alice.locator('.team-admin-panel').evaluate('node=>node.open')
     assert alice.locator('.team-campaign-reset').is_visible()
     assert alice.locator('#teamResetCampaign').is_visible()
@@ -333,6 +425,25 @@ with sync_playwright() as p:
     mobile_admin.wait_for_selector('#teamResetCampaign')
     assert mobile_admin.locator('.team-campaign-reset').is_visible()
     assert not mobile_admin.locator('.team-admin-panel').evaluate('node=>node.open')
+    stats_error_once = True
+    mobile_admin.click('#teamStatsOpen')
+    mobile_admin.wait_for_selector('.team-stats-error')
+    assert 'Statistiques temporairement indisponibles.' in mobile_admin.locator('.team-stats-error').inner_text()
+    mobile_admin.click('#teamStatsRetry')
+    mobile_admin.wait_for_selector('.account-team-stats [data-stat="games"]')
+    assert mobile_admin.locator('[data-stat="games"]').inner_text() == '0'
+    assert mobile_admin.locator('[data-stats-empty="daily"]').count() == 1
+    stats_mobile = mobile_admin.evaluate("""() => ({
+        overlay:document.querySelector('#overlay').getBoundingClientRect().height,
+        holder:document.querySelector('.layout>div:first-child').getBoundingClientRect().height,
+        overflow:document.documentElement.scrollWidth>390,
+        backVisible:document.querySelector('#teamStatsBack').getBoundingClientRect().top>=0
+    })""")
+    assert stats_mobile['overlay'] + 2 >= stats_mobile['holder'], stats_mobile
+    assert not stats_mobile['overflow'] and stats_mobile['backVisible'], stats_mobile
+    mobile_admin.screenshot(path='/tmp/team-stats-mobile-empty.png')
+    mobile_admin.click('#teamStatsBack')
+    mobile_admin.wait_for_selector('#teamResetCampaign')
     mobile_admin.locator('#teamResetCampaign').scroll_into_view_if_needed()
     reset_box = mobile_admin.locator('#teamResetCampaign').bounding_box()
     assert reset_box['x'] >= 0 and reset_box['x'] + reset_box['width'] <= 390
@@ -371,6 +482,7 @@ with sync_playwright() as p:
     assert bob.locator('.team-row').count() == 2
     assert bob.evaluate("prefs.name === 'Bob' && scorePlayerName() === 'Bob'")
     assert bob.locator('#teamSaveRules').count() == 0
+    assert bob.locator('#teamStatsOpen').count() == 0
     assert bob.locator('#teamResetCampaign').count() == 0
     assert bob.locator('.team-campaign-reset').count() == 0
     assert bob.locator('#teamDelete').count() == 0
@@ -403,7 +515,7 @@ with sync_playwright() as p:
     alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('1 partie restante')")
 
     bob.click('#archivesBack')
-    finish_run(bob, 2200)
+    finish_run(bob, 2200, stage_number=3, wave_number=4)
     bob.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('Nouveau highscore')")
 
     alice.click('#retry')
@@ -448,6 +560,49 @@ with sync_playwright() as p:
     assert 'Alice' in alice.locator('.team-row').nth(1).inner_text()
     assert score_total(alice) == 4000
 
+    # Les statistiques additionnent tous les vols acceptés, pas seulement les highscores.
+    stats_unauthorized = bob.evaluate("""async () => {
+        const session=JSON.parse(localStorage.getItem('minuit-supabase-session-v1'));
+        const response=await fetch('https://night-test.supabase.co/rest/v1/rpc/minuit_team_stats',{
+            method:'POST',headers:{apikey:'sb_publishable_test',Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({p_days:30})
+        });
+        return response.status;
+    }""")
+    assert stats_unauthorized == 400
+    alice.click('#teamStatsOpen')
+    alice.wait_for_selector('.account-team-stats [data-stat="games"]')
+    assert int(re.sub(r'\D', '', alice.locator('[data-stat="games"]').inner_text())) == 4
+    assert int(re.sub(r'\D', '', alice.locator('[data-stat="points"]').inner_text())) == 6400
+    assert int(re.sub(r'\D', '', alice.locator('[data-stat="bestScore"]').inner_text())) == 2200
+    assert int(re.sub(r'\D', '', alice.locator('[data-stat="activePlayers"]').inner_text())) == 2
+    assert 'M3 · V4' in alice.locator('[data-stat="bestProgress"]').inner_text()
+    assert 'Le château des vampires' in alice.locator('[data-stat="bestProgress"]').inner_text()
+    assert alice.locator('.team-stats-day').count() == 1
+    daily_cells = alice.locator('.team-stats-day td')
+    assert int(re.sub(r'\D', '', daily_cells.nth(1).inner_text())) == 4
+    assert int(re.sub(r'\D', '', daily_cells.nth(3).inner_text())) == 6400
+    assert int(re.sub(r'\D', '', daily_cells.nth(4).inner_text())) == 2200
+    assert 'M3 · V4' in daily_cells.nth(2).inner_text()
+    assert alice.locator('.team-stats-member').count() == 2
+    assert 'Alice' in alice.locator('.team-stats-member').nth(0).inner_text()
+    assert int(re.sub(r'\D', '', alice.locator('.team-stats-member').nth(0).locator('td').nth(1).inner_text())) == 3
+    assert int(re.sub(r'\D', '', alice.locator('.team-stats-member').nth(0).locator('td').nth(3).inner_text())) == 4200
+    assert 'Bob' in alice.locator('.team-stats-member').nth(1).inner_text()
+    assert int(re.sub(r'\D', '', alice.locator('.team-stats-member').nth(1).locator('td').nth(3).inner_text())) == 2200
+    assert alice.locator('.team-stats-run').count() == 4
+    stats_text = alice.locator('.account-team-stats').inner_text()
+    assert all(secret not in stats_text for secret in ['alice@example.com', 'bob@example.com', ALICE, BOB])
+    assert 'somme des scores de tous les vols comptabilisés' in stats_text
+    alice.screenshot(path='/tmp/team-stats-desktop.png')
+    alice.select_option('#teamStatsDays', '7')
+    alice.wait_for_selector('.account-team-stats [data-stat="games"]')
+    assert int(re.sub(r'\D', '', alice.locator('[data-stat="games"]').inner_text())) == 4
+    stats_calls = [call for call in calls if call['path'].endswith('/minuit_team_stats')]
+    assert stats_calls[-1]['body'] == {'p_days': 7}
+    assert any(call['user_id'] == BOB and call['status'] == 400 for call in stats_calls)
+    alice.click('#teamStatsBack')
+    alice.wait_for_selector('#teamStatsOpen')
+
     # Seul l’admin peut remettre toute la campagne à zéro, highscores compris.
     unauthorized = bob.evaluate("""async () => {
         const session=JSON.parse(localStorage.getItem('minuit-supabase-session-v1'));
@@ -468,6 +623,16 @@ with sync_playwright() as p:
     assert team['dailyGameLimit'] == 3 and len(team['members']) == 2
     for member in team['members'].values():
         assert member['attempts'] == [] and not member['runs'] and 'score' not in member
+    alice.click('#teamStatsOpen')
+    alice.wait_for_selector('.account-team-stats [data-stat="games"]')
+    assert alice.locator('[data-stat="games"]').inner_text() == '0'
+    assert alice.locator('[data-stat="points"]').inner_text() == '0'
+    assert alice.locator('.team-stats-member').count() == 2
+    assert alice.locator('.team-stats-day').count() == 0 and alice.locator('.team-stats-run').count() == 0
+    assert alice.locator('[data-stats-empty="daily"]').count() == 1
+    assert alice.locator('[data-stats-empty="runs"]').count() == 1
+    alice.click('#teamStatsBack')
+    alice.wait_for_selector('#teamResetCampaign')
     reset_calls = [call for call in calls if call['path'].endswith('/minuit_reset_team_campaign')]
     assert [(call['user_id'], call['status']) for call in reset_calls] == [(BOB, 400), (ALICE, 200)]
 
@@ -523,13 +688,14 @@ with sync_playwright() as p:
     assert all(call['body']['p_mode'] == 'free' and call['body']['p_run_id'] for call in submissions)
     assert len({(call['user_id'], call['body']['p_run_id']) for call in submissions}) == 5
     assert not errors, errors
-    print('OK : admin, règles, réinitialisation complète de la campagne, refus non-admin, invitations, départ du dernier membre, suppression admin et mobile.')
+    print('OK : statistiques admin, totaux par jour et par membre, refus non-admin, règles, réinitialisation complète, invitations, suppression et mobile.')
     context_a.close()
     context_b.close()
     browser.close()
 
 schema = (ROOT / 'supabase/teams.sql').read_text()
 rules = (ROOT / 'supabase/team_rules.sql').read_text()
+stats = (ROOT / 'supabase/team_stats.sql').read_text()
 assert schema.count('security definer') == 5
 assert rules.count('security definer') == 7
 assert 'revoke all on table public.team_scores from anon, authenticated' in schema
@@ -544,5 +710,13 @@ assert 'delete from public.team_scores ts where ts.team_id = v_team_id' in rules
 assert 'perform tm.user_id from public.team_members tm' in rules
 assert 'grant execute on function public.minuit_delete_team() to authenticated' in rules
 assert 'delete from public.teams t' in rules and 't.created_by = v_uid' in rules
-assert not any('to anon' in line for line in (schema + rules).splitlines() if line.strip().startswith('grant execute'))
-print('OK : tentatives privées, fonctions authentifiées uniquement, règles serveur et search_path figé.')
+assert stats.count('security definer') == 1
+assert 'public.minuit_team_stats(p_days integer default 30)' in stats
+assert 't.id = v_team_id and t.created_by = v_uid' in stats
+assert 'from public.team_score_attempts ta' in stats and 'sum(ta.score)' in stats
+assert 'ta.played_on between v_since and v_until' in stats
+assert 'limit 50' in stats and 'auth.users' not in stats and '"userId"' not in stats
+assert 'revoke all on function public.minuit_team_stats(integer) from public, anon, authenticated' in stats
+assert 'grant execute on function public.minuit_team_stats(integer) to authenticated' in stats
+assert not any('to anon' in line for line in (schema + rules + stats).splitlines() if line.strip().startswith('grant execute'))
+print('OK : tentatives privées, statistiques réservées au créateur, fonctions authentifiées uniquement et search_path figé.')
