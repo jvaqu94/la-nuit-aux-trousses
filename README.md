@@ -78,12 +78,15 @@ Le tir principal est **automatique**.
 | **Aventure libre** | Vols illimités, difficulté réglable, progression et records personnels. |
 | **Défi score** | Trois essais par jour, en difficulté **Nuit noire**. Seule l’amélioration du meilleur score du jour augmente le cumul local. |
 | **Défi primes** | Un essai séparé par jour et trois objectifs à prime unique. Le score brut de cet essai ne constitue pas un quatrième score classé. |
+| **Sprint hebdo** | Trois vagues puis un gardien, environ 3–5 minutes, graine commune du lundi au dimanche et équipement normalisé. Records hebdomadaires séparés, défi ami par lien et classement de team dédié ; aucun essai quotidien, XP ou record de campagne n’est utilisé. |
 | **Entraînement guidé** | Dix exercices interactifs avec consignes illustrées et validation manuelle. Aucun score, XP, déblocage ou essai quotidien n’est crédité. |
 | **Laboratoire** | Entraînement libre avec les sorts, balais, compagnons, variantes et charges de boss. Ne crédite ni score, ni XP, ni déblocage et ne consomme aucun essai quotidien. |
 
 Les essais et objectifs quotidiens sont renouvelés à minuit, heure d’**Europe/Paris**. Leur comptage est local : il ne s’agit ni d’un système compétitif sécurisé ni d’un mécanisme anti-triche.
 
-Les défis imposent l’équipement de base afin que l’Arsenal débloqué dans l’aventure ne donne pas d’avantage permanent.
+Les défis et le Sprint imposent l’équipement de base afin que l’Arsenal débloqué dans l’aventure ne donne pas d’avantage permanent.
+
+Pendant un vol, les **synergies nommées** signalent les combinaisons de reliques déjà actives : Essaim crépitant (Roquettes + Fragmentation), Contagion de minuit (Venin + Contagion), Chœur spectral (Familier + Rayon spectral), etc. Elles sont purement informatives et ne changent aucune statistique. Le bilan reprend le build, compare le score au record personnel, indique un objectif chiffré et le déblocage le plus proche, puis permet de rejouer avec le même équipement ou de changer immédiatement de balai et de sort.
 
 Le menu principal sépare **Jouer** et **S’entraîner**, puis regroupe les défis, la personnalisation et les options. Le **Guide illustré** est consultable à la demande. Les notifications ordinaires restent au moins 2,8 secondes, attendent leur tour au lieu de s’écraser et affichent l’icône de la relique, du bonbon, du bouclier ou de la créature concernée. Les alertes de boss restent prioritaires.
 
@@ -209,7 +212,7 @@ Le menu **Compte & team** permet, après connexion, de créer une team ou de rej
 - Quitter la team retire le score et les tentatives du joueur de son classement. Une team vide est supprimée.
 - Les tables de teams ne sont pas accessibles directement par l’API : des fonctions authentifiées contrôlent chaque opération et aucune donnée de team n’est publique.
 
-Les fichiers `supabase/teams.sql`, `supabase/team_rules.sql` et `supabase/team_stats.sql` contiennent le schéma et ces fonctions. Le classement est **amical** : le serveur vérifie le compte, la team et les valeurs transmises, mais ne peut pas prouver le déroulé d’une partie exécutée dans un navigateur modifiable. Une compétition anti-triche nécessiterait une validation serveur ou un système de rejeu signé.
+Les fichiers `supabase/teams.sql`, `supabase/team_rules.sql` et `supabase/team_stats.sql` contiennent le schéma et ces fonctions. `supabase/weekly_sprint.sql` ajoute une table et deux RPC distincts pour le Sprint : `minuit_weekly_sprint_board` et `minuit_submit_weekly_sprint`. Ils n’écrivent jamais dans `team_scores` ou `team_score_attempts`, ne consomment pas les parties quotidiennes et sont également réservés aux membres authentifiés de la team. Le classement est **amical** : le serveur vérifie le compte, la team et les valeurs transmises, mais ne peut pas prouver le déroulé d’une partie exécutée dans un navigateur modifiable. Une compétition anti-triche nécessiterait une validation serveur ou un système de rejeu signé.
 
 Le bilan de vol conserve toujours localement l’appréciation **Trop difficile / Bien dosé / Trop facile** et un commentaire facultatif. Avec Supabase configuré, une copie privée peut être envoyée pour l’équilibrage, même sans compte. Les avis ne sont pas publiés dans le jeu et aucune lecture publique de leur table n’est autorisée.
 
@@ -253,6 +256,9 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `nemesis.js` | Rencontres avec le Veilleur. |
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
+| `synergies.js` | Noms et annonces des combinaisons de reliques, sans modifier leurs statistiques. |
+| `weekly.js` | Sprint hebdomadaire, records séparés, partage amical et classement de team dédié. |
+| `replay.js` | Bilan personnalisé, prochain objectif et relance avec le même équipement. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |

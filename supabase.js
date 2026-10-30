@@ -797,6 +797,28 @@ async function submitTeamScore(value){
  teamLoaded=false;
  return result||{bestScore:body.p_score,improved:false};
 }
+function validWeeklySprintState(value){
+ if(!value||typeof value!=='object'||!Array.isArray(value.scores))throw Error('Réponse du Sprint hebdomadaire invalide.');
+ return{team:value.team&&typeof value.team==='object'?value.team:null,scores:value.scores,result:value.result&&typeof value.result==='object'?value.result:null,skipped:!!value.skipped};
+}
+async function weeklySprintBoard(week){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_weekly_sprint_board',{method:'POST',body:{p_week:String(week)}}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+async function submitWeeklySprint(value){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ const body={
+  p_week:String(value.week||''),
+  p_run_id:String(value.runId||'').trim().slice(0,80),
+  p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
+  p_time_seconds:Math.max(0,Math.min(7200,Math.floor(value.time)||0)),
+  p_wave:Math.max(1,Math.min(3,Math.floor(value.wave)||1)),
+  p_won:!!value.won
+ };
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_submit_weekly_sprint',{method:'POST',body}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
 
 function renderPanel(target=mount){
  if(target)mount=target;
@@ -958,6 +980,8 @@ window.MinuitCloud={
  submitFeedback,
  submitTeamScore,
  finishTeamScore,
+ weeklySprintBoard,
+ submitWeeklySprint,
  openTeamBoard,
  openTeamStats,
  renderPanel,
