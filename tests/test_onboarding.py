@@ -32,13 +32,13 @@ with sync_playwright() as p:
     page.click('#guideBack')
     page.wait_for_selector('#trainingRequiredNote')
 
-    # Premier profil : les neuf exercices sont obligatoires et aucun ne peut être passé.
+    # Premier profil : les dix exercices sont obligatoires et aucun ne peut être passé.
     page.click('#playAdventure')
     page.wait_for_function("GuidedTraining.active&&state==='play'")
     assert page.locator('#trainingSkip').is_hidden() and page.locator('#trainingQuit').is_hidden()
     assert page.locator('#score').is_hidden() and page.locator('#hiValue').is_hidden()
     assert 'sans score ni récompense' in page.locator('#modeLabel').inner_text()
-    assert '1 / 9' in page.locator('#trainingProgress').inner_text()
+    assert '1 / 10' in page.locator('#trainingProgress').inner_text()
     page.click('#pause')
     assert page.locator('#quit').is_disabled()
     page.click('#resume')
@@ -58,10 +58,13 @@ with sync_playwright() as p:
 
     # Les deux évolutions utilisent les vraies valeurs de leur balai.
     page.wait_for_function("GuidedTraining.step==='dodgeStyles'")
+    assert page.evaluate("Arsenal.active.broom==='comet-flight'&&Arsenal.dashInv()===.5&&Arsenal.dashCooldown()===5")
+    assert page.locator('[data-training-broom="aurora-flight"]').is_disabled()
     page.click('#dash')
     page.wait_for_function("document.querySelector('[data-training-broom=comet-flight]').textContent.includes('✓')")
-    assert page.evaluate("Arsenal.active.broom==='comet-flight'&&Arsenal.dashInv()===.5&&Arsenal.dashCooldown()===5")
-    page.click('[data-training-broom="aurora-flight"]')
+    # Aucun clic sur Aurore : elle doit être sélectionnée automatiquement après Comète.
+    page.wait_for_function("Arsenal.active.broom==='aurora-flight'&&player.dashCD===0")
+    assert page.locator('[data-training-broom="aurora-flight"]').is_enabled()
     assert page.evaluate('Arsenal.dashDuration()===.26&&Arsenal.dashInv()===.38&&Arsenal.dashCooldown()===3.2')
     page.click('#dash')
     page.wait_for_function('GuidedTraining.exerciseDone')
@@ -70,6 +73,31 @@ with sync_playwright() as p:
     page.keyboard.press('f')
     page.wait_for_function('GuidedTraining.exerciseDone')
     assert page.evaluate('Arsenal.active.cooldown>0')
+    page.click('#trainingNext')
+
+    # Espace déclenche les trois vraies attaques, sans déclencher d’esquive.
+    page.wait_for_function("GuidedTraining.step==='attackStyles'")
+    assert page.locator('[data-training-attack]').count() == 3
+    assert 'rayon 260' in page.locator('[data-training-attack="pulse"]').inner_text()
+    assert '340 × 340' in page.locator('[data-training-attack="tidewave"]').inner_text()
+    assert 'largeur 90' in page.locator('[data-training-attack="sunray"]').inner_text()
+    page.keyboard.press('Space')
+    page.wait_for_function("Arsenal.active.spell==='pulse'&&Arsenal.active.cooldown>0")
+    assert page.evaluate('hostile.length===0&&enemies.every(e=>e.hp<500)')
+    page.wait_for_function("Arsenal.active.spell==='tidewave'&&Arsenal.active.cooldown===0")
+    assert page.evaluate('player.dash===0&&player.dashCD===0')
+    assert '✓' in page.locator('[data-training-attack="pulse"]').inner_text()
+    page.keyboard.press('Space')
+    page.wait_for_function("Arsenal.active.spell==='tidewave'&&Arsenal.active.cooldown>0")
+    assert page.evaluate('hostile.length===1&&hostile[0].x===690&&enemies.every(e=>e.hp<500)&&enemies[0].y<=490')
+    page.wait_for_function("Arsenal.active.spell==='sunray'&&Arsenal.active.cooldown===0")
+    assert page.evaluate('player.dash===0&&player.dashCD===0')
+    assert '✓' in page.locator('[data-training-attack="tidewave"]').inner_text()
+    page.keyboard.press('Space')
+    page.wait_for_function("Arsenal.active.spell==='sunray'&&Arsenal.active.cooldown>0")
+    assert page.evaluate('hostile.length===1&&hostile[0].x===620&&enemies[0].hp<500&&enemies[1].hp===500')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    assert page.evaluate("Arsenal.active.spell==='sunray'&&player.dash===0&&player.dashCD===0")
     page.click('#trainingNext')
 
     # La vraie apparition doit être évitée, sans perdre de vie.
@@ -118,9 +146,11 @@ with sync_playwright() as p:
     page.click('#trainingPlay')
     page.wait_for_function("state==='play'&&!Adventure.training")
     assert page.evaluate('Journey.state.trainingDone&&!SandboxMode')
+    page.keyboard.press('Space')
+    assert page.evaluate('player.dash>0&&Arsenal.active.cooldown===0'), 'Espace doit rester l’esquive en vol normal'
     normal = page.evaluate('''()=>{
       enemies=[];obstacles=[];gates=[];scares=[];drops=[];
-      player.x=400;player.y=700;player.inv=999;player.dashCD=0;
+      player.x=400;player.y=700;player.inv=999;player.dash=0;player.dashCD=0;CombatFeel.reset();
       hostile=[{x:400,y:560,vx:0,vy:200,type:'fire',r:7,life:5,age:0}];
       gameTime=20;Journey.tick(1.1);update(1/60);hostile=[];
       return {tutor:!$('journeyTutor').classList.contains('hidden'),
@@ -180,6 +210,29 @@ with sync_playwright() as p:
     assert mobile.evaluate('''()=>{const r=$('trainingCard').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&parseFloat(getComputedStyle($('trainingText')).fontSize)>=10}''')
     assert mobile.locator('#dash').is_visible() and mobile.locator('#specialCast').is_visible()
 
+    # Sur petit téléphone, le bouton tactile enchaîne les mêmes attaques sans déborder.
+    mobile_attacks = browser.new_page(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
+    mobile_attacks.on('pageerror', lambda error: errors.append(str(error)))
+    mobile_attacks.add_init_script("localStorage.setItem('minuit-journey-v1',JSON.stringify({version:1,trainingDone:true}))")
+    mobile_attacks.goto('http://localhost:3000')
+    mobile_attacks.wait_for_selector('#startGuided', state='visible')
+    mobile_attacks.click('#startGuided')
+    mobile_attacks.wait_for_function("GuidedTraining.active&&state==='play'")
+    for _ in range(4):
+        mobile_attacks.click('#trainingSkip')
+    mobile_attacks.wait_for_function("GuidedTraining.step==='attackStyles'")
+    bounds = mobile_attacks.evaluate('''()=>{const card=$('trainingCard').getBoundingClientRect(),arena=document.querySelector('.arena').getBoundingClientRect(),touch=document.querySelector('.touchbar').getBoundingClientRect();return{left:card.left,right:card.right,top:card.top,bottom:card.bottom,arenaBottom:arena.bottom,touchTop:touch.top,overflow:document.documentElement.scrollWidth>innerWidth}}''')
+    assert bounds['left'] >= 0 and bounds['right'] <= 360 and not bounds['overflow'], bounds
+    assert bounds['bottom'] <= bounds['arenaBottom'] + 1 and bounds['bottom'] <= bounds['touchTop'] + 1, bounds
+    mobile_attacks.screenshot(path='/tmp/training-attacks-mobile.png', full_page=True)
+    mobile_attacks.click('#specialCast')
+    mobile_attacks.wait_for_function("Arsenal.active.spell==='tidewave'&&Arsenal.active.cooldown===0")
+    mobile_attacks.click('#specialCast')
+    mobile_attacks.wait_for_function("Arsenal.active.spell==='sunray'&&Arsenal.active.cooldown===0")
+    mobile_attacks.click('#specialCast')
+    mobile_attacks.wait_for_function('GuidedTraining.exerciseDone')
+    assert mobile_attacks.evaluate('player.dash===0&&player.dashCD===0')
+
     # Les profils déjà actifs avant l’ajout du drapeau ne sont pas bloqués.
     legacy = browser.new_page(viewport={'width': 1100, 'height': 800})
     legacy.on('pageerror', lambda error: errors.append(str(error)))
@@ -195,4 +248,4 @@ with sync_playwright() as p:
 
     assert not errors, errors
     browser.close()
-    print('OK : menu hiérarchisé, guide illustré, notifications stables et iconographiées, neuf exercices obligatoires, bonus présentés, sauvegarde du rejeu inchangée, mobile sans débordement.')
+    print('OK : menu hiérarchisé, guide illustré, notifications stables et iconographiées, dix exercices obligatoires, enchaînements automatiques des esquives et attaques, bonus présentés, sauvegarde du rejeu inchangée, mobile sans débordement.')

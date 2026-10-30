@@ -71,11 +71,14 @@ const steps=[
   text:()=>coarse()?'Pilote avec un doigt et touche « Esquive » avec un autre au contact du projectile orange.':'Appuie sur Espace au contact du projectile orange. Le bond protège brièvement, puis doit se recharger.',
   goal:'Le halo et le bouton signalent le bon moment. Traverse le tir sans perdre de vie.',success:'Esquive réussie · tu as traversé le tir sans dégâts.'},
  {id:'dodgeStyles',icon:'dodge',title:'Compare les évolutions d’esquive',
-  text:()=> 'Les balais modifient réellement le bond, la protection et la recharge. Bruyère est déjà validée : essaie maintenant Comète vive et Aurore agile dans l’ordre de ton choix.',
-  goal:'Déclenche une esquive avec Comète, puis une avec Aurore. Les valeurs affichées sont celles du balai sélectionné.',success:'Comète et Aurore essayées · chaque évolution a un avantage et un compromis.'},
+  text:()=> 'Les balais modifient réellement le bond, la protection et la recharge. Déclenche une esquive avec Comète vive : après la fin complète de l’esquive, Aurore agile est sélectionnée automatiquement.',
+  goal:'Déclenche une esquive avec Comète, puis une avec Aurore. Le passage à Aurore est automatique.',success:'Comète et Aurore essayées · chaque évolution a un avantage et un compromis.'},
  {id:'special',icon:'special',title:'Libère ton sort spécial',
   text:()=>coarse()?'Touche « Sort spécial ». L’onde blesse les cibles et dissipe les projectiles proches.':'Appuie sur F. L’onde blesse les cibles et dissipe les projectiles proches, puis doit se recharger.',
   goal:'Déclenche le sort au milieu des cibles et des projectiles.',success:'Sort spécial déclenché · les tirs proches ont été dissipés.'},
+ {id:'attackStyles',icon:'special',title:'Compare les évolutions d’attaque',
+  text:()=>coarse()?'Touche « Sort spécial » pour chaque attaque. Onde, Marée puis Lance s’enchaînent automatiquement après un court instant. En vol normal, le bouton utilise ton équipement.':'Dans cet exercice, appuie sur Espace pour déclencher chaque attaque. Onde, Marée puis Lance s’enchaînent automatiquement après un court instant. En vol normal, le sort spécial reste sur F.',
+  goal:'Essaie les trois formes : Onde autour de toi, Marée devant toi, puis Lance en ligne étroite.',success:'Onde, Marée et Lance essayées · trois zones et trois compromis distincts.'},
  {id:'surprise',icon:'demon',title:'Réagis à une attaque surprise',
   text:()=> 'Une apparition ne blesse qu’après s’être matérialisée. Dès qu’elle surgit, sors rapidement de sa trajectoire ou utilise ton esquive. Elle réapparaîtra si tu te fais toucher.',
   goal:'Évite l’apparition jusqu’à sa disparition sans perdre de vie.',success:'Attaque surprise évitée · déplacement ou esquive au bon moment.'},
@@ -92,21 +95,42 @@ const steps=[
   text:()=> 'Le bouclier turquoise absorbe les dégâts pendant '+MINUIT_BALANCE.shield.duration+' secondes. Il ne remplace pas une vie : surveille ses deux jauges.',
   goal:'Rejoins le bouclier pour le ramasser.',success:'Bouclier actif · jauge de protection et durée visibles.'}
 ];
+const attackProfiles=[
+ {id:'pulse',name:'Onde améthyste',summary:`Autour de toi : rayon ${MINUIT_BALANCE.pulse.radius} · ${MINUIT_BALANCE.pulse.damage} dégâts · recharge ${MINUIT_BALANCE.pulse.cooldown} s.`},
+ {id:'tidewave',name:'Marée spectrale',summary:'Devant toi : zone 340 × 340 · 4 dégâts · recul 70 · recharge 14 s.'},
+ {id:'sunray',name:'Lance solaire',summary:'Ligne étroite : largeur 90 · 14 dégâts · recharge 18 s.'}
+];
 function makeTarget(x,y,hp=100){return{x,y,baseX:x,r:35,hp,max:hp,speed:0,fire:9999,age:0,pattern:9,tier:0,kind:'pumpkin',boss:false,dead:false,poison:0,poisonTick:0,hit:0}}
 function makeBullet(x,y,vx=0,vy=0,speed=0){return{x,y,vx,vy,speed,r:10,life:20,type:'fire',damage:25,grazed:false,homing:false,lockRemaining:0,age:0}}
+function prepareAttack(index){
+ const profile=attackProfiles[index];if(!profile)return;
+ enemies=[];hostile=[];shots=[];rockets=[];obstacles=[];player.x=400;player.y=780;player.vx=0;player.vy=0;player.inv=1;player.fire=0;
+ Arsenal.active.spell=profile.id;Arsenal.active.cooldown=0;exercise.attackWait=0;
+ if(profile.id==='pulse'){
+  enemies=[makeTarget(320,690,500),makeTarget(480,690,500)];
+  for(let i=0;i<8;i++){const a=i*Math.PI/4;hostile.push(makeBullet(400+Math.cos(a)*120,780+Math.sin(a)*120))}
+ }else if(profile.id==='tidewave'){
+  enemies=[makeTarget(400,560,500),makeTarget(510,590,500)];
+  hostile=[makeBullet(350,600),makeBullet(450,600),makeBullet(690,600)];
+ }else{
+  enemies=[makeTarget(400,540,500),makeTarget(620,540,500)];
+  hostile=[makeBullet(400,610),makeBullet(620,610)];
+ }
+}
 function setupStep(index){
  if(!active)return;stepIndex=index;const step=steps[index];
  enemies=[];hostile=[];shots=[];rockets=[];drops=[];obstacles=[];hazards=[];gates=[];scares=[];particles=[];
  transition=0;transitionBoss=false;waveTime=0;spawnIndex=0;schedule=[{time:99999}];obstacleTimer=99999;
  player.x=400;player.y=780;player.vx=0;player.vy=0;player.inv=1;player.dash=0;player.dashCD=0;player.shield=0;player.shieldTime=0;player.fire=0;
- if(Arsenal.active){Arsenal.active.cooldown=0;Arsenal.active.petCooldown=0;Arsenal.active.broom='bruyere'}
- exercise={done:false,wait:.75,distance:0,lastX:player.x,lastY:player.y,tried:[],dashReady:true,spawned:false,hits:0,chest:null};
+ if(Arsenal.active){Arsenal.active.cooldown=0;Arsenal.active.petCooldown=0;Arsenal.active.broom='bruyere';Arsenal.active.spell='pulse'}
+ exercise={done:false,wait:.75,distance:0,lastX:player.x,lastY:player.y,tried:[],dashReady:true,switchWait:0,attackWait:0,spawned:false,hits:0,chest:null};
  if(step.id==='move')enemies=[makeTarget(400,330,500)];
  if(step.id==='dodgeStyles')Arsenal.active.broom='comet-flight';
  if(step.id==='special'){
   enemies=[makeTarget(330,650,80),makeTarget(470,650,80)];
   for(let i=0;i<8;i++){const a=i*Math.PI/4;hostile.push(makeBullet(400+Math.cos(a)*120,780+Math.sin(a)*120))}
  }
+ if(step.id==='attackStyles')prepareAttack(0);
  if(step.id==='chest')exercise.chest=spawnObstacle(400,570,{kind:'crate',r:25,breakable:true,hp:3,max:3,age:2,warn:0,loot:'points'});
  if(step.id==='relic')drops=[{x:400,y:560,kind:'upgrade',key:'fragment',age:0}];
  if(step.id==='shield')drops=[{x:400,y:560,kind:'shield',age:0}];
@@ -114,11 +138,19 @@ function setupStep(index){
 }
 function goalText(step){
  if(exercise.done)return '✓ '+step.success;
- if(step.id==='dodgeStyles'&&exercise.tried?.length){const names={ 'comet-flight':'Comète','aurora-flight':'Aurore'},done=exercise.tried.map(id=>names[id]).join(' et '),remaining=['comet-flight','aurora-flight'].filter(id=>!exercise.tried.includes(id)).map(id=>names[id]).join(' puis ');return '✓ '+done+' essayée. Encore : '+remaining+'.'}
+ if(step.id==='dodgeStyles'&&exercise.tried?.length){
+  if(exercise.switchWait>0)return '✓ Comète validée. Fin de l’esquive, puis passage automatique à Aurore…';
+  const names={'comet-flight':'Comète','aurora-flight':'Aurore'},done=exercise.tried.map(id=>names[id]).join(' et '),remaining=['comet-flight','aurora-flight'].filter(id=>!exercise.tried.includes(id)).map(id=>names[id]).join(' puis ');return '✓ '+done+' essayée. Encore : '+remaining+'.';
+ }
+ if(step.id==='attackStyles'&&exercise.tried?.length){
+  const done=exercise.tried.map(id=>attackProfiles.find(profile=>profile.id===id)?.name).filter(Boolean).join(' · '),next=attackProfiles[exercise.tried.length];
+  if(exercise.attackWait>0)return '✓ '+done+(next?' · attaque suivante automatique…':'');
+  if(next)return '✓ '+done+'. '+(coarse()?'Touche « Sort spécial »':'Espace')+' pour '+next.name+'.';
+ }
  return step.goal;
 }
 function renderStep(){
- const step=steps[stepIndex],card=$('trainingCard');card.classList.remove('hidden');
+ const step=steps[stepIndex],card=$('trainingCard');card.classList.remove('hidden');card.dataset.step=step.id;
  $('trainingProgress').textContent=(requiredRun?'ENTRAÎNEMENT OBLIGATOIRE · ':'ENTRAÎNEMENT GUIDÉ · ')+(stepIndex+1)+' / '+steps.length;
  $('trainingTitle').textContent=step.title;$('trainingText').textContent=step.text();
  $('trainingGoal').textContent=goalText(step);$('trainingGoal').classList.toggle('done',!!exercise.done);
@@ -132,8 +164,18 @@ function renderDetails(){
  if(step.id==='dodgeStyles'){
   const note=document.createElement('div');note.className='training-profile-note';note.textContent='Bruyère validée : bond 0,32 s · protection 0,45 s · recharge 4 s.';root.appendChild(note);
   const profiles=[{id:'comet-flight',name:'Comète vive',summary:'Bond 0,38 s · protection 0,50 s · recharge 5 s · vitesse +12 %.'},{id:'aurora-flight',name:'Aurore agile',summary:'Bond 0,26 s · protection 0,38 s · recharge 3,2 s · vitesse réduite.'}];
-  for(const profile of profiles){const button=document.createElement('button');button.type='button';button.className='training-profile'+(Arsenal.active?.broom===profile.id?' selected':'');button.dataset.trainingBroom=profile.id;button.disabled=!!exercise.done;const title=document.createElement('b');title.textContent=(exercise.tried?.includes(profile.id)?'✓ ':'')+profile.name;const small=document.createElement('small');small.textContent=profile.summary;button.append(title,small);button.onclick=()=>{if(exercise.done)return;Arsenal.active.broom=profile.id;player.dash=0;player.dashCD=0;exercise.dashReady=true;CombatFeel.reset();renderStep()};root.appendChild(button)}
+  for(const profile of profiles){
+   const button=document.createElement('button'),locked=profile.id==='aurora-flight'&&!exercise.tried.includes('comet-flight');button.type='button';button.className='training-profile'+(Arsenal.active?.broom===profile.id?' selected':'');button.dataset.trainingBroom=profile.id;button.disabled=!!exercise.done||exercise.switchWait>0||exercise.tried?.includes(profile.id)||locked;
+   const title=document.createElement('b');title.textContent=(exercise.tried?.includes(profile.id)?'✓ ':'')+profile.name;const small=document.createElement('small');small.textContent=profile.summary;button.append(title,small);
+   button.onclick=()=>{if(exercise.done||exercise.switchWait>0||exercise.tried.includes(profile.id)||profile.id==='aurora-flight'&&!exercise.tried.includes('comet-flight'))return;exercise.switchWait=0;Arsenal.active.broom=profile.id;player.dash=0;player.dashCD=0;player.inv=0;exercise.dashReady=true;CombatFeel.reset();renderStep()};root.appendChild(button);
+  }
   const live=document.createElement('div');live.className='training-profile-live';live.textContent='Balai actuel : '+Arsenal.dashDuration().toFixed(2).replace('.',',')+' s de bond · '+Arsenal.dashInv().toFixed(2).replace('.',',')+' s de protection · '+Arsenal.dashCooldown().toFixed(1).replace('.',',')+' s de recharge.';root.appendChild(live);
+ }
+ if(step.id==='attackStyles'){
+  for(const profile of attackProfiles){
+   const current=Arsenal.active?.spell===profile.id,row=document.createElement('div');row.className='training-profile attack-profile'+(current?' selected':'');row.dataset.trainingAttack=profile.id;
+   const title=document.createElement('b');title.textContent=(exercise.tried?.includes(profile.id)?'✓ ':current?'→ ':'')+profile.name;const small=document.createElement('small');small.textContent=profile.summary;row.append(title,small);root.appendChild(row);
+  }
  }
  if(step.id==='bonuses'){const button=document.createElement('button');button.type='button';button.id='trainingBonusGallery';button.className='secondary';button.textContent=exercise.done?'✓ Catalogue consulté':'Ouvrir le catalogue illustré';button.disabled=!!exercise.done;button.onclick=showBonusGallery;root.appendChild(button)}
 }
@@ -147,10 +189,30 @@ function tickTraining(dt,before){
   if(!hostile.length){exercise.wait-=dt;if(exercise.wait<=0){hostile=[makeBullet(player.x,player.y-310,0,155,155)];exercise.wait=1}}
  }
  if(id==='dodgeStyles'){
+  if(exercise.switchWait>0){
+   exercise.switchWait-=dt;
+   if(exercise.switchWait<=0){exercise.switchWait=0;Arsenal.active.broom='aurora-flight';player.dash=0;player.dashCD=0;player.inv=0;exercise.dashReady=true;CombatFeel.reset();renderStep()}
+   return;
+  }
   if(player.dashCD<=0)exercise.dashReady=true;
-  else if(exercise.dashReady){exercise.dashReady=false;const broom=Arsenal.active?.broom;if(['comet-flight','aurora-flight'].includes(broom)&&!exercise.tried.includes(broom)){exercise.tried.push(broom);renderStep()}if(exercise.tried.length===2)completeStep()}
+  else if(exercise.dashReady){
+   exercise.dashReady=false;const broom=Arsenal.active?.broom;
+   if(['comet-flight','aurora-flight'].includes(broom)&&!exercise.tried.includes(broom)){
+    exercise.tried.push(broom);if(broom==='comet-flight'&&!exercise.tried.includes('aurora-flight'))exercise.switchWait=Math.max(Arsenal.dashDuration(),Arsenal.dashInv());renderStep();
+   }
+   if(exercise.tried.length===2)completeStep();
+  }
  }
  if(id==='special'&&Arsenal.active?.cooldown>0)completeStep();
+ if(id==='attackStyles'){
+  if(exercise.attackWait>0){
+   exercise.attackWait-=dt;
+   if(exercise.attackWait<=0){exercise.attackWait=0;if(exercise.tried.length>=attackProfiles.length)completeStep();else{prepareAttack(exercise.tried.length);renderStep()}}
+   return;
+  }
+  const spell=Arsenal.active?.spell;
+  if(Arsenal.active?.cooldown>0&&attackProfiles.some(profile=>profile.id===spell)&&!exercise.tried.includes(spell)){exercise.tried.push(spell);exercise.attackWait=.8;renderStep()}
+ }
  if(id==='surprise'){
   if(!exercise.spawned){exercise.wait-=dt;if(exercise.wait<=0){Surprise.spawn();exercise.spawned=true;exercise.hits=Adventure.lab?.hits||0}}
   else if(!scares.length){if((Adventure.lab?.hits||0)===exercise.hits)completeStep();else{exercise.spawned=false;exercise.wait=.75}}
@@ -163,7 +225,7 @@ function tickTraining(dt,before){
 function nextStep(){if(!active)return;if(stepIndex<steps.length-1)setupStep(stepIndex+1);else finishTraining()}
 function finishTraining(){
  Adventure.completeGuided();finished=true;state='training-complete';$('trainingCard').classList.add('hidden');clearMessages();
- overlay(`<section class="training-finish"><div class="menu-kicker">ENTRAÎNEMENT TERMINÉ</div><h2>Tu es prête pour la nuit</h2><div class="guide-art finish-art" id="finishArt"></div><p>Pilotage, esquives et leurs évolutions, sort spécial, attaque surprise, coffres, reliques, bonus et bouclier : les ${steps.length} exercices sont terminés.</p><p class="tiny">L’aventure et les défis sont maintenant débloqués. En vol normal, aucune consigne automatique ne viendra couvrir le combat. Le guide et l’entraînement restent disponibles dans le menu.</p><div class="training-finish-actions"><button class="primary" id="trainingPlay">Commencer l’aventure</button><button class="secondary" id="trainingAgain">Refaire les exercices</button><button class="secondary" id="trainingMenu">Retour au menu</button></div></section>`);
+ overlay(`<section class="training-finish"><div class="menu-kicker">ENTRAÎNEMENT TERMINÉ</div><h2>Tu es prête pour la nuit</h2><div class="guide-art finish-art" id="finishArt"></div><p>Pilotage, esquives et leurs évolutions, sort spécial et ses trois formes, attaque surprise, coffres, reliques, bonus et bouclier : les ${steps.length} exercices sont terminés.</p><p class="tiny">L’aventure et les défis sont maintenant débloqués. En vol normal, aucune consigne automatique ne viendra couvrir le combat. Le guide et l’entraînement restent disponibles dans le menu.</p><div class="training-finish-actions"><button class="primary" id="trainingPlay">Commencer l’aventure</button><button class="secondary" id="trainingAgain">Refaire les exercices</button><button class="secondary" id="trainingMenu">Retour au menu</button></div></section>`);
  $('finishArt').append(iconNode('move'),iconNode('dodge'),iconNode('demon'),iconNode('chest'),iconNode('bonus-fire'),iconNode('pickup-shield'));
  $('trainingPlay').onclick=()=>{exitTraining();LocalLeague.play()};
  $('trainingAgain').onclick=()=>{requiredRun=false;state='play';hideOverlay();setupStep(0)};
@@ -180,6 +242,12 @@ function exitTraining(){
 }
 arena.insertAdjacentHTML('beforeend',`<section class="training-card hidden" id="trainingCard" aria-label="Exercice d’entraînement"><div id="trainingIcon" class="training-icon"></div><div class="training-copy"><div class="menu-kicker" id="trainingProgress"></div><h3 id="trainingTitle"></h3><p id="trainingText"></p><p class="training-goal" id="trainingGoal"></p><div class="training-details" id="trainingDetails"></div></div><div class="training-nav"><button class="primary" id="trainingNext" disabled>Suivant</button><button class="secondary" id="trainingSkip">Passer</button><button class="secondary" id="trainingQuit">Quitter</button></div></section>`);
 $('trainingNext').onclick=nextStep;$('trainingSkip').onclick=()=>{if(!requiredRun)nextStep()};$('trainingQuit').onclick=()=>{if(!requiredRun)exitTraining()};
+window.addEventListener('keydown',event=>{
+ if(!active||state!=='play'||steps[stepIndex]?.id!=='attackStyles'||(event.key!==' '&&event.code!=='Space'))return;
+ event.preventDefault();event.stopImmediatePropagation();
+ if(event.repeat||exercise.done||exercise.attackWait>0||Arsenal.active?.cooldown>0)return;
+ Arsenal.cast();
+},true);
 const trainingPause=pauseScreen;pauseScreen=function(){trainingPause();if(active&&requiredRun&&$('quit')){$('quit').disabled=true;$('quit').textContent='Termine l’entraînement pour continuer';$('quit').title='Le premier entraînement est obligatoire.'}};
 
 function showBonusGallery(){
@@ -203,7 +271,7 @@ function showBonusGallery(){
 const guidePages=[
  {icon:'move',title:'Pilotage et tir automatique',text:()=>coarse()?'Glisse dans la zone de jeu pour piloter. Le second doigt reste libre pour l’esquive et le sort spécial.':'Flèches ou ZQSD/WASD pour piloter ; Maj pour la précision. Le tir est automatique.',notes:['Le balai ne se téléporte pas au doigt.','Les cibles sont touchées par les projectiles violets.']},
  {icon:'dodge',title:'Esquive : traverser sans dégâts',text:()=>coarse()?'Touche « Esquive » au contact d’un tir avec un second doigt.':'Appuie sur Espace au contact d’un tir.',notes:['0,45 seconde d’invulnérabilité.','4 secondes de recharge. Maj ne rend pas invulnérable.']},
- {icon:'special',title:'Sort spécial et recharge',text:()=>coarse()?'Le bouton « Sort spécial » déclenche l’équipement choisi dans Préparer mon vol.':'La touche F déclenche l’équipement choisi dans Préparer mon vol.',notes:['L’Onde améthyste blesse autour de toi et dissipe les tirs proches.','La jauge du bouton indique la recharge ; aucun sort ne change la difficulté des ennemis.']},
+ {icon:'special',title:'Sort spécial et recharge',text:()=>coarse()?'Le bouton « Sort spécial » déclenche l’équipement choisi dans Préparer mon vol.':'La touche F déclenche l’équipement choisi dans Préparer mon vol.',notes:['L’Onde améthyste blesse autour de toi et dissipe les tirs proches.','La Marée attaque devant toi et repousse ; la Lance solaire frappe une ligne étroite plus fortement.','La jauge du bouton indique la recharge ; aucun sort ne change la difficulté des ennemis.']},
  {icons:['bonus-rocket','bonus-fragment','bonus-familiar'],title:'Reliques : image, nom et effet',text:()=> 'Ramasse les reliques sur le terrain. Leur illustration et leur nom permettent de les reconnaître avant et après le ramassage.',notes:[`Roquettes : missiles guidés pendant ${MINUIT_BALANCE.missiles.duration} secondes.`,'Fragmentation : chaque roquette libère 8 tirs en cercle.','Familier lunaire : un compagnon tire à tes côtés.']},
  {icons:['pickup-shield','xp','points','shield'],title:'Bouclier et bonbons',text:()=> 'Le bouclier spectral absorbe les dégâts pendant '+MINUIT_BALANCE.shield.duration+' secondes. Les bonbons ont des couleurs et des emblèmes distincts.',notes:['Violet : expérience de collection.','Doré : points. Turquoise : recharge de bouclier.','Le bouclier ne rend pas invulnérable et ne remplace pas une vie.']},
  {icons:['pumpkin','hunter','spider'],title:'Créatures et attaques',text:()=> 'Chaque silhouette annonce un comportement. Les champions affichent leur nom et leur attaque ; les gardiens télégraphient leurs charges.',notes:['Les toiles ralentissent, les projectiles orange font perdre une vie.','Les reliquaires scellés sont facultatifs : aucun passage ne dépend de leur ouverture.']}
