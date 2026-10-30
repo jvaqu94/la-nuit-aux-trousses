@@ -6,7 +6,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={'width': 1366, 'height': 900})
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.goto('http://localhost:3000', wait_until='networkidle')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000', wait_until='networkidle')
     page.wait_for_selector('.home-account-access')
     assert 'Compte & team' in page.locator('#archives').inner_text()
     page.click('#archives')
@@ -108,7 +108,7 @@ with sync_playwright() as p:
     mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     mobile_errors = []
     mobile.on('pageerror', lambda error: mobile_errors.append(str(error)))
-    mobile.goto('http://localhost:3000', wait_until='networkidle')
+    mobile.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");mobile.goto('http://localhost:3000', wait_until='networkidle')
     mobile.click('#archives')
     mobile.wait_for_selector('.account-page #cloudPseudo', state='visible')
     account_layout = mobile.evaluate("""() => {

@@ -7,6 +7,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
+    page.add_init_script("localStorage.setItem('minuit-journey-v1',JSON.stringify({version:1,trainingDone:true}))")
     page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
     page.click('#playAdventure')

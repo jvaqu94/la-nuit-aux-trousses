@@ -15,7 +15,7 @@ with sync_playwright() as p:
             bulletContrast: true, effectLevel: 0, autoPause: false
         }));
     """)
-    page.goto('http://localhost:3000')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
 
     # Le chargement nettoie aussi les exports produits par les anciennes éditions.

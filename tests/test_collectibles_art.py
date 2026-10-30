@@ -1,7 +1,7 @@
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 with sync_playwright() as p:
- b=p.chromium.launch(headless=True,args=['--no-sandbox']);page=b.new_page(viewport={'width':1440,'height':1000});errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.goto('http://localhost:3000');page.wait_for_function("window.CollectibleArt&&Object.values(CollectibleArt.art).length>=18&&Object.values(CollectibleArt.art).every(i=>i.complete&&i.naturalWidth===180)");page.click('#playAdventure');page.wait_for_function("state==='play'")
+ b=p.chromium.launch(headless=True,args=['--no-sandbox']);page=b.new_page(viewport={'width':1440,'height':1000});errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000');page.wait_for_function("window.CollectibleArt&&Object.values(CollectibleArt.art).length>=18&&Object.values(CollectibleArt.art).every(i=>i.complete&&i.naturalWidth===180)");page.click('#playAdventure');page.wait_for_function("state==='play'")
  page.evaluate("enemies=[];obstacles=[];gates=[];wave=2;Adventure.createRisk();const d=Adventure.encounter.seal;d.y=480;d.x=625;NightHazards.spawnCandy('xp',180,480);NightHazards.spawnCandy('points',340,480);NightHazards.spawnCandy('shield',500,670);state='pause';hideOverlay();document.querySelector('#journeyTutor').classList.add('hidden');drawGame()")
  page.screenshot(path=str(Path(__file__).parent/'collectibles-refined.png'),full_page=True)
  assert 'Détruis un rocher' in page.inner_text('.sidebar')

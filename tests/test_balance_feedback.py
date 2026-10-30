@@ -7,7 +7,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={'width': 1366, 'height': 900})
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.goto('http://localhost:3000')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
     page.click('#playAdventure')
     page.wait_for_function("state==='play'")

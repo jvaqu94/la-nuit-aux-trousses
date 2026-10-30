@@ -17,7 +17,7 @@ with sync_playwright() as p:
     errors = []
     mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     mobile.on('pageerror', lambda error: errors.append(str(error)))
-    mobile.goto('http://localhost:3000')
+    mobile.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");mobile.goto('http://localhost:3000')
     mobile.wait_for_selector('#playAdventure')
     mobile.evaluate('Journey.state.tutorialDone=true')
     mobile.click('#playAdventure')
@@ -95,7 +95,7 @@ with sync_playwright() as p:
     # retour visuel réservé au toucher.
     desktop = browser.new_page(viewport={'width': 1366, 'height': 768})
     desktop.on('pageerror', lambda error: errors.append(str(error)))
-    desktop.goto('http://localhost:3000')
+    desktop.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");desktop.goto('http://localhost:3000')
     desktop.wait_for_selector('#playAdventure')
     desktop.evaluate('Journey.state.tutorialDone=true')
     desktop.click('#playAdventure')

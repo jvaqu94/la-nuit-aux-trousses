@@ -35,7 +35,7 @@ with sync_playwright() as p:
     errors, failed = [], []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.on('requestfailed', lambda request: failed.append(request.url))
-    page.goto('http://localhost:3000')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
     page.wait_for_function("audio?.state==='running' && mp3Music?.current==='menu' && !!mp3Music.source")
 

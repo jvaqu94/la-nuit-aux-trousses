@@ -66,10 +66,13 @@ with sync_playwright() as p:
     assert any('nuitsorc-loop.mp3' in url for url in requests)
     portrait = page.evaluate("""()=>{
       const image=document.querySelector('.home-witch'),menu=document.querySelector('.home-menu');
-      const title=document.querySelector('.menu-copy h1');
+      const title=document.querySelector('.menu-copy h1'),copy=title.closest('.menu-copy');
+      const range=document.createRange();range.selectNodeContents(title.lastElementChild);
+      const contentRight=copy.getBoundingClientRect().right-parseFloat(getComputedStyle(copy).paddingRight);
       return {src:image.src===MinuitArt.witch.src,loaded:image.complete&&image.naturalWidth>0,
         alt:image.alt,menuHeight:menu.getBoundingClientRect().height,
-        titleOverflow:title.scrollWidth>title.clientWidth+1,buttons:menu.querySelectorAll('button').length};
+        titleOverflow:title.scrollWidth>title.clientWidth+1||range.getBoundingClientRect().right>contentRight+1,
+        buttons:menu.querySelectorAll('button').length};
     }""")
     assert portrait['src'] and portrait['loaded'] and 'profil' in portrait['alt'], portrait
     assert portrait['menuHeight'] < 760 and not portrait['titleOverflow'], portrait

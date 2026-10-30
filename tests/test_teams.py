@@ -361,6 +361,7 @@ with sync_playwright() as p:
             body=f"window.MINUIT_SUPABASE_CONFIG={{url:'{BASE}',publishableKey:'sb_publishable_test'}};",
         ))
         context.route(BASE + '/**', handle)
+        context.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()")
         page = context.new_page()
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('dialog', lambda dialog: dialog.accept())
@@ -417,7 +418,7 @@ with sync_playwright() as p:
     mobile_admin_context.route(BASE + '/**', handle)
     mobile_admin = mobile_admin_context.new_page()
     mobile_admin.on('pageerror', lambda error: errors.append(str(error)))
-    mobile_admin.goto('http://localhost:3000')
+    mobile_admin.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");mobile_admin.goto('http://localhost:3000')
     mobile_admin.evaluate('(value)=>localStorage.setItem(\'minuit-supabase-session-v1\',value)', admin_session)
     mobile_admin.reload()
     mobile_admin.wait_for_selector('#playAdventure')

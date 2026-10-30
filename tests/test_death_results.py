@@ -20,7 +20,7 @@ with sync_playwright() as p:
     page = context.new_page()
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.goto('http://localhost:3000')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
     page.click('#playAdventure')
     page.wait_for_function("state==='play'")
@@ -66,7 +66,7 @@ with sync_playwright() as p:
     phone = mobile.new_page()
     phone_errors = []
     phone.on('pageerror', lambda error: phone_errors.append(str(error)))
-    phone.goto('http://localhost:3000')
+    phone.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");phone.goto('http://localhost:3000')
     phone.wait_for_selector('#playAdventure')
     phone.evaluate('MinuitSoundtrack.player.defeat=()=>undefined')
     phone.click('#playAdventure')

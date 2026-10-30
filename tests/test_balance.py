@@ -1,7 +1,7 @@
 from playwright.sync_api import sync_playwright
 with sync_playwright() as p:
  b=p.chromium.launch(headless=True,args=['--no-sandbox']);page=b.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
- page.goto('http://localhost:3000');page.wait_for_selector('#playAdventure');page.click('#playAdventure');page.wait_for_function("state==='play'")
+ page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000');page.wait_for_selector('#playAdventure');page.click('#playAdventure');page.wait_for_function("state==='play'")
  print(page.evaluate('''()=>{
   if(Object.values(upgrades).some(v=>v))throw Error('arsenal initial');
   if(eligibleUpgrades().length)throw Error('bonus vague 1');
