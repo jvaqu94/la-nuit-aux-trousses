@@ -18,7 +18,7 @@ with sync_playwright() as p:
     page = browser.new_page(viewport={'width': 1366, 'height': 900})
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.goto('http://localhost:3000')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
     page.wait_for_selector('#arcadeScores')
     page.evaluate(SEED)
     page.click('#arcadeScores')
@@ -113,7 +113,7 @@ with sync_playwright() as p:
     mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     mobile_errors = []
     mobile.on('pageerror', lambda error: mobile_errors.append(str(error)))
-    mobile.goto('http://localhost:3000')
+    mobile.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");mobile.goto('http://localhost:3000')
     mobile.wait_for_selector('#arcadeScores')
     mobile.evaluate(SEED)
     mobile.click('#arcadeScores')
@@ -149,7 +149,7 @@ with sync_playwright() as p:
     small = browser.new_page(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
     small_errors = []
     small.on('pageerror', lambda error: small_errors.append(str(error)))
-    small.goto('http://localhost:3000')
+    small.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");small.goto('http://localhost:3000')
     small.wait_for_selector('#arcadeScores')
     small.evaluate(SEED)
     small.click('#arcadeScores')
@@ -162,7 +162,7 @@ with sync_playwright() as p:
     calm = reduced.new_page()
     calm_errors = []
     calm.on('pageerror', lambda error: calm_errors.append(str(error)))
-    calm.goto('http://localhost:3000')
+    calm.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");calm.goto('http://localhost:3000')
     calm.wait_for_selector('#arcadeScores')
     calm.evaluate(SEED)
     calm.click('#arcadeScores')

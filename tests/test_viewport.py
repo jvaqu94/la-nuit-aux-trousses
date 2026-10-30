@@ -16,7 +16,7 @@ with sync_playwright() as p:
         )
         page.on('pageerror', lambda error: errors.append(str(error)))
         page.on('dialog', lambda dialog: dialog.accept())
-        page.goto('http://localhost:3000')
+        page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
         page.wait_for_selector('#fullView', state='attached')
         page.wait_for_timeout(100)
 

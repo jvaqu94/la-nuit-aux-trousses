@@ -12,7 +12,7 @@ with sync_playwright() as p:
         f'{response.status} {response.url}'
     ) if '/audio/' in response.url and response.status >= 400 else None)
 
-    page.goto('http://localhost:3000')
+    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
     page.wait_for_function("audio?.state==='running'")
     page.wait_for_function(

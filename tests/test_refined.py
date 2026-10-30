@@ -5,7 +5,7 @@ with sync_playwright() as p:
  b=p.chromium.launch(headless=True,args=['--no-sandbox'])
  page=b.new_page(viewport={'width':1440,'height':1200})
  errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept())
- page.goto('http://localhost:3000');page.wait_for_function('MinuitArt.witch.complete && MinuitScenery.every(i=>i.complete)')
+ page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000');page.wait_for_function('MinuitArt.witch.complete && MinuitScenery.every(i=>i.complete)')
  page.screenshot(path=str(ROOT/'refined-menu.png'),full_page=True)
  page.click('#playAdventure');page.wait_for_function("state==='play'");page.wait_for_timeout(150)
  print('Pilotage et bonus',page.evaluate('''()=>{
@@ -28,7 +28,7 @@ with sync_playwright() as p:
  page.reload();page.wait_for_selector('#localResume');page.click('#localResume');page.wait_for_function("state==='play'");assert page.evaluate('state')=='play'
  page.click('#pause');page.click('#resume');assert page.evaluate('state')=='play'
  mobile=b.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
- mobile.on('pageerror',lambda e:errors.append(str(e)));mobile.goto('http://localhost:3000');mobile.wait_for_function('MinuitScenery.every(i=>i.complete)');mobile.click('#playAdventure');mobile.wait_for_function("state==='play'");mobile.wait_for_timeout(200);mobile.screenshot(path=str(ROOT/'refined-mobile.png'),full_page=True)
+ mobile.on('pageerror',lambda e:errors.append(str(e)));mobile.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");mobile.goto('http://localhost:3000');mobile.wait_for_function('MinuitScenery.every(i=>i.complete)');mobile.click('#playAdventure');mobile.wait_for_function("state==='play'");mobile.wait_for_timeout(200);mobile.screenshot(path=str(ROOT/'refined-mobile.png'),full_page=True)
  assert not mobile.evaluate('document.documentElement.scrollWidth > innerWidth')
  print('Erreurs JS',errors);assert not errors
  b.close()

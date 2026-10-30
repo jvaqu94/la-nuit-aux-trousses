@@ -8,12 +8,15 @@ with sync_playwright() as p:
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto('http://localhost:3000')
-    page.wait_for_selector('#startGuided')
+    page.wait_for_selector('#playAdventure')
 
     assert page.locator('.main-menu button').count() == 13
     assert 'Éclaircir les ombres' not in page.locator('.main-menu').inner_text()
     assert page.locator('#playAdventure').is_visible()
     assert page.locator('#localRanked').is_visible() and page.locator('#labMenu').is_visible()
+    assert page.locator('#trainingRequiredNote').is_visible()
+    assert page.locator('#localRanked').is_disabled() and page.locator('#labMenu').is_disabled()
+    assert 'Entraînement obligatoire' in page.locator('#playAdventure').inner_text()
 
     page.click('#localHelp')
     page.wait_for_selector('.guide-card')
@@ -27,10 +30,94 @@ with sync_playwright() as p:
             page.click('#guideNext')
     assert titles[0] == 'Pilotage et tir automatique' and titles[-1] == 'Créatures et attaques'
     page.click('#guideBack')
-    page.wait_for_selector('#startGuided')
+    page.wait_for_selector('#trainingRequiredNote')
 
+    # Premier profil : les neuf exercices sont obligatoires et aucun ne peut être passé.
     page.click('#playAdventure')
-    page.wait_for_function("state==='play'")
+    page.wait_for_function("GuidedTraining.active&&state==='play'")
+    assert page.locator('#trainingSkip').is_hidden() and page.locator('#trainingQuit').is_hidden()
+    assert page.locator('#score').is_hidden() and page.locator('#hiValue').is_hidden()
+    assert 'sans score ni récompense' in page.locator('#modeLabel').inner_text()
+    assert '1 / 9' in page.locator('#trainingProgress').inner_text()
+    page.click('#pause')
+    assert page.locator('#quit').is_disabled()
+    page.click('#resume')
+
+    page.keyboard.down('ArrowLeft')
+    page.wait_for_timeout(600)
+    page.keyboard.up('ArrowLeft')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    page.click('#trainingNext')
+
+    page.wait_for_function("GuidedTraining.step==='dodge'&&hostile.length>0&&hostile[0].y>player.y-45", timeout=10000)
+    assert page.evaluate("hostile[0].type==='fire'&&hostile[0].damage===25")
+    page.keyboard.press('Space')
+    page.wait_for_function('GuidedTraining.exerciseDone', timeout=3000)
+    assert page.evaluate('lives===5&&player.dashCD>0&&!!CombatFeel.success')
+    page.click('#trainingNext')
+
+    # Les deux évolutions utilisent les vraies valeurs de leur balai.
+    page.wait_for_function("GuidedTraining.step==='dodgeStyles'")
+    page.click('#dash')
+    page.wait_for_function("document.querySelector('[data-training-broom=comet-flight]').textContent.includes('✓')")
+    assert page.evaluate("Arsenal.active.broom==='comet-flight'&&Arsenal.dashInv()===.5&&Arsenal.dashCooldown()===5")
+    page.click('[data-training-broom="aurora-flight"]')
+    assert page.evaluate('Arsenal.dashDuration()===.26&&Arsenal.dashInv()===.38&&Arsenal.dashCooldown()===3.2')
+    page.click('#dash')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    page.click('#trainingNext')
+
+    page.keyboard.press('f')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    assert page.evaluate('Arsenal.active.cooldown>0')
+    page.click('#trainingNext')
+
+    # La vraie apparition doit être évitée, sans perdre de vie.
+    page.wait_for_function("GuidedTraining.step==='surprise'&&scares.length>0", timeout=5000)
+    page.keyboard.down('ArrowRight')
+    page.wait_for_timeout(800)
+    page.keyboard.up('ArrowRight')
+    page.wait_for_function('GuidedTraining.exerciseDone', timeout=5000)
+    page.click('#trainingNext')
+
+    # Le tir automatique détruit une vraie caisse.
+    page.wait_for_function("GuidedTraining.step==='chest'&&GuidedTraining.exerciseDone", timeout=5000)
+    page.click('#trainingNext')
+
+    page.evaluate('drops=[]')  # Une relique manquée doit être reproposée.
+    page.wait_for_function("drops.some(d=>d.kind==='upgrade'&&d.key==='fragment')")
+    page.keyboard.down('ArrowUp')
+    page.wait_for_timeout(750)
+    page.keyboard.up('ArrowUp')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    assert page.evaluate('upgrades.fragment===1')
+    page.click('#trainingNext')
+
+    # Dix reliques et sept bonus immédiats/bonbons sont présentés.
+    page.click('#trainingBonusGallery')
+    page.wait_for_selector('.training-bonus-gallery')
+    assert page.locator('.training-bonus-item').count() == 17
+    assert page.locator('.training-bonus-item img').count() == 17
+    page.click('#bonusGalleryBack')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    page.click('#trainingNext')
+
+    page.keyboard.down('ArrowUp')
+    page.wait_for_timeout(750)
+    page.keyboard.up('ArrowUp')
+    page.wait_for_function('GuidedTraining.exerciseDone')
+    assert page.evaluate('player.shield===100')
+    page.click('#trainingNext')
+    page.wait_for_selector('#trainingPlay')
+    assert page.evaluate("GuidedTraining.finished&&state==='training-complete'")
+    completed = page.evaluate("JSON.parse(localStorage.getItem('minuit-journey-v1'))")
+    assert completed['trainingDone'] is True and completed['xp'] == 0 and completed['recent'] == [], completed
+    assert page.evaluate("localStorage.getItem('minuit-v2-scores')===null&&localStorage.getItem('minuit-highscores')===null")
+
+    # Le bouton final lance cette fois une vraie partie hors bac à sable.
+    page.click('#trainingPlay')
+    page.wait_for_function("state==='play'&&!Adventure.training")
+    assert page.evaluate('Journey.state.trainingDone&&!SandboxMode')
     normal = page.evaluate('''()=>{
       enemies=[];obstacles=[];gates=[];scares=[];drops=[];
       player.x=400;player.y=700;player.inv=999;player.dashCD=0;
@@ -62,66 +149,50 @@ with sync_playwright() as p:
     page.evaluate('end(false)')
     page.click('#return')
     page.wait_for_selector('#startGuided')
+    # Rejouer l’entraînement reste libre et ne modifie plus la sauvegarde si on le quitte.
     before = page.evaluate('JSON.stringify(Object.fromEntries(Object.entries(localStorage)))')
     page.click('#startGuided')
     page.wait_for_function("GuidedTraining.active&&state==='play'")
-    assert page.evaluate("Adventure.training&&SandboxMode&&GuidedTraining.step==='move'")
-    assert page.locator('#trainingIcon img').count() == 1
-
-    page.keyboard.down('ArrowLeft')
-    page.wait_for_timeout(600)
-    page.keyboard.up('ArrowLeft')
-    page.wait_for_function('GuidedTraining.exerciseDone')
-
-    page.click('#trainingNext')
-    page.wait_for_function("GuidedTraining.step==='dodge'&&hostile.length>0&&hostile[0].y>player.y-45", timeout=10000)
-    assert page.evaluate("hostile[0].type==='fire'&&hostile[0].damage===25")
-    page.keyboard.press('Space')
-    page.wait_for_function('GuidedTraining.exerciseDone', timeout=3000)
-    assert page.evaluate('lives===5&&player.dashCD>0&&!!CombatFeel.success')
-
-    page.click('#trainingNext')
-    page.keyboard.press('f')
-    page.wait_for_function('GuidedTraining.exerciseDone')
-    assert page.evaluate('Arsenal.active.cooldown>0')
-
-    page.click('#trainingNext')
-    page.evaluate('drops=[]')  # Une relique manquée doit être reproposée.
-    page.wait_for_function("drops.some(d=>d.kind==='upgrade'&&d.key==='fragment')")
-    page.keyboard.down('ArrowUp')
-    page.wait_for_timeout(750)
-    page.keyboard.up('ArrowUp')
-    page.wait_for_function('GuidedTraining.exerciseDone')
-    assert page.evaluate('upgrades.fragment===1')
-
-    page.click('#trainingNext')
-    assert page.locator('#trainingIcon img').count() == 1
-    page.keyboard.down('ArrowUp')
-    page.wait_for_timeout(750)
-    page.keyboard.up('ArrowUp')
-    page.wait_for_function('GuidedTraining.exerciseDone')
-    assert page.evaluate('player.shield===100')
-
-    page.click('#trainingNext')
-    page.wait_for_selector('#trainingPlay')
-    assert page.evaluate("GuidedTraining.finished&&state==='training-complete'")
-    page.click('#trainingMenu')
+    assert page.locator('#trainingSkip').is_visible() and page.locator('#trainingQuit').is_visible()
+    page.click('#trainingSkip')
+    page.wait_for_function("GuidedTraining.step==='dodge'")
+    page.click('#trainingQuit')
     page.wait_for_selector('#startGuided')
     after = page.evaluate('JSON.stringify(Object.fromEntries(Object.entries(localStorage)))')
-    assert before == after, 'L’entraînement a modifié une sauvegarde ou une progression'
+    assert before == after, 'Le rejeu quitté a modifié une sauvegarde ou une progression'
     assert page.evaluate('!GuidedTraining.active&&!Adventure.training&&!SandboxMode')
+    assert page.locator('#trainingRequiredNote').count() == 0
+    page.reload(wait_until='domcontentloaded')
+    page.wait_for_selector('.home-menu #playAdventure')
+    assert page.evaluate('Journey.state.trainingDone')
+    assert page.locator('#trainingRequiredNote').count() == 0
+    assert page.locator('#localRanked').is_enabled() and page.locator('#labMenu').is_enabled()
 
     mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     mobile.on('pageerror', lambda error: errors.append(str(error)))
     mobile.goto('http://localhost:3000')
-    mobile.wait_for_selector('#startGuided')
+    mobile.wait_for_selector('#playAdventure')
     assert mobile.evaluate('document.documentElement.scrollWidth<=390&&document.documentElement.scrollHeight<=844')
     assert mobile.locator('#playAdventure').is_visible() and mobile.locator('#localSettings').is_visible()
-    mobile.click('#startGuided')
+    mobile.click('#playAdventure')
     mobile.wait_for_function('GuidedTraining.active')
+    assert mobile.locator('#trainingSkip').is_hidden() and mobile.locator('#trainingQuit').is_hidden()
     assert mobile.evaluate('''()=>{const r=$('trainingCard').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&parseFloat(getComputedStyle($('trainingText')).fontSize)>=10}''')
     assert mobile.locator('#dash').is_visible() and mobile.locator('#specialCast').is_visible()
 
+    # Les profils déjà actifs avant l’ajout du drapeau ne sont pas bloqués.
+    legacy = browser.new_page(viewport={'width': 1100, 'height': 800})
+    legacy.on('pageerror', lambda error: errors.append(str(error)))
+    legacy.add_init_script("""
+        localStorage.setItem('minuit-journey-v1',JSON.stringify({version:1,tutorialDone:true,xp:0,recent:[],seen:{},activeDates:[]}));
+        localStorage.setItem('minuit-settings',JSON.stringify({sound:false,music:false}));
+    """)
+    legacy.goto('http://localhost:3000', wait_until='domcontentloaded')
+    legacy.wait_for_selector('.home-menu #playAdventure')
+    assert legacy.evaluate('Journey.state.trainingDone')
+    assert legacy.locator('#trainingRequiredNote').count() == 0
+    assert legacy.locator('#localRanked').is_enabled()
+
     assert not errors, errors
     browser.close()
-    print('OK : menu hiérarchisé, guide illustré, notifications stables et iconographiées, cinq exercices réels, sauvegarde strictement inchangée, mobile sans débordement.')
+    print('OK : menu hiérarchisé, guide illustré, notifications stables et iconographiées, neuf exercices obligatoires, bonus présentés, sauvegarde du rejeu inchangée, mobile sans débordement.')
