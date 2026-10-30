@@ -83,6 +83,9 @@ with sync_playwright() as p:
     assert 'largeur 90' in page.locator('[data-training-attack="sunray"]').inner_text()
     page.keyboard.press('Space')
     page.wait_for_function("Arsenal.active.spell==='pulse'&&Arsenal.active.cooldown>0")
+    page.wait_for_function("$('trainingCard').classList.contains('attack-preview')")
+    preview = page.evaluate('''()=>{const card=$('trainingCard').getBoundingClientRect(),arena=document.querySelector('.arena').getBoundingClientRect();return{height:card.height,clear:card.bottom<=arena.top+90}}''')
+    assert preview['height'] <= 64 and preview['clear'], preview
     assert page.evaluate('hostile.length===0&&enemies.every(e=>e.hp<500)')
     page.wait_for_function("Arsenal.active.spell==='tidewave'&&Arsenal.active.cooldown===0")
     assert page.evaluate('player.dash===0&&player.dashCD===0')
@@ -106,9 +109,13 @@ with sync_playwright() as p:
     page.wait_for_timeout(800)
     page.keyboard.up('ArrowRight')
     page.wait_for_function('GuidedTraining.exerciseDone', timeout=5000)
-    page.click('#trainingNext')
-
-    # Le tir automatique détruit une vraie caisse.
+    # Une caisse percutée disparaît sans être détruite : elle doit être reproposée.
+    page.evaluate("document.querySelector('#trainingNext').click();player.fire=999")
+    page.wait_for_function("GuidedTraining.step==='chest'&&obstacles.length===1")
+    lost = page.evaluate('''()=>{const chest=obstacles[0];player.x=chest.x;player.y=chest.y;player.inv=0;player.dash=0;update(1/60);return {remaining:obstacles.length,done:GuidedTraining.exerciseDone,lives}}''')
+    assert lost == {'remaining': 0, 'done': False, 'lives': 5}, lost
+    page.wait_for_function("GuidedTraining.step==='chest'&&obstacles.length===1&&!GuidedTraining.exerciseDone", timeout=3000)
+    page.evaluate('player.fire=0')
     page.wait_for_function("GuidedTraining.step==='chest'&&GuidedTraining.exerciseDone", timeout=5000)
     page.click('#trainingNext')
 
@@ -225,11 +232,16 @@ with sync_playwright() as p:
     assert bounds['left'] >= 0 and bounds['right'] <= 360 and not bounds['overflow'], bounds
     assert bounds['bottom'] <= bounds['arenaBottom'] + 1 and bounds['bottom'] <= bounds['touchTop'] + 1, bounds
     mobile_attacks.screenshot(path='/tmp/training-attacks-mobile.png', full_page=True)
-    mobile_attacks.click('#specialCast')
+    def assert_attack_preview():
+        mobile_attacks.wait_for_function("$('trainingCard').classList.contains('attack-preview')")
+        preview = mobile_attacks.evaluate('''()=>{const card=$('trainingCard').getBoundingClientRect(),arena=document.querySelector('.arena').getBoundingClientRect(),canvas=c.getBoundingClientRect();return{height:card.height,clear:card.bottom<=arena.top+90,targets:enemies.every(e=>canvas.top+e.y/H*canvas.height>card.bottom),overflow:document.documentElement.scrollWidth>innerWidth}}''')
+        assert preview['height'] <= 64 and preview['clear'] and preview['targets'] and not preview['overflow'], preview
+    mobile_attacks.click('#specialCast');assert_attack_preview()
+    mobile_attacks.screenshot(path='/tmp/training-attacks-mobile-preview.png', full_page=True)
     mobile_attacks.wait_for_function("Arsenal.active.spell==='tidewave'&&Arsenal.active.cooldown===0")
-    mobile_attacks.click('#specialCast')
+    mobile_attacks.click('#specialCast');assert_attack_preview()
     mobile_attacks.wait_for_function("Arsenal.active.spell==='sunray'&&Arsenal.active.cooldown===0")
-    mobile_attacks.click('#specialCast')
+    mobile_attacks.click('#specialCast');assert_attack_preview()
     mobile_attacks.wait_for_function('GuidedTraining.exerciseDone')
     assert mobile_attacks.evaluate('player.dash===0&&player.dashCD===0')
 
@@ -248,4 +260,4 @@ with sync_playwright() as p:
 
     assert not errors, errors
     browser.close()
-    print('OK : menu hiérarchisé, guide illustré, notifications stables et iconographiées, dix exercices obligatoires, enchaînements automatiques des esquives et attaques, bonus présentés, sauvegarde du rejeu inchangée, mobile sans débordement.')
+    print('OK : menu hiérarchisé, guide illustré, notifications stables et iconographiées, dix exercices obligatoires, enchaînements automatiques des esquives et attaques, bonus présentés, sauvegarde du rejeu inchangée, aperçu des trois attaques dégagé et mobile sans débordement.')
