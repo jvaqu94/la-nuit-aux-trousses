@@ -4,7 +4,7 @@ Le jeu reste utilisable localement sans Supabase. Le cloud ajoute une sauvegarde
 
 ## État de cette installation
 
-Le projet `fkdijgrmgnbpybcfowpr` est configuré dans `supabase-config.js`. Les migrations `20261025104836_la_nuit_cloud_saves_feedback`, `20261025110755_minuit_teams_and_highscores`, `20261025112049_minuit_team_admin_rules`, `20261025125012_minuit_team_deletion` et `20261029132000_minuit_team_stats` sont appliquées ; toutes les tables ont RLS activé. L’authentification e-mail et la confirmation d’adresse restent activées pour les comptes e-mail existants. La fonction **`pseudo-auth` version 1 est déployée et active avec `verify_jwt=false`** pour les accès par pseudo sans e-mail. Seule la clé publiable est utilisée par le navigateur ; la clé `service_role` reste dans l’environnement privé de la fonction.
+Le projet `fkdijgrmgnbpybcfowpr` est configuré dans `supabase-config.js`. Les migrations `20261025104836_la_nuit_cloud_saves_feedback`, `20261025110755_minuit_teams_and_highscores`, `20261025112049_minuit_team_admin_rules`, `20261025125012_minuit_team_deletion` et `20261029132000_minuit_team_stats` sont appliquées, ainsi que `add_weekly_sprint_team_scores` pour le classement Sprint séparé ; toutes les tables ont RLS activé. L’authentification e-mail et la confirmation d’adresse restent activées pour les comptes e-mail existants. La fonction **`pseudo-auth` version 1 est déployée et active avec `verify_jwt=false`** pour les accès par pseudo sans e-mail. Seule la clé publiable est utilisée par le navigateur ; la clé `service_role` reste dans l’environnement privé de la fonction.
 
 Les sections suivantes servent de procédure de maintenance ou de réinstallation sur un autre projet.
 
@@ -20,6 +20,8 @@ Il crée :
 Les avis n’ont **aucune politique de lecture publique**. Ils se consultent depuis le tableau de bord Supabase ou avec une clé secrète conservée sur un serveur d’administration.
 
 Pour activer les teams, exécuter également [`teams.sql`](teams.sql), puis [`team_rules.sql`](team_rules.sql) et [`team_stats.sql`](team_stats.sql). Ils créent `teams`, `team_members`, `team_scores` et `team_score_attempts`, toutes protégées par RLS et sans accès direct pour `anon` ou `authenticated`. Seules des fonctions authentifiées sont exposées : consulter sa team, créer, rejoindre, quitter, modifier les règles en tant qu’admin, réinitialiser la campagne, supprimer la team en tant qu’admin, transmettre un score et consulter les statistiques en tant qu’admin.
+
+Pour le Sprint hebdomadaire, exécuter ensuite [`weekly_sprint.sql`](weekly_sprint.sql). Ce fichier crée `team_weekly_sprints` et les RPC `minuit_weekly_sprint_board(date)` et `minuit_submit_weekly_sprint(date, text, integer, integer, integer, boolean)`. Ce classement amical conserve le meilleur score de chaque membre pour la semaine courante, dans une table séparée de la campagne. Il ne consomme aucune partie quotidienne et ne modifie pas les highscores `free`, `ranked` ou `daily`. La table est protégée par RLS, sans accès direct ; seules les deux fonctions authentifiées sont exposées.
 
 ## 2. Activer les accès par pseudo ou e-mail
 

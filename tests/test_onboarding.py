@@ -10,12 +10,12 @@ with sync_playwright() as p:
     page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
 
-    assert page.locator('.main-menu button').count() == 13
+    assert page.locator('.main-menu button').count() == 14
     assert 'Éclaircir les ombres' not in page.locator('.main-menu').inner_text()
     assert page.locator('#playAdventure').is_visible()
     assert page.locator('#localRanked').is_visible() and page.locator('#labMenu').is_visible()
     assert page.locator('#trainingRequiredNote').is_visible()
-    assert page.locator('#localRanked').is_disabled() and page.locator('#labMenu').is_disabled()
+    assert page.locator('#localRanked').is_disabled() and page.locator('#labMenu').is_disabled() and page.locator('#weeklySprint').is_disabled()
     assert 'Entraînement obligatoire' in page.locator('#playAdventure').inner_text()
 
     page.click('#localHelp')
@@ -196,7 +196,7 @@ with sync_playwright() as p:
     page.wait_for_selector('.home-menu #playAdventure')
     assert page.evaluate('Journey.state.trainingDone')
     assert page.locator('#trainingRequiredNote').count() == 0
-    assert page.locator('#localRanked').is_enabled() and page.locator('#labMenu').is_enabled()
+    assert page.locator('#localRanked').is_enabled() and page.locator('#labMenu').is_enabled() and page.locator('#weeklySprint').is_enabled()
 
     mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
     mobile.on('pageerror', lambda error: errors.append(str(error)))

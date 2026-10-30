@@ -318,7 +318,7 @@ const killSfxByKind={ghost:'killGhost',spirit:'killGhost',skull:'killSkull',bone
 let player={x:400,y:780,shield:0,shieldTime:0,inv:0,dash:0,dashCD:0,slow:0,fire:0,rocket:0,missileTime:0,rocketUnlocked:false,laser:0};
 let rng=()=>{seed|=0;seed=(seed+0x6D2B79F5)|0;let z=Math.imul(seed^(seed>>>15),1|seed);z^=z+Math.imul(z^(z>>>7),61|z);return((z^(z>>>14))>>>0)/4294967296};
 function hash(s){let n=2166136261;for(const ch of s)n=Math.imul(n^ch.charCodeAt(0),16777619);return n>>>0}
-function savePrefs(){for(const key of removedSettings)delete prefs[key];if(!['standard','left','right'].includes(prefs.touchLayout))prefs.touchLayout='standard';if(window.SandboxMode){$('sound').textContent='♪ Son '+(prefs.sound?'ON':'OFF');window.CombatFeel?.syncTouchLayout?.();return}try{localStorage.setItem('minuit-settings',JSON.stringify(prefs))}catch{}$('sound').textContent='♪ Son '+(prefs.sound?'ON':'OFF');window.CombatFeel?.syncTouchLayout?.();window.MinuitCloud?.schedule?.()}
+function savePrefs(){for(const key of removedSettings)delete prefs[key];if(!['standard','left','right'].includes(prefs.touchLayout))prefs.touchLayout='standard';if(window.SandboxMode&&!window.WeeklySprint?.active){$('sound').textContent='♪ Son '+(prefs.sound?'ON':'OFF');window.CombatFeel?.syncTouchLayout?.();return}try{localStorage.setItem('minuit-settings',JSON.stringify(prefs))}catch{}$('sound').textContent='♪ Son '+(prefs.sound?'ON':'OFF');window.CombatFeel?.syncTouchLayout?.();window.MinuitCloud?.schedule?.()}
 function scorePlayerName(){
  const account=String(window.MinuitCloud?.user?.displayName||'').normalize('NFKC').trim();
  const local=String(prefs?.name||'').normalize('NFKC').trim();
@@ -523,7 +523,7 @@ function saveCheckpoint(){if(window.SandboxMode)return;if(recorded||state!=='pla
 function checkpoint(){try{const v=JSON.parse(localStorage.getItem('minuit-checkpoint')||'null');return [4,5,6,7,8].includes(v?.version)&&v.stage>=0&&v.stage<5?v:null}catch{return null}}
 function resumeCheckpoint(){const v=checkpoint();if(!v)return;lifeFlash=0;musicTime=0;note=0;musicStage=-1;scrollVelocity=Math.max(40,Math.min(200,v.scrollVelocity||58));dailyBonus=v.dailyBonus||0;dailyEliteKills=v.dailyEliteKills||0;terrainDistance=v.terrainDistance||0;routeIndex=v.routeIndex||0;gates=[];pointer=null;moveInput={};transition=0;transitionBoss=false;killCount=v.killCount||0;trail=[];mode=v.mode;stage=v.stage;wave=v.wave;seed=v.seed;diff=v.diff;score=v.score;lives=v.lives;graze=v.graze;clears=v.clears;runId=v.runId;dailyDate=v.dailyDate;gameTime=v.gameTime;upgrades={...v.upgrades};player={...v.player,x:400,y:780,inv:2};player.missileTime=Math.min(MINUIT_BALANCE.missiles.duration,player.missileTime??(upgrades.rocket?MINUIT_BALANCE.missiles.duration:0));upgrades.rocket=Math.min(stage>=2?2:1,upgrades.rocket);player.rocketUnlocked=!!(player.rocketUnlocked||upgrades.rocket);session=v.session;world=worlds[stage];schedule=v.schedule;scareTimer=v.scareTimer;obstacleTimer=v.obstacleTimer;waveTime=0;spawnIndex=0;chain=0;combo=1;comboTime=0;clean=true;recorded=false;pendingBoss=false;enemies=[];shots=[];hostile=[];rockets=[];particles=[];drops=(v.bossLives||[]).filter(d=>d.kind==='heal').map(d=>({...d})).concat((v.sweets||[]).filter(d=>d.kind==='sweet'&&!d.taken).map(d=>({...d})));hazards=[];obstacles=[];scares=[];state='play';recordAtStart=getHighScore();recordBroken=false;lastRecordSave=gameTime;document.body.classList.remove('menu-open');$('pause').closest('.touchbar').style.display='flex';hideOverlay();initAudio();activateAudio();updateLoadout();updateHUD();$('modeLabel').textContent=mode==='daily'?'✦ Défi '+dailyDate:'☾ '+difficultyName(runId);say('Reprise au début de la vague '+wave,3)}
 function makeSchedule(){let list=[];const density=(diff>1?7:6)+Math.floor(stage*.75);for(let g=0;g<density;g++){const pattern=(g+wave+stage)%4;let count=3+Math.min(3,Math.floor((wave+stage)/3));for(let i=0;i<count;i++){let kind=world.foes[(g+i+wave)%world.foes.length];let x=pattern===0?100+i*600/(count-1):pattern===1?(i%2?650:150):pattern===2?400+(i-(count-1)/2)*90:80+(i*137+g*67)%640;list.push({time:1+g*2.2+i*.2,x,kind,pattern,group:g,index:i})}}return list.sort((a,b)=>a.time-b.time)}
-function newWave(){if(mode==='daily'&&dailyDate!==dateKey())say('Reprise du défi du '+dailyDate,3);waveTime=0;spawnIndex=0;clean=true;routeTimer=5.5;routeIndex=0;schedule=makeSchedule();scareTimer=12+rng()*8;obstacleTimer=stage===0&&wave===1?5:1.8;say(world.name+' · Vague '+wave+'/5',2.5);saveCheckpoint()}
+function newWave(){if(mode==='daily'&&dailyDate!==dateKey())say('Reprise du défi du '+dailyDate,3);waveTime=0;spawnIndex=0;clean=true;routeTimer=5.5;routeIndex=0;schedule=makeSchedule();scareTimer=12+rng()*8;obstacleTimer=stage===0&&wave===1?5:1.8;say(world.name+' · Vague '+wave+'/5',2.5);saveCheckpoint();window.WeeklySprint?.prepareWave?.()}
 function spawnEnemy(d){const index=(d.group||0)*5+(d.index||0)+wave+stage,reinforced=(stage>0||wave>=3)&&index%7===0,champion=stage>=2&&wave>=4&&index%13===0,tier=champion?2:reinforced?1:0,base=1+Math.floor((wave+stage)/3)+Math.floor(stage*1.25),hp=tier===2?base*3+4:tier===1?base*2+2:base;let speed=(43+stage*13+wave*4)*diff*(tier?1.1:1);enemies.push({x:d.x,y:-35,baseX:d.x,hp,max:hp,r:tier===2?25:tier===1?22:19,speed,kind:d.kind,pattern:d.pattern,elite:tier>0,tier,age:0,fire:Math.max(.8,2-stage*.22)+rng()*1.5,poison:0,poisonTick:0,id:rng(),hit:0})}
 function dailyAward(points,label){if(window.League?.active)return;if(mode!=='daily')return;points=Math.round(points);dailyBonus+=points;score+=points;say('DÉFI · '+label+' +'+points,2.7);updateDailyInfo()}
 function dailyWaveReward(){window.League?.event?.('waves',1);if(clean)window.League?.event?.('cleanWaves',1);if(mode!=='daily')return;dailyAward(150*(stage+1)*wave+(clean?100*(stage+1):0),'Vague '+wave+(clean?' sans dégâts':''))}
@@ -540,7 +540,7 @@ function advanceStage(){const bossReward=transitionBoss;if(transitionBoss){windo
 function updateLoadout(){$('loadout').textContent=upgrades.rocket||upgrades.fire||upgrades.poison||upgrades.familiar||upgrades.laser?'Ta magie grandit à chaque rencontre.':'Sort de base · tir automatique';$('badges').innerHTML=upgradeDefs.filter(d=>upgrades[d[0]]).map(d=>`<span class="badge">${d[2]} ${d[0]==='rocket'?Math.ceil(player.missileTime||0)+'s · '+upgrades.rocket+' / salve':upgrades[d[0]]+'/'+d[4]}</span>`).join('')}
 function spawnBoss(){dailyWaveReward();clean=true;const power=Object.entries(upgrades).reduce((v,[k,n])=>v+(k==='rocket'?0:n),0),hp=(300+stage*150+power*14)*diff;enemies.push({x:400,y:-90,baseX:400,hp,max:hp,r:52,speed:50,kind:world.kind,boss:true,age:0,fire:2,phase:1,phaseShield:1.2,damageBudget:0,budgetRate:hp/(30+stage*5),poison:0,poisonTick:0,hit:0,cycle:0,adds:4,weak:0,phaseFlash:0,lossStart:window.Journey?.run?.stats.lifeLoss||0});schedule=[];say(world.boss+' · Le gardien s’éveille',3);mp3Music?.bossArrival(musicThemes[stage%musicThemes.length].id)}
 function particle(x,y,color,n=12){for(let i=0;i<n&&particles.length<350;i++){let a=Math.random()*Math.PI*2,s=30+Math.random()*150,p=particlePool.pop()||{};p.x=x;p.y=y;p.vx=Math.cos(a)*s;p.vy=Math.sin(a)*s;p.life=.25+Math.random()*.5;p.max=.8;p.color=color;p.r=1+Math.random()*3;p.laser=false;particles.push(p)}}
-function reward(e){if(e.dead)return;e.dead=true;window.League?.event?.('kills',1);if(e.elite)window.League?.event?.('elites',1);if(e.boss){window.League?.event?.('bosses',1);if((window.Journey?.run?.stats.lifeLoss||0)===(e.lossStart||0))window.League?.event?.('cleanBosses',1)}if(e.node)hazards=hazards.filter(z=>z.link!==e.link);score+=Math.round((e.boss?3000:e.elite?250*(e.tier||1):100)*combo);playSfx(e.boss?'impactBoss':(killSfxByKind[e.kind]||'killDemon'),e.boss?.38:.58,.06);chain++;combo=Math.min(8,1+Math.floor(chain/6));comboTime=4;if(upgrades.spread&&e.poison>0)for(let n of enemies)if(!n.dead&&n!==e&&Math.hypot(n.x-e.x,n.y-e.y)<120+upgrades.spread*40)n.poison=Math.max(n.poison,2.5);particle(e.x,e.y,e.boss?'#ffc786':'#c291e7',e.boss?70:16);if(e.elite){dailyEliteKills++;dailyAward(100*(stage+1)*(e.tier||1),'Élite vaincue')}if(e.boss){dailyAward(750*(stage+1)+(clean?500*(stage+1):0),'Gardien vaincu');clears++;if(clean){score+=2000; say('Gardien sans dégâts ! +2 000',2)}if(stage<4&&rng()<.7)drops.push({x:e.x,y:e.y,kind:'heal',bossLife:true,age:0});if(stage===4){window.Adventure?.worldClear?.();end(true);return}pendingBoss=true;beginTransition(true)}else{killCount++;if((stage>0||wave>=2)&&!drops.some(v=>v.kind==='upgrade')&&(killCount%(stage===0?18:14)===0||rng()<.025))dropUpgrade(e.x,e.y);else if(rng()<.09)drops.push({x:e.x,y:e.y,kind:rng()<.45?'shield':rng()<.55?'heal':'candy',age:0})}if(gameTime<(reward.lastTone??-10))reward.lastTone=-10;if(e.boss||e.elite||gameTime-(reward.lastTone??-10)>=.075){reward.lastTone=gameTime;tone(e.boss?100:160,.12,'triangle',e.boss?.18:.05)}}
+function reward(e){if(e.dead)return;e.dead=true;window.League?.event?.('kills',1);if(e.elite)window.League?.event?.('elites',1);if(e.boss){window.League?.event?.('bosses',1);if((window.Journey?.run?.stats.lifeLoss||0)===(e.lossStart||0))window.League?.event?.('cleanBosses',1)}if(e.node)hazards=hazards.filter(z=>z.link!==e.link);score+=Math.round((e.boss?3000:e.elite?250*(e.tier||1):100)*combo);playSfx(e.boss?'impactBoss':(killSfxByKind[e.kind]||'killDemon'),e.boss?.38:.58,.06);chain++;combo=Math.min(8,1+Math.floor(chain/6));comboTime=4;if(upgrades.spread&&e.poison>0)for(let n of enemies)if(!n.dead&&n!==e&&Math.hypot(n.x-e.x,n.y-e.y)<120+upgrades.spread*40)n.poison=Math.max(n.poison,2.5);particle(e.x,e.y,e.boss?'#ffc786':'#c291e7',e.boss?70:16);if(e.elite){dailyEliteKills++;dailyAward(100*(stage+1)*(e.tier||1),'Élite vaincue')}if(e.boss){dailyAward(750*(stage+1)+(clean?500*(stage+1):0),'Gardien vaincu');clears++;if(clean){score+=2000; say('Gardien sans dégâts ! +2 000',2)}if(stage<4&&rng()<.7)drops.push({x:e.x,y:e.y,kind:'heal',bossLife:true,age:0});if(window.WeeklySprint?.guardianDefeated?.()){end(true);return}if(stage===4){window.Adventure?.worldClear?.();end(true);return}pendingBoss=true;beginTransition(true)}else{killCount++;if((stage>0||wave>=2)&&!drops.some(v=>v.kind==='upgrade')&&(killCount%(stage===0?18:14)===0||rng()<.025))dropUpgrade(e.x,e.y);else if(rng()<.09)drops.push({x:e.x,y:e.y,kind:rng()<.45?'shield':rng()<.55?'heal':'candy',age:0})}if(gameTime<(reward.lastTone??-10))reward.lastTone=-10;if(e.boss||e.elite||gameTime-(reward.lastTone??-10)>=.075){reward.lastTone=gameTime;tone(e.boss?100:160,.12,'triangle',e.boss?.18:.05)}}
 function damageEnemy(e,n,poison=true){if(e.dead)return;if(e.boss){if(e.exposed>0)n*=1.25;if(e.y<160||e.phaseShield>0){e.blockHit=.12;return}n*=Math.max(.6,.88-stage*.06);n=Math.min(n,Math.max(0,e.damageBudget||0));e.damageBudget=Math.max(0,(e.damageBudget||0)-n);const floor=e.phase===1?e.max*.66:e.phase===2?e.max*.33:0;n=Math.min(n,Math.max(0,e.hp-floor));if(n<=0)return}if(e.boss&&e.kind==='demon'&&enemies.some(v=>v.lantern&&!v.dead))n*=.2;e.hp-=n;e.hit=.1;if(poison&&upgrades.poison)e.poison=Math.max(e.poison,2+upgrades.poison*.5);if(e.hp<=0)reward(e)}
 function hurt(n=25,source='une créature de la nuit'){if(player.inv>0||player.dash>0||state!=='play')return;lastDamage=source;window.Encounters?.recordDanger?.(source);window.League?.event?.('hits',1);clean=false;chain=0;combo=1;comboTime=0;damageCue();const terrainHit=/obstacle|barrière|branche|procession|herse|brume|lanterne|mur/i.test(String(source));playSfx(terrainHit?'obstacleCollision':'lifeLoss',terrainHit?.82:.78,.08);if(player.shield>0){player.shieldHit=.22;player.shield=Math.max(0,player.shield-n);player.inv=.45;particle(player.x,player.y,'#8ee9e2',10);tone(340,.1,'triangle',.1);if(!player.shield)player.shieldTime=0}else{lives--;lifeFlash=1.8;window.League?.event?.('lifeLoss',1);player.inv=1.8;particle(player.x,player.y,'#ff8e7b',24);playSfx('lifeLossClear',.96,.08);lifeLossCue();if(lives<=0)end(false)}}
 function dodge(){if(state!=='play'||player.dashCD>0)return;window.League?.event?.('dashes',1);player.dash=window.Arsenal?.dashDuration?.()||.32;player.inv=Math.max(player.inv,window.Arsenal?.dashInv?.()||.45);player.dashCD=window.Arsenal?.dashCooldown?.()||4;particle(player.x,player.y,'#c5b6fa',14);tone(850,.16,'sine',.09,.3);window.CombatFeel?.onDodge?.()}$('dash').onclick=dodge;$('dash').addEventListener('pointerdown',e=>{if(e.pointerType==='touch'){e.preventDefault();dodge()}});
@@ -731,6 +731,9 @@ function preflight(which){selected=which;state='league-preflight';const d=daySta
 function replaceSaved(){return !checkpoint()||confirm('Remplacer la sauvegarde locale par une nouvelle partie ?')}
 function launch(){if(!window.SandboxMode&&window.GuidedTraining?.required?.()){GuidedTraining.start();return}const d=dayState(),daily=selected==='daily';if((daily?d.dailyUsed>=1:d.rankedUsed>=3)||!replaceSaved())return;finish(true);const day=dateKey(),id=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);current={id,day,mode:selected,stats:zeros(),credited:[]};data.runs[id]={...current,score:0,finished:false};if(daily)d.dailyUsed++;else d.rankedUsed++;save();const difficulty=prefs.difficulty;prefs.difficulty='normal';base.start(daily?'daily':'story');window.Journey?.begin?.({mode:daily?'daily':'ranked',id,day});prefs.difficulty=difficulty;session='';$('modeLabel').textContent=(daily?'✦ Défi local':'★ Partie du jour · '+d.rankedUsed+'/3')+' · '+day;saveCheckpoint();persist();renderQuests();renderPanel()}
 function practice(){if(!window.SandboxMode&&window.GuidedTraining?.required?.()){GuidedTraining.start();return}if(!window.SandboxMode&&!replaceSaved())return;finish(true);current=null;base.start('story');window.Journey?.begin?.({mode:'free'});saveCheckpoint();session='';$('modeLabel').textContent='☾ Aventure libre · '+difficultyName(prefs.difficulty);$('questHUD').classList.add('hidden');renderPanel()}
+// Point d’entrée isolé pour les formats courts : la boucle et les contrôles sont
+// ceux de l’aventure, mais aucun essai, checkpoint, record ou XP de campagne n’est écrit.
+function transient(){if(window.GuidedTraining?.required?.()){GuidedTraining.start();return false}if(!replaceSaved())return false;finish(true);current=null;try{localStorage.removeItem('minuit-checkpoint')}catch{}window.SandboxMode=true;try{base.start('story');window.Journey?.begin?.({mode:'free',transient:true,standard:true})}catch(error){window.SandboxMode=false;throw error}session='';$('questHUD').classList.add('hidden');renderPanel();return true}
 start=function(m){if(m==='daily')preflight('daily');else practice()};
 function persist(){if(window.MinuitImporting||!current)return;const d=dayState(current.day),run=data.runs[current.id];if(!run||run.finished)return;run.score=Math.max(run.score||0,Math.floor(score));run.stats={...current.stats};run.credited=[...current.credited];if(current.mode==='ranked')d.best=Math.max(d.best,run.score);else for(const k in current.stats)d.stats[k]=Math.max(d.stats[k]||0,current.stats[k]);save()}
 function event(metric,n=1){if(window.SandboxMode)return;window.Journey?.event?.(metric,n);if(!current||state!=='play')return;current.stats[metric]=(current.stats[metric]||0)+n;if(current.mode!=='daily')return;const d=dayState(current.day);for(const goal of objectives(current.day)){if(current.stats[goal.metric]>=goal.target&&!d.claimed.includes(goal.id)){d.claimed.push(goal.id);d.bonus+=goal.reward;current.credited.push(goal.id);score+=goal.reward;dailyBonus+=goal.reward;say('Défi accompli · '+goal.title+' +'+fmt(goal.reward),3);persist();renderPanel();renderBoard()}}}
@@ -739,7 +742,7 @@ function finish(abandon=false){if(abandon)window.Journey?.abandon?.();if(!curren
 end=function(win){if(recorded)return;const type=current?.mode;window.Journey?.beforeEnd?.();base.end(win);finish();if($('submitstatus'))$('submitstatus').textContent=type?'Résultat sauvegardé localement · cumul '+fmt(total())+' points.':'Record sauvegardé dans ce navigateur.';$('retry').onclick=type?()=>preflight(type):practice;window.Journey?.finish?.(win)};
 resumeCheckpoint=function(){if(!window.SandboxMode&&window.GuidedTraining?.required?.()){GuidedTraining.start();return}const cp=checkpoint();if(!cp)return;if(window.Journey&&!window.Journey.canResume(cp))return;const saved=cp.league;if(saved?.local){const run=data.runs[saved.id];if(!run||run.finished){overlay('<h2 class="local-title">Cette partie est terminée.</h2><p>Tu peux lancer une nouvelle partie ou un entraînement.</p><button class="primary" id="resumeBack">Retour →</button>');$('resumeBack').onclick=renderMenu;return}current={id:saved.id,mode:saved.mode,day:saved.day,stats:{...zeros(),...saved.stats},credited:[...(saved.credited||[])]};base.resume();if(current.mode==='daily'){for(const g of objectives(current.day)){if(dayState(current.day).claimed.includes(g.id)&&!current.credited.includes(g.id)){current.credited.push(g.id);score+=g.reward;dailyBonus+=g.reward}}}$('modeLabel').textContent='☾ Reprise locale · '+current.day;renderQuests()}else{current=null;base.resume();$('modeLabel').textContent='☾ Sauvegarde reprise · entraînement libre';saveCheckpoint()}session='';window.Journey?.restore?.(cp);renderPanel()};
 function tick(dt){if(window.SandboxMode)return;window.Journey?.tick?.(dt);if(!current)return;elapsed+=dt;paint+=dt;if(paint>=.3){paint=0;renderQuests()}if(elapsed>=2){elapsed=0;persist();renderPanel();renderBoard()}}
-window.LocalLeague={play:practice,challenge:preflight,menu:renderMenu,total,dayState,flush:persist,goals:goalState,get current(){return current},get data(){return data},save};
+window.LocalLeague={play:practice,startTransient:transient,challenge:preflight,menu:renderMenu,total,dayState,flush:persist,goals:goalState,get current(){return current},get data(){return data},save};
 window.League={get active(){return !!current},get day(){return current?.day},event,tick,snapshot};
 updateDailyInfo=function(){if($('dailyinfo'))$('dailyinfo').textContent='Aventure illimitée : XP et carnet dans tous les modes. Défis optionnels : 3 essais score + 1 essai primes par jour. Sauvegarde locale et cloud optionnel, renouvellement à minuit Paris.'};
 window.addEventListener('pagehide',persist);
@@ -788,10 +791,10 @@ function xp(n,label){const before=j.xp;j.xp+=n;const unlocked=items.filter(i=>i.
 function unlockAchievements(){for(const [id,a]of Object.entries(achievementRules)){const value=a.metric==='days'?j.activeDates.length:(j.lifetime[a.metric]||0);if(value>=a.target&&!j.achievements.includes(id)){j.achievements.push(id);say('Nouveau titre · '+items.find(i=>i.id===id).name,4)}}}
 function weekOf(day){const d=new Date(day+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10)}
 function returnVisit(){const d=diary(run.day);if(d.returnReward)return;d.returnReward=true;const diff=(Date.parse(run.day)-Date.parse(j.lastActive))/86400000;if(!j.lastActive||diff>1)j.streak=1;else if(diff===1)j.streak++;if(!j.lastActive||run.day>j.lastActive)j.lastActive=run.day;if(!j.activeDates.includes(run.day))j.activeDates.push(run.day);xp(40,'Première vague du jour');const week=weekOf(run.day);if(j.activeDates.filter(d=>weekOf(d)===week).length>=3&&!j.weeks.includes(week)){j.weeks.push(week);xp(120,'Trois nuits cette semaine')}unlockAchievements()}
-function begin(options={}){run={id:options.id||('free-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)),day:options.day||dateKey(),mode:options.mode||'free',stats:{},beforeXP:j.xp,beforeAchievements:[...j.achievements],beforeTotal:LocalLeague.total(),beforeBonus:LocalLeague.dayState(options.day||dateKey()).bonus,record:getHighScore(),started:Date.now(),tutorial:!j.tutorialDone};j.seen[run.id]??={stats:{},paid:0,done:false};timer=0;tutorialStep=-1;renderTutorial();write()}
-function event(metric,n=1){if(!run||state!=='play')return;run.stats[metric]=(run.stats[metric]||0)+n;const seen=j.seen[run.id],last=seen.stats[metric]||0,delta=Math.max(0,run.stats[metric]-last);if(!delta)return;seen.stats[metric]=run.stats[metric];j.lifetime[metric]=(j.lifetime[metric]||0)+delta;const d=diary(run.day);d.stats[metric]=(d.stats[metric]||0)+delta;if(metric==='candyXP')xp(delta,'Bonbon d’expérience');if(metric==='waves')returnVisit();for(const c of contracts){if((d.stats[c.metric]||0)>=c.target&&!d.claimed.includes(c.id)){d.claimed.push(c.id);xp(c.reward,'Contrat rempli : '+c.title)}}if(d.claimed.length===contracts.length&&!d.complete){d.complete=true;xp(100,'Carnet du jour terminé')}unlockAchievements()}
+function begin(options={}){run={id:options.id||('free-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)),day:options.day||dateKey(),mode:options.mode||'free',transient:!!options.transient,stats:{},beforeXP:j.xp,beforeAchievements:[...j.achievements],beforeTotal:LocalLeague.total(),beforeBonus:LocalLeague.dayState(options.day||dateKey()).bonus,record:getHighScore(),started:Date.now(),tutorial:!j.tutorialDone};if(!run.transient)j.seen[run.id]??={stats:{},paid:0,done:false};timer=0;tutorialStep=-1;renderTutorial();write()}
+function event(metric,n=1){if(!run||state!=='play')return;run.stats[metric]=(run.stats[metric]||0)+n;if(run.transient)return;const seen=j.seen[run.id],last=seen.stats[metric]||0,delta=Math.max(0,run.stats[metric]-last);if(!delta)return;seen.stats[metric]=run.stats[metric];j.lifetime[metric]=(j.lifetime[metric]||0)+delta;const d=diary(run.day);d.stats[metric]=(d.stats[metric]||0)+delta;if(metric==='candyXP')xp(delta,'Bonbon d’expérience');if(metric==='waves')returnVisit();for(const c of contracts){if((d.stats[c.metric]||0)>=c.target&&!d.claimed.includes(c.id)){d.claimed.push(c.id);xp(c.reward,'Contrat rempli : '+c.title)}}if(d.claimed.length===contracts.length&&!d.complete){d.complete=true;xp(100,'Carnet du jour terminé')}unlockAchievements()}
 function baseXP(stats,time,win){return Math.min(400,Math.floor((stats.kills||0)/2))+60*(stats.waves||0)+250*(stats.bosses||0)+5*Math.floor(Math.min(time,1800)/20)+(win?300:0)}
-function settle(win,abandon=false){if(!run)return null;const seen=j.seen[run.id];if(seen.done){run=null;return null}const stats={...seen.stats};const n=Math.max(0,baseXP(stats,gameTime,win)-seen.paid);seen.paid+=n;seen.done=true;const prior=j.xp;xp(n);if(win)j.lifetime.wins=(j.lifetime.wins||0)+1;unlockAchievements();if(gameTime>=25)j.tutorialDone=true;const result={id:run.id,day:run.day,mode:run.mode,score:Math.floor(score),record:run.record,delta:Math.max(0,LocalLeague.total()-run.beforeTotal),bonus:Math.max(0,LocalLeague.dayState(run.day).bonus-run.beforeBonus),xp:n,extraXP:Math.max(0,j.xp-(run.beforeXP??prior)-n),unlocks:items.filter(i=>i.xp>(run.beforeXP??prior)&&i.xp<=j.xp||i.achievement&&j.achievements.includes(i.achievement)&&!(run.beforeAchievements||[]).includes(i.achievement)).map(i=>i.name),stats,stage:stage+1,wave,world:world.name,time:Math.floor(gameTime),cause:win?'Victoire':abandon?'Partie quittée':lastDamage,win,abandon,feedback:null,comment:''};j.recent.unshift(result);j.recent=j.recent.slice(0,30);run=null;$('journeyTutor').classList.add('hidden');write();renderPanel();return result}
+function settle(win,abandon=false){if(!run)return null;if(run.transient){delete j.seen[run.id];run=null;$('journeyTutor').classList.add('hidden');return null}const seen=j.seen[run.id];if(seen.done){run=null;return null}const stats={...seen.stats};const n=Math.max(0,baseXP(stats,gameTime,win)-seen.paid);seen.paid+=n;seen.done=true;const prior=j.xp;xp(n);if(win)j.lifetime.wins=(j.lifetime.wins||0)+1;unlockAchievements();if(gameTime>=25)j.tutorialDone=true;const result={id:run.id,day:run.day,mode:run.mode,score:Math.floor(score),record:run.record,delta:Math.max(0,LocalLeague.total()-run.beforeTotal),bonus:Math.max(0,LocalLeague.dayState(run.day).bonus-run.beforeBonus),xp:n,extraXP:Math.max(0,j.xp-(run.beforeXP??prior)-n),unlocks:items.filter(i=>i.xp>(run.beforeXP??prior)&&i.xp<=j.xp||i.achievement&&j.achievements.includes(i.achievement)&&!(run.beforeAchievements||[]).includes(i.achievement)).map(i=>i.name),stats,stage:stage+1,wave,world:world.name,time:Math.floor(gameTime),cause:win?'Victoire':abandon?'Partie quittée':lastDamage,win,abandon,feedback:null,comment:''};j.recent.unshift(result);j.recent=j.recent.slice(0,30);run=null;$('journeyTutor').classList.add('hidden');write();renderPanel();return result}
 function beforeEnd(){pendingRecord=run?.record||recordAtStart}
 function finish(win){const r=settle(win);if(!r)return;lastResult=r;queueTeamResult(r);renderResult(r)}
 function abandon(){if(run&&!window.SandboxMode){try{if(checkpoint()?.journey?.id===run.id)localStorage.removeItem('minuit-checkpoint')}catch{}}settle(false,true)}
@@ -1041,7 +1044,7 @@ function equipped(kind){const a=active();return catalog.find(i=>i.kind===kind&&i
 function cooldown(){return (window.Adventure?.tuning?.(equipped('spell')).cooldown||equipped('spell').cooldown)*(equipped('pet').id==='scout-owl'?1.15:equipped('pet').id==='hunter-bat'?1.25:1)}
 let effects=[],paint=0,stored=0,gpDown=false;
 function remember(){const a=active(),id=Journey.run?.id;if(!a||!id)return;j.combat.live[id]={cooldown:a.cooldown,petTimer:a.petTimer};save()}
-const oldBegin=Journey.begin;Journey.begin=function(options={}){oldBegin(options);const standard=options.mode==='ranked'||options.mode==='daily';Journey.run.combat={...(standard?defaults:{spell:choice('spell').id,broom:choice('broom').id,pet:choice('pet').id}),cooldown:0,petTimer:2.5,standard};effects=[];paint=0;stored=0;remember();renderHUD()};
+const oldBegin=Journey.begin;Journey.begin=function(options={}){oldBegin(options);const standard=!!options.standard||options.mode==='ranked'||options.mode==='daily';Journey.run.combat={...(standard?defaults:{spell:choice('spell').id,broom:choice('broom').id,pet:choice('pet').id}),cooldown:0,petTimer:2.5,standard};effects=[];paint=0;stored=0;remember();renderHUD()};
 const oldFinish=Journey.finish;Journey.finish=function(win){oldFinish(win);effects=[];renderHUD()};const oldAbandon=Journey.abandon;Journey.abandon=function(){oldAbandon();effects=[];renderHUD()};
 const oldRestore=Journey.restore;Journey.restore=function(cp){oldRestore(cp);const r=Journey.run;if(!r)return;r.combat??={...defaults,cooldown:0,petTimer:2.5,standard:r.mode!=='free'};for(const k in defaults)if(!catalog.some(i=>i.id===r.combat[k]&&i.kind===k))r.combat[k]=defaults[k];const live=j.combat.live[r.id];r.combat.cooldown=Math.max(r.combat.cooldown||0,live?.cooldown||0);r.combat.petTimer=Math.max(r.combat.petTimer||0,live?.petTimer||0);effects=[];renderHUD()};
 const oldEvent=Journey.event;Journey.event=function(metric,n){oldEvent(metric,n);unlock()};
@@ -1763,7 +1766,7 @@ function applyRequirement(){
  if(!note&&route){route.id='trainingRequiredNote';route.className='training-required-note home-required-note';note=route}
  if(!note){document.querySelector('.menu-primary')?.insertAdjacentHTML('afterend','<div class="training-required-note" id="trainingRequiredNote"></div>');note=$('trainingRequiredNote')}
  if(note)note.innerHTML='<b>Première connexion</b> · '+steps.length+' exercices obligatoires avant de jouer. Sans score ni récompense.';
- for(const id of ['localResume','localRanked','localDaily','prepareFlight','labMenu'])if($(id)){$(id).disabled=true;$(id).title='Termine d’abord l’entraînement obligatoire.';$(id).setAttribute('aria-describedby','trainingRequiredNote')}
+ for(const id of ['localResume','localRanked','localDaily','prepareFlight','labMenu','weeklySprint'])if($(id)){$(id).disabled=true;$(id).title='Termine d’abord l’entraînement obligatoire.';$(id).setAttribute('aria-describedby','trainingRequiredNote')}
 }
 
 /* Tous les réglages restent accessibles, mais les deux décisions principales et les
@@ -2628,6 +2631,28 @@ async function submitTeamScore(value){
  teamLoaded=false;
  return result||{bestScore:body.p_score,improved:false};
 }
+function validWeeklySprintState(value){
+ if(!value||typeof value!=='object'||!Array.isArray(value.scores))throw Error('Réponse du Sprint hebdomadaire invalide.');
+ return{team:value.team&&typeof value.team==='object'?value.team:null,scores:value.scores,result:value.result&&typeof value.result==='object'?value.result:null,skipped:!!value.skipped};
+}
+async function weeklySprintBoard(week){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_weekly_sprint_board',{method:'POST',body:{p_week:String(week)}}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+async function submitWeeklySprint(value){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ const body={
+  p_week:String(value.week||''),
+  p_run_id:String(value.runId||'').trim().slice(0,80),
+  p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
+  p_time_seconds:Math.max(0,Math.min(7200,Math.floor(value.time)||0)),
+  p_wave:Math.max(1,Math.min(3,Math.floor(value.wave)||1)),
+  p_won:!!value.won
+ };
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_submit_weekly_sprint',{method:'POST',body}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
 
 function renderPanel(target=mount){
  if(target)mount=target;
@@ -2789,6 +2814,8 @@ window.MinuitCloud={
  submitFeedback,
  submitTeamScore,
  finishTeamScore,
+ weeklySprintBoard,
+ submitWeeklySprint,
  openTeamBoard,
  openTeamStats,
  renderPanel,
@@ -3158,5 +3185,294 @@ reduced?.addEventListener?.('change',event=>{if(event.matches)document.querySele
 installMenuButton();
 enhanceResult();
 window.ArcadeScores={open,ranked,table};
+})();
+</script><script>/* Synergies nommées : lecture du build existant, sans bonus ni statistique ajoutée. */
+(()=>{
+'use strict';
+const KEY='minuit-build-synergies-v1';
+const definitions=[
+ {id:'rocket-fragment',name:'Essaim crépitant',needs:['rocket','fragment'],description:'Roquettes spectrales + Fragmentation : chaque explosion libère les éclats déjà prévus par les reliques.'},
+ {id:'poison-spread',name:'Contagion de minuit',needs:['poison','spread'],description:'Venin de minuit + Contagion : les créatures empoisonnées transmettent leur malédiction en tombant.'},
+ {id:'familiar-laser',name:'Chœur spectral',needs:['familiar','laser'],description:'Familier lunaire + Rayon spectral : les tirs des compagnons accompagnent le rayon de la colonne de tir.'},
+ {id:'fragment-chain',name:'Résonance explosive',needs:['fragment','chain'],description:'Fragmentation + Réaction en chaîne : les déflagrations successives produisent leurs éclats habituels.'},
+ {id:'flame-poison',name:'Braise venimeuse',needs:['flame','poison'],description:'Flamme maudite + Venin de minuit : les explosions peuvent appliquer le poison dont les dégâts dépendent du Venin.'},
+ {id:'fire-pierce',name:'Volée perforante',needs:['fire','pierce'],description:'Grimoire de puissance + Aiguilles fantômes : la cadence et les projectiles traversants composent le même tir automatique.'}
+];
+const ids=new Set(definitions.map(d=>d.id));
+let seen=new Set(),current=null,last=null,lastSignature='';
+try{const value=JSON.parse(localStorage.getItem(KEY)||'[]');if(Array.isArray(value))seen=new Set(value.filter(id=>ids.has(id)))}catch{}
+const byId=id=>definitions.find(d=>d.id===id);
+const saveSeen=()=>{try{localStorage.setItem(KEY,JSON.stringify([...seen]))}catch{}};
+const equipmentIds=()=>{const combat=Journey.run?.combat;return{spell:combat?.spell||'pulse',broom:combat?.broom||'bruyere',pet:combat?.pet||'solo'}};
+function equipmentNames(equipment){return['spell','broom','pet'].map(kind=>Arsenal.catalog.find(item=>item.kind===kind&&item.id===equipment?.[kind])?.name).filter(Boolean)}
+function newCurrent(restored=false){
+ const run=Journey.run;if(!run){current=null;render();return}
+ const activated=restored&&Array.isArray(run.synergies)?run.synergies.filter(id=>ids.has(id)):[];
+ current={id:run.id,activated:[...new Set(activated)],discovered:[],upgrades:restored&&run.synergyLevels?{...run.synergyLevels}:{},equipment:equipmentIds()};
+ scan(false);
+}
+function snapshot(){
+ if(!current)return null;
+ return{id:current.id,activated:[...current.activated],discovered:[...current.discovered],upgrades:{...current.upgrades},equipment:{...current.equipment}};
+}
+function scan(notify=true){
+ const run=Journey.run;
+ if(!run||!current||current.id!==run.id||window.SandboxMode&&!window.WeeklySprint?.active){render();return}
+ for(const key in upgrades)current.upgrades[key]=Math.max(current.upgrades[key]||0,Number(upgrades[key])||0);
+ current.equipment=equipmentIds();
+ const activated=[];
+ for(const synergy of definitions){
+  if(current.activated.includes(synergy.id)||!synergy.needs.every(key=>(Number(upgrades[key])||0)>0))continue;
+  current.activated.push(synergy.id);activated.push(synergy);
+  if(!seen.has(synergy.id)){seen.add(synergy.id);current.discovered.push(synergy.id);saveSeen()}
+ }
+ run.synergies=[...current.activated];run.synergyLevels={...current.upgrades};
+ if(notify&&activated.length&&state==='play')say('Synergie'+(activated.length>1?'s':'')+' activée'+(activated.length>1?'s':'')+' · '+activated.map(d=>d.name).join(' · '),3.2);
+ render();
+}
+function render(){
+ const hud=$('synergyHUD'),list=$('synergyLoadout');if(!hud||!list)return;
+ const visible=!!current&&['play','pause'].includes(state)&&(!window.SandboxMode||!!window.WeeklySprint?.active);
+ const active=current?current.activated.map(byId).filter(Boolean):[];
+ const signature=visible+'|'+active.map(d=>d.id).join(',');if(signature===lastSignature)return;lastSignature=signature;
+ hud.classList.toggle('hidden',!visible||!active.length);list.classList.toggle('hidden',!visible||!active.length);
+ if(!visible||!active.length){hud.innerHTML='';list.innerHTML='';return}
+ const title=active.map(d=>d.name+' — '+d.description).join('\n');
+ hud.title=title;hud.setAttribute('aria-label',active.length+' synergie'+(active.length>1?'s':'')+' active'+(active.length>1?'s':'')+' : '+active.map(d=>d.name).join(', '));
+ hud.innerHTML='<span>✦ SYNERGIE'+(active.length>1?'S':'')+' · BUILD</span><b>'+active.slice(-2).map(d=>safeText(d.name)).join(' · ')+'</b>'+(active.length>2?'<small>+'+(active.length-2)+' autre'+(active.length>3?'s':'')+'</small>':'');
+ list.innerHTML='<small>SYNERGIES DU VOL · SANS BONUS AJOUTÉ</small>'+active.map(d=>'<span title="'+safeText(d.description)+'">✦ '+safeText(d.name)+'</span>').join('');
+}
+const oldBegin=Journey.begin;Journey.begin=function(...args){const result=oldBegin(...args);newCurrent(false);return result};
+const oldRestore=Journey.restore;Journey.restore=function(...args){const result=oldRestore(...args);newCurrent(true);return result};
+const oldFinish=Journey.finish;Journey.finish=function(...args){if(current)last=snapshot();const result=oldFinish(...args);current=null;render();return result};
+const oldAbandon=Journey.abandon;Journey.abandon=function(...args){if(current)last=snapshot();const result=oldAbandon(...args);current=null;render();return result};
+const oldLoadout=updateLoadout;updateLoadout=function(...args){const result=oldLoadout(...args);scan(true);return result};
+const oldTick=League.tick;League.tick=function(dt){const result=oldTick(dt);if(state==='play')scan(true);else render();return result};
+const css=document.createElement('style');css.textContent=`
+.synergy-hud{position:absolute;z-index:3;top:105px;left:13px;max-width:min(330px,58%);padding:7px 9px;border:1px solid #d6ac6c66;border-radius:8px;background:#171222c9;box-shadow:0 5px 18px #08051055;pointer-events:none;text-align:left;backdrop-filter:blur(3px)}
+.synergy-hud span{display:block;color:#c5a6d5;font-size:7px;letter-spacing:1.2px}.synergy-hud b{display:block;margin-top:3px;color:#ffd493;font-size:10px;line-height:1.35}.synergy-hud small{display:block;margin-top:2px;color:#b9a4c6;font-size:8px}
+.synergy-loadout{margin-top:9px;padding-top:8px;border-top:1px solid #7f5f8133;text-align:left}.synergy-loadout small{display:block;margin-bottom:5px;color:#a893b7;font-size:7px;letter-spacing:.8px}.synergy-loadout span{display:block;margin-top:4px;color:#e8bf88;font-size:9px;line-height:1.4}
+.replay-personal-cards{display:contents}.replay-card{width:100%;max-width:720px;margin:10px 0;padding:12px;border:1px solid #8f6d7d66;border-radius:10px;background:linear-gradient(135deg,#2c2039cc,#181422dd);text-align:left}
+.replay-card>small{display:block;color:#b79bc7;font-size:8px;letter-spacing:1.3px}.replay-card h3{margin:6px 0;color:#f2cc98;font:600 17px Georgia,serif}.replay-card p{margin:5px 0;color:#c4b1cf;font-size:10px;line-height:1.55}.replay-card .replay-progress{height:5px;margin:9px 0 5px;border-radius:5px;background:#49364f;overflow:hidden}.replay-card .replay-progress i{display:block;height:100%;background:linear-gradient(90deg,#a681cf,#ffc279)}
+.replay-synergy-list{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.replay-synergy{padding:8px;border:1px solid #72587355;border-radius:7px;background:#1b1527aa}.replay-synergy b{display:block;color:#f0c58f;font-size:10px}.replay-synergy span{display:block;margin-top:3px;color:#b8a6c5;font-size:9px;line-height:1.45}.replay-synergy em{display:block;margin-top:4px;color:#9ed7bc;font-size:8px;font-style:normal}
+.replay-equipment{margin-top:8px;color:#d1b9dc;font-size:9px;line-height:1.55}.replay-empty{color:#aa98b8;font-size:10px;line-height:1.55}.replay-result-actions{margin-top:10px}.replay-result-actions button{min-height:42px}
+@media(max-width:850px){.synergy-hud{top:98px;left:8px;max-width:62%;padding:5px 7px}.synergy-hud b{font-size:8px}.synergy-hud span{font-size:6px}.replay-card{padding:10px}.replay-synergy-list{grid-template-columns:1fr}.replay-result-actions{display:grid;grid-template-columns:1fr;width:100%}.replay-result-actions button{width:100%}}
+@media(max-height:500px){.synergy-hud{top:58px;max-width:48%}.synergy-hud b{font-size:7px}}
+`;document.head.appendChild(css);
+document.querySelector('.arena').insertAdjacentHTML('beforeend','<div id="synergyHUD" class="synergy-hud hidden"></div>');
+$('badges').insertAdjacentHTML('afterend','<div id="synergyLoadout" class="synergy-loadout hidden"></div>');
+window.BuildSynergies={definitions,byId,equipmentNames,snapshot,get current(){return snapshot()},get last(){return last},get discovered(){return[...seen]},scan};
+render();
+})();
+</script><script>/* Sprint hebdomadaire : trois vagues, un gardien, graine commune et scores séparés. */
+(()=>{
+'use strict';
+const KEY='minuit-weekly-sprints-v1';
+let data={version:1,weeks:{}},active=false,config=null,result=null,countdown=0,teamEpoch=0,friend=null;
+const fmt=value=>Math.floor(Number(value)||0).toLocaleString('fr-FR');
+const timeLabel=value=>Math.floor((Number(value)||0)/60)+' min '+String(Math.floor(Number(value)||0)%60).padStart(2,'0')+' s';
+const cleanRun=value=>{
+ if(!value||typeof value!=='object'||!Number.isFinite(value.score)||value.score<0)return null;
+ return{id:String(value.id||'').slice(0,80),week:String(value.week||''),seed:Number(value.seed)>>>0,score:Math.floor(value.score),time:Math.max(0,Math.floor(Number(value.time)||0)),wave:Math.max(1,Math.min(3,Math.floor(Number(value.wave)||1))),won:!!value.won,world:String(value.world||'').slice(0,80),date:String(value.date||'').slice(0,40),build:value.build&&typeof value.build==='object'?value.build:null};
+};
+try{
+ const saved=JSON.parse(localStorage.getItem(KEY)||'null');
+ if(saved?.version===1&&saved.weeks&&typeof saved.weeks==='object'){
+  for(const [week,value] of Object.entries(saved.weeks)){
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(week)||!value||typeof value!=='object')continue;
+   const best=cleanRun(value.best),last=cleanRun(value.last),runs=Array.isArray(value.runs)?value.runs.map(cleanRun).filter(Boolean).slice(0,8):[];
+   data.weeks[week]={best,last,runs};
+  }
+ }
+}catch{}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch{}}
+function weekInfo(){
+ const day=dateKey(),date=new Date(day+'T00:00:00Z');date.setUTCDate(date.getUTCDate()-((date.getUTCDay()+6)%7));
+ const week=date.toISOString().slice(0,10),seed=hash('minuit-weekly-sprint-v1:'+week),stage=hash('minuit-weekly-world-v1:'+week)%worlds.length;
+ const label=date.toLocaleDateString('fr-FR',{day:'numeric',month:'long',timeZone:'UTC'});
+ return{week,seed,stage,label};
+}
+function weekData(week){return data.weeks[week]||(data.weeks[week]={best:null,last:null,runs:[]})}
+function clearCountdown(){if(countdown){clearInterval(countdown);countdown=0}}
+function shareContent(scoreValue){
+ const info=config||result?.info||weekInfo(),score=Math.floor(Number(scoreValue)||0),url=location.protocol==='file:'?'':new URL(location.href);
+ let link='';if(url){url.search='';url.hash='';url.searchParams.set('sprint',info.week);url.searchParams.set('target',String(score));link=url.href}
+ const text='Sprint hebdo · La Nuit aux Trousses — semaine du '+info.label+' : '+fmt(score)+' points. La même graine pour tous cette semaine. Peux-tu battre mon score ?';
+ return{text,link,message:text+(link?'\n'+link:''),whatsapp:'https://wa.me/?text='+encodeURIComponent(text+(link?'\n'+link:'')),messenger:link?'https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(link):''};
+}
+async function copyChallenge(scoreValue,status){
+ const share=shareContent(scoreValue);try{await navigator.clipboard.writeText(share.message);if(status)status.textContent='Défi copié. Envoie-le à un ami ou dans ta team.'}catch{prompt('Copie ce défi :',share.message)}
+}
+function bindShare(scoreValue,prefix='weekly'){
+ const score=Math.floor(Number(scoreValue)||0),share=shareContent(score),whats=$(prefix+'WhatsApp'),messenger=$(prefix+'Messenger'),copy=$(prefix+'Copy'),status=$(prefix+'ShareStatus');
+ if(whats)whats.href=share.whatsapp;if(messenger){messenger.href=share.messenger||'#';messenger.classList.toggle('hidden',!share.messenger)}
+ if(copy)copy.onclick=()=>copyChallenge(score,status);
+}
+function teamRows(board){
+ const rows=Array.isArray(board?.scores)?board.scores:[];if(!rows.length)return'<div class="tiny">Aucun membre n’a encore joué ce Sprint.</div>';
+ return rows.slice(0,10).map((row,index)=>{const played=row.played!==false&&row.score!==null&&row.score!==undefined;return`<div class="weekly-team-row ${row.isYou?'team-you':''}"><b>#${Number(row.rank)||index+1}</b><span>${safeText(row.displayName||'Sorcière')}${row.isYou?'<small>TOI</small>':''}</span><strong>${played?fmt(row.score):'—'}</strong><small>${played?(row.won?'Gardien vaincu':'Vague '+Number(row.wave||1)+'/3')+' · '+timeLabel(row.time):'Pas encore de vol'}</small></div>`}).join('');
+}
+function paintTeam(element,board){
+ if(!element)return;
+ if(!board||board.skipped||!board.team){element.innerHTML='<div class="tiny">Le record reste sur cet appareil. Rejoins une team pour comparer ce Sprint avec ses membres.</div>';return}
+ const mine=(board.scores||[]).find(row=>row.isYou),rank=mine?.rank||'—';
+ element.innerHTML=`<div class="weekly-team-heading"><span>TEAM · ${safeText(board.team.name||'Ta team')}</span><b>TA POSITION : #${rank}</b></div><div class="weekly-team-board">${teamRows(board)}</div><div class="tiny">Meilleur Sprint de la semaine pour chaque membre · classement séparé de la campagne.</div>`;
+}
+function syncTeam(element,week,promise){
+ if(!element)return;if(!window.MinuitCloud?.connected){paintTeam(element,null);return}
+ const epoch=++teamEpoch;element.innerHTML='<div class="tiny">Chargement du classement Sprint de la team…</div>';
+ const request=promise||Promise.resolve().then(()=>window.MinuitCloud.weeklySprintBoard?.(week));
+ Promise.resolve(request).then(board=>{if(epoch===teamEpoch&&element.isConnected)paintTeam(element,board)}).catch(error=>{if(epoch===teamEpoch&&element.isConnected)element.innerHTML='<div class="tiny">Record local conservé. Classement team indisponible : '+safeText(error.message||'service hors ligne')+'</div>'});
+}
+function buildHTML(build){
+ if(!build)return'';
+ const synergies=(build.activated||[]).map(id=>BuildSynergies.byId(id)).filter(Boolean),equipment=BuildSynergies.equipmentNames(build.equipment);
+ return`<section class="replay-card weekly-build-card"><small>BUILD DÉCOUVERT DANS CE SPRINT</small><h3>${synergies.length?synergies.length+' synergie'+(synergies.length>1?'s':'')+' activée'+(synergies.length>1?'s':''):'Un build à explorer'}</h3>${synergies.length?`<div class="replay-synergy-list">${synergies.map(item=>`<div class="replay-synergy"><b>✦ ${safeText(item.name)}</b><span>${safeText(item.description)}</span>${(build.discovered||[]).includes(item.id)?'<em>Nouvelle combinaison découverte</em>':''}</div>`).join('')}</div>`:'<p class="replay-empty">Aucune paire nommée cette fois. Au prochain vol, cherche deux reliques complémentaires.</p>'}<div class="replay-equipment">Équipement normalisé : ${safeText(equipment.join(' · ')||'Onde améthyste · Bruyère équilibrée · Vol solitaire')}.<br>Les synergies décrivent les mécaniques existantes, sans bonus de puissance.</div></section>`;
+}
+function recordLocal(win,build,info){
+ const value=cleanRun({id:info.id,week:info.week,seed:info.seed,score:Math.floor(score),time:Math.floor(gameTime),wave:Math.max(1,Math.min(3,wave-2)),won:win,world:world.name,date:new Date().toISOString(),build});
+ const week=weekData(info.week),previousBest=week.best?.score||0,isRecord=value.score>previousBest;
+ week.last=value;week.runs.unshift(value);week.runs=week.runs.slice(0,8);
+ if(!week.best||value.score>week.best.score||(value.score===week.best.score&&(value.won&&!week.best.won||value.won===week.best.won&&value.time<week.best.time)))week.best=value;
+ save();return{...value,previousBest,isRecord,info,build};
+}
+function finish(win){
+ if(!active||!config||recorded)return;
+ const info={...config},build=BuildSynergies.snapshot(),submissionValue={week:info.week,runId:info.id,score:Math.floor(score),time:Math.max(0,Math.floor(gameTime)),wave:Math.max(1,Math.min(3,wave-2)),won:!!win};
+ release();recorded=true;state='end';try{localStorage.removeItem('minuit-checkpoint')}catch{}
+ result=recordLocal(!!win,build,info);active=false;config=null;$('questHUD').classList.add('hidden');
+ const submission=window.MinuitCloud?.connected&&window.MinuitCloud.submitWeeklySprint?Promise.resolve().then(()=>window.MinuitCloud.submitWeeklySprint(submissionValue)):null;
+ Journey.abandon();window.SandboxMode=false;result.submission=submission;
+ if(win){present();return}
+ let deadline=0;const reveal=()=>{clearCountdown();if(state==='end'&&result)present()};
+ const schedule=ms=>{clearCountdown();const delay=Math.max(3000,Math.min(8500,(Number(ms)||1200)-250));deadline=performance.now()+delay;const paint=()=>{if(state!=='end'||!result){clearCountdown();return}if(performance.now()>=deadline){reveal();return}const number=$('deathCountdown');if(number)number.textContent=String(Math.max(1,Math.ceil((deadline-performance.now())/1000)))};paint();countdown=setInterval(paint,100)};
+ const cue=window.MinuitSoundtrack?.player?.defeat?.();if(cue?.then)cue.then(schedule).catch(()=>schedule(0));else schedule(0);
+ overlay(`<div class="death-transition" role="alert"><div class="death-transition-mark">✦</div><h2>VOUS AVEZ PERDU</h2><p>Le Sprint est terminé, mais ton record hebdomadaire est conservé.</p><div class="death-countdown"><b id="deathCountdown" aria-live="polite">…</b><span id="deathCountdownLabel">Préparation des HI-SCORES Sprint…</span></div><small>La page des HI-SCORES Sprint va s’afficher en plein écran.<br>Aucun essai quotidien ni score de campagne n’a été utilisé.</small></div>`);
+}
+function present(){
+ const current=result;if(!current)return;state='end';const best=weekData(current.week).best,difference=current.score-current.previousBest;
+ const friendCard=friend&&friend.week===current.week?`<section class="replay-card"><small>DÉFI AMI · SCORE PARTAGÉ</small><h3>${current.score>friend.score?'Score ami battu !':current.score===friend.score?'Égalité avec ton ami':'Encore '+fmt(friend.score-current.score)+' points'}</h3><p>Ton score : ${fmt(current.score)} · score à battre : ${fmt(friend.score)}.</p></section>`:'';
+ const history=(weekData(current.week).runs||[]).slice(0,3).map((run,index)=>`<div class="weekly-last-run"><span>${index===0?'Dernier Sprint':'Sprint précédent'} · ${run.won?'gardien vaincu':'vague '+run.wave+'/3'}</span><b>${fmt(run.score)}</b><small>${timeLabel(run.time)}</small></div>`).join('');
+ overlay(`<section class="journey-result-screen weekly-result" aria-label="Highscores et bilan du Sprint hebdomadaire"><div class="eyebrow">SPRINT HEBDO · SEMAINE DU ${safeText(current.info.label.toUpperCase())}</div><h2 class="local-title ${current.won?'':'death-title'}">${current.won?'Le gardien du Sprint est tombé !':'Vous êtes mort !'}</h2>${current.won?'':'<div class="death-note" role="alert">Vous avez perdu votre dernière vie.<br>Le record Sprint est sauvegardé séparément.</div>'}<div class="journey-result-grid"><div><small>SCORE DU SPRINT</small><b>${fmt(current.score)}</b><span>${current.isRecord?'Nouveau record hebdomadaire !':difference===0?'Record personnel égalé':fmt(Math.max(0,-difference))+' points pour battre ton record'}</span></div><div><small>RECORD PERSONNEL</small><b>${fmt(best?.score||current.score)}</b><span>${current.previousBest?'Avant ce vol : '+fmt(current.previousBest)+' points.':'Premier score inscrit cette semaine.'}</span></div><div><small>PARCOURS</small><b>${current.won?'3 vagues + gardien':'Vague '+current.wave+' / 3'}</b><span>${safeText(current.world)} · graine commune ${current.seed}</span></div><div><small>TEMPS DE VOL</small><b>${timeLabel(current.time)}</b><span>Format court · trois vagues puis un gardien.</span></div></div>${friendCard}${buildHTML(current.build)}<section class="replay-card weekly-scoreboard"><div class="scoreboard-title"><span>HI-SCORES · SPRINT HEBDO</span><b>RECORDS SÉPARÉS</b></div>${history}<div id="weeklyTeamBoard" class="weekly-team-board-wrap"></div></section><div class="local-actions weekly-share-actions"><a class="secondary" id="weeklyWhatsApp" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="weeklyMessenger" target="_blank" rel="noopener">Messenger</a><button class="secondary" id="weeklyCopy">Copier le défi</button></div><div class="tiny" id="weeklyShareStatus" role="status">Le lien contient la semaine et le score à battre, sans donnée de compte.</div><div class="local-actions replay-result-actions"><button class="primary" id="weeklyRetry">Rejouer le Sprint →</button><button class="secondary" id="weeklyHome">Retour à l’accueil</button></div><div class="tiny">Illimité, sans essai quotidien, sans XP et sans inscription dans les records de campagne.</div></section>`);
+ $('weeklyRetry').onclick=start;$('weeklyHome').onclick=()=>LocalLeague.menu();bindShare(best?.score||current.score);syncTeam($('weeklyTeamBoard'),current.week,current.submission);
+}
+function start(){
+ clearCountdown();active=false;config=null;result=null;friend=friend&&friend.week===weekInfo().week?friend:null;
+ if(!LocalLeague.startTransient())return false;
+ const info=weekInfo();config={...info,id:'sprint-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)};
+ stage=info.stage;world=worlds[stage];wave=3;diff=1;lives=3;runId='normal';dailyDate=dateKey();seed=info.seed;session=config.id;active=true;
+ schedule=[];enemies=[];shots=[];hostile=[];rockets=[];drops=[];hazards=[];obstacles=[];scares=[];
+ newWave();updateLoadout();updateHUD();customHUD();
+ $('modeLabel').textContent='↯ Sprint hebdo · '+info.week;say('Sprint hebdo · trois vagues, puis '+world.boss,3.2);
+ return true;
+}
+function prepareWave(){
+ if(!active||!config||wave<3||wave>5)return;
+ const first=schedule.map(item=>({...item})),second=first.map(item=>({...item,time:item.time+22,x:800-item.x,pattern:((item.pattern||0)+1)%4}));
+ schedule=[...first,...second].sort((a,b)=>a.time-b.time);say('Sprint · Vague '+(wave-2)+'/3'+(wave===5?' · le gardien approche':''),2.4);customHUD();
+}
+function customHUD(){
+ if(!active||!config)return;const boss=enemies.some(enemy=>enemy.boss&&!enemy.dead),best=weekData(config.week).best?.score||0;
+ $('wave').textContent=boss?'GARDIEN':String(Math.max(1,wave-2)).padStart(2,'0')+' / 03';$('realmHUD').textContent=world.short;
+ $('hiValue').textContent=String(Math.max(best,Math.floor(score))).padStart(6,'0');$('hiValue').parentElement?.classList.toggle('record-live',score>best);
+ $('status').textContent=world.name+' · '+timeLabel(gameTime)+' · SPRINT HEBDO';
+}
+function guardianDefeated(){return!!(active&&config&&wave===5)}
+function preflight(){
+ clearCountdown();const info=weekInfo(),week=weekData(info.week),best=week.best;state='weekly-preflight';
+ const friendNote=friend&&friend.week===info.week?`<div class="weekly-friend-target"><small>DÉFI AMI REÇU</small><b>${fmt(friend.score)} points à battre</b><span>La comparaison apparaîtra dans ton bilan.</span></div>`:'';
+ overlay(`<section class="weekly-preflight"><div class="eyebrow">MODE COURT · MÊME GRAINE POUR TOUS</div><h2 class="local-title">Le Sprint de la semaine.</h2><p>Trois vagues, puis un gardien. Environ 3 à 5 minutes, avec l’équipement de défi normalisé et la difficulté Nuit noire.</p><div class="weekly-rule-grid"><div><b>01</b><span>Trois vagues d’environ 40 secondes, sans écran de choix.</span></div><div><b>02</b><span>${safeText(worlds[info.stage].boss)} garde la fin du Sprint.</span></div><div><b>03</b><span>Rejoue librement pour améliorer ton record avant lundi.</span></div></div><div class="weekly-seed"><span>SEMAINE DU ${safeText(info.label.toUpperCase())}</span><b>GRAINE ${info.seed}</b><small>${safeText(worlds[info.stage].name)} · renouvellement lundi, heure de Paris</small></div>${friendNote}<div class="weekly-personal-best"><small>TON RECORD HEBDOMADAIRE</small><b>${best?fmt(best.score):'—'}</b><span>${best?timeLabel(best.time)+' · '+(best.won?'gardien vaincu':'vague '+best.wave+'/3'):'Ton premier Sprint inscrira un record séparé.'}</span></div><section class="replay-card"><small>AMIS & TEAM</small><div id="weeklyPreflightTeam"></div></section><div class="local-actions"><button class="primary" id="weeklyLaunch">Lancer le Sprint →</button><button class="secondary" id="weeklyBack">Retour</button></div>${best?'<div class="local-actions weekly-share-actions"><a class="secondary" id="weeklyWhatsApp" target="_blank" rel="noopener">Défier sur WhatsApp</a><a class="secondary" id="weeklyMessenger" target="_blank" rel="noopener">Messenger</a><button class="secondary" id="weeklyCopy">Copier le défi</button></div><div class="tiny" id="weeklyShareStatus">Un ami ouvre le lien, joue la même graine et compare son score au tien.</div>':''}<div class="tiny">Aucun essai quotidien consommé. Pas d’XP ni de score de campagne. Aucun malus si tu ne joues pas chaque semaine.</div></section>`);
+ $('weeklyLaunch').onclick=start;$('weeklyBack').onclick=()=>LocalLeague.menu();if(best)bindShare(best.score);syncTeam($('weeklyPreflightTeam'),info.week);
+}
+function discard(){
+ clearCountdown();const had=active||result||Journey.run?.transient;if(!had)return false;
+ active=false;config=null;result=null;if(Journey.run?.transient)Journey.abandon();window.SandboxMode=false;$('questHUD').classList.add('hidden');return true;
+}
+function installMenu(){
+ if(state!=='league-menu'||document.querySelector('#overlay .training-mode'))return;
+ const lab=$('labMenu'),grid=lab?.closest('.menu-grid');if(!grid||$('weeklySprint'))return;
+ const button=document.createElement('button');button.type='button';button.id='weeklySprint';button.className='secondary menu-card-button';button.innerHTML='<span class="menu-card-icon">↯</span><span>Sprint hebdo</span>';button.onclick=preflight;grid.insertBefore(button,grid.firstChild);GuidedTraining.applyRequirement();
+}
+const oldEnd=end;end=function(win){if(active)return finish(win);return oldEnd(win)};
+const oldMenu=menu;menu=function(...args){if(discard())return LocalLeague.menu();return oldMenu(...args)};
+const oldPlay=LocalLeague.play;LocalLeague.play=function(...args){discard();return oldPlay(...args)};
+const oldChallenge=LocalLeague.challenge;LocalLeague.challenge=function(...args){discard();return oldChallenge(...args)};
+const oldLocalMenu=LocalLeague.menu;LocalLeague.menu=function(...args){discard();return oldLocalMenu(...args)};
+const oldEvent=League.event;League.event=function(metric,n=1){if(active){Journey.event(metric,n);return}return oldEvent(metric,n)};
+const oldTick=League.tick;League.tick=function(dt){const result=oldTick(dt);customHUD();return result};
+const oldJourneyMenu=Journey.menu;Journey.menu=function(...args){const value=oldJourneyMenu(...args);installMenu();return value};
+const css=document.createElement('style');css.textContent=`
+.weekly-preflight{width:min(760px,100%);min-height:100%;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}.weekly-preflight>p{max-width:580px}.weekly-rule-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;margin:12px 0}.weekly-rule-grid>div{padding:11px;text-align:left;border:1px solid #755c8055;border-radius:9px;background:#251c32bb}.weekly-rule-grid b{display:block;color:#efbe85;font-size:16px}.weekly-rule-grid span{display:block;margin-top:5px;color:#c2afc9;font-size:10px;line-height:1.5}.weekly-seed{display:flex;flex-direction:column;gap:4px;margin:8px 0 12px;padding:10px 16px;border:1px solid #b3895d66;border-radius:9px;background:#38243788}.weekly-seed span{color:#c4a4cd;font-size:8px;letter-spacing:1px}.weekly-seed b{color:#ffd08e;font-size:13px;letter-spacing:1px}.weekly-seed small{margin:0;color:#b8a5c1;font-size:9px;letter-spacing:0}.weekly-personal-best{display:flex;flex-direction:column;margin:4px 0 12px}.weekly-personal-best small{margin:0;color:#b99bc7;font-size:8px}.weekly-personal-best b{color:#ffd08e;font-size:28px}.weekly-personal-best span{color:#baa8c4;font-size:10px}.weekly-friend-target{display:flex;flex-direction:column;gap:4px;margin:6px 0 10px;padding:10px 15px;border:1px solid #d4a56b88;border-radius:9px;background:#5a392b55}.weekly-friend-target small{margin:0;color:#d9b58c;font-size:8px}.weekly-friend-target b{color:#ffe0a6;font-size:18px}.weekly-friend-target span{color:#c9b4c8;font-size:9px}.weekly-share-actions{margin:9px 0}.weekly-share-actions a{text-decoration:none}.weekly-team-board-wrap{width:100%;margin-top:10px}.weekly-team-heading{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;color:#e6c9a5;font-size:9px}.weekly-team-heading b{color:#ffd08e}.weekly-team-row{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:4px 7px;align-items:center;padding:7px 5px;border-top:1px solid #ffffff0d;color:#d4c2de;font-size:10px;text-align:left}.weekly-team-row>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.weekly-team-row>span small{margin-left:5px;color:#ffc57e;font-size:7px}.weekly-team-row>strong{color:#ffd08e}.weekly-team-row>small{grid-column:2/-1;color:#9f8ead;font-size:8px}.weekly-team-row.team-you{background:#b0884433;border-radius:6px}.weekly-last-run{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;padding:8px 4px;border-top:1px solid #ffffff0d;color:#c8b5d2;font-size:10px;text-align:left}.weekly-last-run b{color:#ffd08e}.weekly-last-run small{margin:0;color:#a493b1;font-size:9px}.weekly-result .weekly-scoreboard{max-width:720px}.overlay:has(.weekly-preflight),.overlay:has(.weekly-result){justify-content:flex-start}.weekly-preflight>.local-actions,.weekly-result>.local-actions{flex-shrink:0}
+@media(max-width:850px){.weekly-preflight{padding:4px 0;min-height:100%}.weekly-preflight>p{font-size:11px;margin-bottom:10px}.weekly-rule-grid{grid-template-columns:1fr;gap:5px;margin:8px 0}.weekly-rule-grid>div{display:grid;grid-template-columns:28px 1fr;gap:5px;padding:8px;text-align:left}.weekly-rule-grid span{margin:0}.weekly-seed{margin:5px 0 8px;padding:8px 12px}.weekly-personal-best{margin-bottom:8px}.weekly-preflight .replay-card{margin:6px 0}.weekly-result{min-height:100%}.weekly-share-actions{flex-wrap:wrap}.weekly-share-actions a,.weekly-share-actions button{min-height:42px}.weekly-last-run{grid-template-columns:minmax(0,1fr) auto}.weekly-last-run small{grid-column:1/-1}.weekly-team-heading{font-size:8px}}
+`;document.head.appendChild(css);
+try{
+ const url=new URL(location.href),week=url.searchParams.get('sprint'),target=Number(url.searchParams.get('target'));
+ if(/^\d{4}-\d{2}-\d{2}$/.test(week||'')&&Number.isFinite(target)&&target>=0&&target<=100000000)friend={week,score:Math.floor(target)};
+ if(week||url.searchParams.has('target')){url.searchParams.delete('sprint');url.searchParams.delete('target');history.replaceState(null,'',url.pathname+(url.searchParams.size?'?'+url.searchParams:'')+url.hash)}
+}catch{}
+window.WeeklySprint={start,preflight,prepareWave,guardianDefeated,weekInfo,shareContent,get active(){return active},get result(){return result},get config(){return config},get data(){return data},get isResult(){return!!result&&state==='end'},get friend(){return friend}};
+Journey.menu();if(friend&&friend.week===weekInfo().week)setTimeout(preflight,0);
+})();
+</script><script>/* Bilan de rejouabilité : record, build, prochain objectif et relance rapide. */
+(()=>{
+'use strict';
+let pending=null;
+const fmt=value=>Math.floor(Number(value)||0).toLocaleString('fr-FR');
+const metricLabels={waves:'vagues à terminer',bosses:'gardiens à vaincre',dashes:'esquives à réaliser',cleanWaves:'vagues sans dégâts à terminer',pickups:'objets à ramasser',elites:'élites à vaincre'};
+function nextUnlock(){
+ const state=Journey.state,combat=Arsenal.catalog.filter(item=>item.metric&&!state.combat.unlocked.includes(item.id)).map(item=>({item,remaining:Math.max(0,item.target-(state.lifetime[item.metric]||0))})).sort((a,b)=>a.remaining-b.remaining)[0];
+ const cosmetic=Journey.items.filter(item=>item.xp>state.xp).sort((a,b)=>a.xp-b.xp)[0];
+ return{combat,cosmetic};
+}
+function goalHTML(result){
+ const difference=result.score-result.record,target=Math.max(result.record+1,difference>0?Math.ceil(result.score*1.05):result.record+1),progress=Math.max(3,Math.min(100,result.score/Math.max(1,target)*100));
+ const title=difference>0?'Record battu de '+fmt(difference)+' points':difference===0?'Record personnel égalé':'Encore '+fmt(-difference)+' points pour ton record';
+ const next=nextUnlock(),lines=[];
+ if(result.unlocks?.length)lines.push('Débloqué pendant ce vol : '+result.unlocks.join(' · ')+'.');
+ if(next.combat)lines.push('Prochaine capacité : '+next.combat.item.name+' — encore '+fmt(next.combat.remaining)+' '+(metricLabels[next.combat.item.metric]||'objectifs')+'.');
+ if(next.cosmetic)lines.push('Collection : '+next.cosmetic.name+' — encore '+fmt(next.cosmetic.xp-Journey.state.xp)+' XP.');
+ if(!lines.length)lines.push('Ta collection est complète : vise un nouveau record ou une synergie jamais découverte.');
+ return`<section class="replay-card replay-goal-card"><small>TON PROCHAIN OBJECTIF</small><h3>${safeText(title)}</h3><div class="replay-progress" aria-hidden="true"><i style="width:${progress}%"></i></div><p>Vise <b>${fmt(target)} point${target>1?'s':''}</b> au prochain vol. ${lines.map(safeText).join('<br>')}</p></section>`;
+}
+function buildHTML(build){
+ if(!build)return'';
+ const active=(build.activated||[]).map(id=>BuildSynergies.byId(id)).filter(Boolean),equipment=BuildSynergies.equipmentNames(build.equipment);
+ let suggestion='';
+ if(!active.length){
+  const partial=BuildSynergies.definitions.find(synergy=>synergy.needs.some(key=>(build.upgrades?.[key]||0)>0)&&!synergy.needs.every(key=>(build.upgrades?.[key]||0)>0));
+  if(partial){const missing=partial.needs.find(key=>!(build.upgrades?.[key]>0)),relic=upgradeDefs.find(def=>def[0]===missing)?.[2]||missing;suggestion='Piste du prochain vol : ajoute '+relic+' pour révéler « '+partial.name+' ».'}
+  else suggestion='Au prochain vol, ramasse deux reliques complémentaires pour révéler une synergie nommée.';
+ }
+ return`<section class="replay-card replay-build-card"><small>BUILD DE CE VOL</small><h3>${active.length?active.length+' synergie'+(active.length>1?'s':'')+' dans ton grimoire':'Ton prochain build reste à découvrir'}</h3>${active.length?`<div class="replay-synergy-list">${active.map(item=>`<div class="replay-synergy"><b>✦ ${safeText(item.name)}</b><span>${safeText(item.description)}</span>${(build.discovered||[]).includes(item.id)?'<em>Découverte dans ce vol</em>':''}</div>`).join('')}</div>`:'<p class="replay-empty">'+safeText(suggestion)+'</p>'}<div class="replay-equipment">Équipement : ${safeText(equipment.join(' · ')||'équipement du défi')}.<br>Ces noms rendent les combinaisons existantes plus lisibles ; ils n’ajoutent aucun bonus.</div></section>`;
+}
+function equip(build){
+ const selected=Journey.state.combat?.selected;if(!selected||!build?.equipment)return;
+ for(const kind of ['spell','broom','pet']){
+  const id=build.equipment[kind],item=Arsenal.catalog.find(entry=>entry.kind===kind&&entry.id===id);
+  if(item&&Journey.state.combat.unlocked.includes(id))selected[kind]=id;
+ }
+}
+function enhance(){
+ const screen=document.querySelector('#overlay .journey-result-screen:not(.weekly-result)');
+ if(!screen||!pending||WeeklySprint.isResult||screen.dataset.replayResult===pending.id)return;
+ const grid=screen.querySelector('.journey-result-grid');if(!grid)return;
+ screen.dataset.replayResult=pending.id;
+ const cards=document.createElement('div');cards.className='replay-personal-cards';cards.innerHTML=goalHTML(pending)+buildHTML(pending.build);grid.insertAdjacentElement('afterend',cards);
+ const retry=screen.querySelector('#retry');if(retry){
+  retry.parentElement?.classList.add('replay-result-actions');
+  if(pending.mode==='free'){
+   retry.innerHTML='Rejouer avec ce build →';retry.onclick=()=>{equip(pending.build);LocalLeague.play()};
+  }
+  if(!screen.querySelector('#replayChangeBuild')){
+   const change=document.createElement('button');change.type='button';change.id='replayChangeBuild';change.className='secondary';change.textContent='Changer balai / sort';change.onclick=()=>Arsenal.prepare();retry.insertAdjacentElement('afterend',change);
+  }
+ }
+}
+const oldFinish=Journey.finish;Journey.finish=function(win){
+ const id=Journey.run?.id,build=BuildSynergies.snapshot(),result=oldFinish(win),saved=Journey.state.recent.find(entry=>entry.id===id);
+ pending=saved?{...saved,build:build||BuildSynergies.last}:null;enhance();return result;
+};
+const observer=new MutationObserver(enhance);observer.observe($('overlay'),{childList:true,subtree:true});
+window.Replayability={enhance,get pending(){return pending}};
 })();
 </script></body></html>
