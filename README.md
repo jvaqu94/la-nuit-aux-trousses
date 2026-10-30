@@ -78,7 +78,7 @@ Le tir principal est **automatique**.
 | **Aventure libre** | Vols illimités, difficulté réglable, progression et records personnels. |
 | **Défi score** | Trois essais par jour, en difficulté **Nuit noire**. Seule l’amélioration du meilleur score du jour augmente le cumul local. |
 | **Défi primes** | Un essai séparé par jour et trois objectifs à prime unique. Le score brut de cet essai ne constitue pas un quatrième score classé. |
-| **Sprint hebdo** | Trois vagues puis un gardien, environ 3–5 minutes, graine commune du lundi au dimanche et équipement normalisé. Records hebdomadaires séparés, défi ami par lien et classement de team dédié ; aucun essai quotidien, XP ou record de campagne n’est utilisé. |
+| **Sprint hebdo** | Trois vagues puis un gardien, environ 3–5 minutes, graine commune du lundi au dimanche et équipement normalisé. Records hebdomadaires séparés, défi ami par lien et classement de team dédié ; aucun essai quotidien, XP ou record de campagne n’est utilisé. Le bilan détaille les sources de points, le meilleur combo et chaque section par rapport au record précédent. Un bouton permet de s’entraîner contre le gardien de la semaine dans le Laboratoire, puis de revenir au prévol. |
 | **Entraînement guidé** | Dix exercices interactifs avec consignes illustrées et validation manuelle. Aucun score, XP, déblocage ou essai quotidien n’est crédité. |
 | **Laboratoire** | Entraînement libre avec les sorts, balais, compagnons, variantes et charges de boss. Ne crédite ni score, ni XP, ni déblocage et ne consomme aucun essai quotidien. |
 

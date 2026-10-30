@@ -25,8 +25,24 @@ with sync_playwright() as p:
     # Graine commune, trois vagues allégées et équipement de défi normalisé.
     page.click('#weeklySprint')
     page.wait_for_selector('.weekly-preflight')
-    assert 'Trois vagues' in page.locator('.weekly-preflight').inner_text()
+    assert 'score attack' in page.locator('.weekly-preflight').inner_text()
+    assert 'combos' in page.locator('.weekly-preflight').inner_text()
     assert 'tirs automatiques ×2' in page.locator('.weekly-preflight').inner_text()
+
+    # Le gardien de la semaine est accessible au laboratoire, puis le retour
+    # restaurera le prévol sans toucher aux records ni à la campagne.
+    training_before = page.evaluate("({kind:worlds[WeeklySprint.weekInfo().stage].kind,stage:WeeklySprint.weekInfo().stage,saved:localStorage.getItem('minuit-weekly-sprints-v1')})")
+    page.click('#weeklyTrainGuardian')
+    page.wait_for_function("Adventure.training&&enemies.some(enemy=>enemy.boss)")
+    training = page.evaluate("({kind:enemies.find(enemy=>enemy.boss).kind,stage,lives,sandbox:SandboxMode,weekly:WeeklySprint.active,xp:Journey.state.xp})")
+    assert training['kind'] == training_before['kind'] and training['stage'] == training_before['stage']
+    assert training['lives'] == 5 and training['sandbox'] and not training['weekly'] and training['xp'] == 0
+    assert page.locator('#exitLab').inner_text() == 'Retour au Sprint'
+    page.click('#exitLab')
+    page.wait_for_selector('.weekly-preflight')
+    assert not page.evaluate('Adventure.training||SandboxMode')
+    assert page.evaluate("localStorage.getItem('minuit-weekly-sprints-v1')") == training_before['saved']
+
     page.click('#weeklyLaunch')
     page.wait_for_function('WeeklySprint.active')
     first = page.evaluate("""()=>({
@@ -38,11 +54,14 @@ with sync_playwright() as p:
       ranked:LocalLeague.dayState().rankedUsed,daily:LocalLeague.dayState().dailyUsed
     })""")
     assert first['wave'] == 3 and first['diff'] == 1 and first['lives'] == 3
+    assert first['stage'] <= 2
+    assert page.evaluate('WeeklySprint.hostileCadenceMultiplier()') == 1.3
     assert first['transient'] and first['standard'] and first['hud'] == '01 / 03'
     assert first['checkpoint'] is None and first['xp'] == 0
     assert first['recent'] == first['records'] == 0
     assert first['ranked'] == first['daily'] == 0
-    assert len(json.loads(first['schedule'])) == 31
+    expected_spawns = 19 if first['stage'] == 2 else 16
+    assert len(json.loads(first['schedule'])) == expected_spawns
     assert page.evaluate("""()=>{prefs.touchLayout='left';savePrefs();const saved=JSON.parse(localStorage.getItem('minuit-settings')).touchLayout==='left';prefs.touchLayout='standard';savePrefs();return saved}""")
     # Le tir principal est deux fois plus efficace, sans amplifier le familier
     # ni modifier les dégâts et le périmètre du sort spécial.
@@ -67,14 +86,28 @@ with sync_playwright() as p:
     assert second['schedule'] == first['schedule']
 
     # Le gardien emprunte le vrai reward(), mais termine le Sprint avant la
-    # victoire de campagne du monde 5 et avant tout record normal.
+    # transition ou tout record normal de campagne.
     page.evaluate("""()=>{
-      wave=5;enemies=[];spawnBoss();
-      const guardian=enemies.find(enemy=>enemy.boss);window.__sprintGuardianHP=guardian.hp;reward(guardian);
+      enemies=[];spawnEnemy({x:400,kind:'ghost',pattern:0,group:0,index:0});reward(enemies[0]);
+      gameTime=12;beginTransition(false);score+=60;transition=0;advanceStage();
+      combo=2;graze++;League.event('graze',1);score+=50;
+      gameTime=28;beginTransition(false);transition=0;advanceStage();
+      combo=1;gameTime=47;wave=5;enemies=[];spawnBoss();
+      const guardian=enemies.find(enemy=>enemy.boss);window.__sprintGuardianHP=guardian.hp;
+      gameTime=65;reward(guardian);
     }""")
     page.wait_for_selector('.weekly-result')
     assert '3 vagues + gardien' in page.locator('.weekly-result').inner_text()
-    assert page.evaluate('window.__sprintGuardianHP') == 585
+    assert page.evaluate('window.__sprintGuardianHP') == (300 + first['stage'] * 150) * .65
+    analysis = page.evaluate("({stats:WeeklySprint.result.stats,segments:WeeklySprint.result.segments,score:WeeklySprint.result.score})")
+    assert analysis['stats'] == {'eliminationScore': 100, 'grazeScore': 50, 'bossScore': 5000, 'otherScore': 60, 'bestCombo': 2, 'kills': 1, 'grazes': 1}, analysis
+    assert [segment['id'] for segment in analysis['segments']] == ['wave-1', 'wave-2', 'wave-3', 'guardian']
+    assert sum(segment['score'] for segment in analysis['segments']) == analysis['score'] == 5210
+    assert all(segment['time'] > 0 for segment in analysis['segments'])
+    result_text = page.locator('.weekly-analysis').inner_text()
+    assert 'DÉTAIL DU SCORE' in result_text and 'MEILLEUR COMBO' in result_text and 'Parcours & trésors' in result_text
+    assert page.locator('.weekly-split').count() == 4
+    assert page.locator('#weeklyTrainGuardian').is_visible()
     isolated = page.evaluate("""()=>({
       active:WeeklySprint.active,sandbox:SandboxMode,run:Journey.run,
       recent:Journey.state.recent.length,records:records.length,xp:Journey.state.xp,
@@ -86,6 +119,15 @@ with sync_playwright() as p:
     assert isolated['recent'] == isolated['records'] == isolated['xp'] == 0
     assert isolated['ranked'] == isolated['daily'] == 0
     assert isolated['saved'] and isolated['campaignSaved'] is None
+
+    # Le record précédent sert de repère section par section, sans être remplacé
+    # par un score total plus faible.
+    page.click('#weeklyRetry')
+    page.wait_for_function('WeeklySprint.active')
+    page.evaluate('score=210;gameTime=10;end(true)')
+    page.wait_for_selector('.weekly-result')
+    assert '+50 au record' in page.locator('.weekly-split small').first.inner_text()
+    assert page.evaluate('WeeklySprint.data.weeks[WeeklySprint.result.week].best.score') == 5210
 
     # Une défaite a le même décompte explicite, puis un high score Sprint plein écran.
     page.click('#weeklyRetry')
@@ -159,9 +201,9 @@ with sync_playwright() as p:
       player.inv=999;enemies=[{x:player.x,y:player.y-80,hp:100,max:100,r:19}];hostile=[];
       Arsenal.active.cooldown=0;transition=0;const cast=Arsenal.cast(),spellDamage=100-enemies[0].hp;
       enemies=[];hostile=[];stage=4;world=worlds[4];wave=5;spawnBoss();
-      return {shotDamage,cast,spellDamage,bossHP:enemies.find(enemy=>enemy.boss).hp,sprint:WeeklySprint.active};
+      return {shotDamage,cast,spellDamage,bossHP:enemies.find(enemy=>enemy.boss).hp,sprint:WeeklySprint.active,cadence:WeeklySprint.hostileCadenceMultiplier()};
     }""")
-    assert normal_balance == {'shotDamage': 1, 'cast': True, 'spellDamage': 10, 'bossHP': 900, 'sprint': False}, normal_balance
+    assert normal_balance == {'shotDamage': 1, 'cast': True, 'spellDamage': 10, 'bossHP': 900, 'sprint': False, 'cadence': 1}, normal_balance
     balance.close()
 
     # Le partage ami ouvre directement le bon Sprint avec une cible chiffrée.
@@ -230,10 +272,10 @@ with sync_playwright() as p:
     geometry = mobile.evaluate("""()=>{
       const overlay=document.querySelector('#overlay').getBoundingClientRect();
       const holder=document.querySelector('.layout>div:first-child').getBoundingClientRect();
-      return {width:document.documentElement.scrollWidth,inner:innerWidth,fullHeight:overlay.height+2>=holder.height};
+      return {width:document.documentElement.scrollWidth,inner:innerWidth,fullHeight:overlay.height+2>=holder.height,scrollTop:document.querySelector('#overlay').scrollTop};
     }""")
-    assert geometry['width'] <= geometry['inner'] and geometry['fullHeight'], geometry
+    assert geometry['width'] <= geometry['inner'] and geometry['fullHeight'] and geometry['scrollTop'] == 0, geometry
     assert not mobile_errors, mobile_errors
 
     browser.close()
-    print('OK : synergies informatives, bilan et relance, Sprint allégé et dégâts contrôlés, campagne inchangée, décompte, partage, team dédiée et mobile.')
+    print('OK : Sprint allégé, bilan détaillé et comparaisons, entraînement du gardien avec retour, campagne inchangée, décompte, partage, team dédiée et mobile.')

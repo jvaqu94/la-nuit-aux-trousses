@@ -117,6 +117,7 @@ function prepareAttack(index){
   hostile=[makeBullet(400,610),makeBullet(620,610)];
  }
 }
+function spawnTrainingChest(y=570){return spawnObstacle(400,y,{kind:'crate',r:25,breakable:true,hp:3,max:3,age:2,warn:0,loot:'points'})}
 function setupStep(index){
  if(!active)return;stepIndex=index;const step=steps[index];
  enemies=[];hostile=[];shots=[];rockets=[];drops=[];obstacles=[];hazards=[];gates=[];scares=[];particles=[];
@@ -131,7 +132,7 @@ function setupStep(index){
   for(let i=0;i<8;i++){const a=i*Math.PI/4;hostile.push(makeBullet(400+Math.cos(a)*120,780+Math.sin(a)*120))}
  }
  if(step.id==='attackStyles')prepareAttack(0);
- if(step.id==='chest')exercise.chest=spawnObstacle(400,570,{kind:'crate',r:25,breakable:true,hp:3,max:3,age:2,warn:0,loot:'points'});
+ if(step.id==='chest')exercise.chest=spawnTrainingChest();
  if(step.id==='relic')drops=[{x:400,y:560,kind:'upgrade',key:'fragment',age:0}];
  if(step.id==='shield')drops=[{x:400,y:560,kind:'shield',age:0}];
  CombatFeel.reset();clearMessages();renderStep();
@@ -143,14 +144,14 @@ function goalText(step){
   const names={'comet-flight':'Comète','aurora-flight':'Aurore'},done=exercise.tried.map(id=>names[id]).join(' et '),remaining=['comet-flight','aurora-flight'].filter(id=>!exercise.tried.includes(id)).map(id=>names[id]).join(' puis ');return '✓ '+done+' essayée. Encore : '+remaining+'.';
  }
  if(step.id==='attackStyles'&&exercise.tried?.length){
-  const done=exercise.tried.map(id=>attackProfiles.find(profile=>profile.id===id)?.name).filter(Boolean).join(' · '),next=attackProfiles[exercise.tried.length];
-  if(exercise.attackWait>0)return '✓ '+done+(next?' · attaque suivante automatique…':'');
+  const done=exercise.tried.map(id=>attackProfiles.find(profile=>profile.id===id)?.name).filter(Boolean).join(' · '),next=attackProfiles[exercise.tried.length],current=attackProfiles[exercise.tried.length-1];
+  if(exercise.attackWait>0)return '✓ '+(current?.name||done)+' · observe la zone.';
   if(next)return '✓ '+done+'. '+(coarse()?'Touche « Sort spécial »':'Espace')+' pour '+next.name+'.';
  }
  return step.goal;
 }
 function renderStep(){
- const step=steps[stepIndex],card=$('trainingCard');card.classList.remove('hidden');card.dataset.step=step.id;
+ const step=steps[stepIndex],card=$('trainingCard');card.classList.remove('hidden');card.dataset.step=step.id;card.classList.toggle('attack-preview',step.id==='attackStyles'&&exercise.attackWait>0);
  $('trainingProgress').textContent=(requiredRun?'ENTRAÎNEMENT OBLIGATOIRE · ':'ENTRAÎNEMENT GUIDÉ · ')+(stepIndex+1)+' / '+steps.length;
  $('trainingTitle').textContent=step.title;$('trainingText').textContent=step.text();
  $('trainingGoal').textContent=goalText(step);$('trainingGoal').classList.toggle('done',!!exercise.done);
@@ -217,7 +218,13 @@ function tickTraining(dt,before){
   if(!exercise.spawned){exercise.wait-=dt;if(exercise.wait<=0){Surprise.spawn();exercise.spawned=true;exercise.hits=Adventure.lab?.hits||0}}
   else if(!scares.length){if((Adventure.lab?.hits||0)===exercise.hits)completeStep();else{exercise.spawned=false;exercise.wait=.75}}
  }
- if(id==='chest'&&exercise.chest?.dead)completeStep();
+ if(id==='chest'){
+  if(exercise.chest?.dead)completeStep();
+  else if(!obstacles.includes(exercise.chest)){
+   exercise.wait-=dt;
+   if(exercise.wait<=0){exercise.chest=spawnTrainingChest(Math.max(140,Math.min(570,player.y-180)));exercise.wait=1}
+  }else exercise.wait=.75;
+ }
  if((id==='relic'||id==='shield')&&!drops.length){exercise.wait-=dt;if(exercise.wait<=0){drops=[{x:400,y:560,kind:id==='relic'?'upgrade':'shield',key:id==='relic'?'fragment':undefined,age:0}];exercise.wait=1}}
  if(id==='relic'&&upgrades.fragment>0)completeStep();
  if(id==='shield'&&player.shield>0)completeStep();
@@ -324,5 +331,8 @@ body.menu-open>header,body.menu-open main .heading,body.menu-open .sidebar,body.
 `;
 style.textContent+=`
 .training-required-note{margin-top:9px;padding:9px 11px;border:1px solid #d0a16877;border-radius:9px;background:#4b302888;color:#f0d5a7;font-size:10px;line-height:1.5}.training-required-note b{color:#ffe3b4}.home-required-note{margin:0 0 10px}.main-menu button:disabled{opacity:.48;cursor:not-allowed}.training-details{display:grid;gap:5px;margin-top:7px}.training-profile-note,.training-profile-live{color:#c9b5d7;font-size:8px;line-height:1.4}.training-profile-live{color:#f0d49c}.training-profile{display:grid;gap:2px;padding:6px 8px;border:1px solid #765888;border-radius:7px;background:#2b213b;color:#eadcf2;text-align:left}.training-profile.selected{border-color:#b9e5ef;background:#303048}.training-profile b{font-size:9px}.training-profile small{font-size:8px;line-height:1.35;color:#cdbbd8}#trainingBonusGallery{margin:2px 0 0;padding:7px 9px;font-size:9px}.training-bonus-gallery{width:min(920px,100%);margin:auto;text-align:left}.training-bonus-gallery>h2{margin:7px 0;color:#f2e2fa;font-size:25px;text-align:center}.training-bonus-gallery>h3{margin:15px 0 7px;color:#edc990;font-size:12px;letter-spacing:1px}.training-bonus-gallery>p{color:#cfbddb;font-size:11px;line-height:1.55;text-align:center}.training-bonus-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.training-bonus-item{display:flex;align-items:center;gap:9px;min-width:0;padding:8px;border:1px solid #70547e66;border-radius:9px;background:#21182ddd}.training-bonus-art{flex:0 0 54px}.training-bonus-art .lesson-icon{width:54px;height:54px}.training-bonus-item b{color:#eed9b8;font-size:11px}.training-bonus-item p{margin:4px 0 0;color:#c9b7d4;font-size:9px;line-height:1.45}.training-bonus-gallery>.primary{display:block;margin:16px auto 0}@media(max-width:850px){.training-profile{padding:5px 7px}.training-profile b{font-size:10px}.training-profile small{font-size:9px}.training-profile-note,.training-profile-live{font-size:8px}.training-bonus-grid{grid-template-columns:1fr}.training-bonus-gallery>h2{font-size:21px}.training-bonus-item p{font-size:10px}}@media(max-height:500px){.training-card{max-height:250px;overflow:auto}.training-bonus-gallery>h2{font-size:18px}.training-bonus-item{padding:6px}}
+`;
+style.textContent+=`
+.training-card[data-step="attackStyles"].attack-preview{top:12px;left:50%;right:auto;display:block;width:max-content;max-width:calc(100% - 24px);padding:7px 12px;transform:translateX(-50%);border-radius:999px;background:#161224e8;box-shadow:0 4px 18px #09061288;pointer-events:none}.training-card[data-step="attackStyles"].attack-preview .training-icon,.training-card[data-step="attackStyles"].attack-preview #trainingProgress,.training-card[data-step="attackStyles"].attack-preview #trainingTitle,.training-card[data-step="attackStyles"].attack-preview #trainingText,.training-card[data-step="attackStyles"].attack-preview #trainingDetails,.training-card[data-step="attackStyles"].attack-preview .training-nav{display:none}.training-card[data-step="attackStyles"].attack-preview #trainingGoal{display:block;max-width:min(560px,calc(100vw - 70px));margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.3}
 `;document.head.appendChild(style);Journey.menu();
 })();
