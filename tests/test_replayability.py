@@ -22,10 +22,11 @@ with sync_playwright() as p:
     page.wait_for_selector('#weeklySprint')
     assert page.locator('.main-menu button').count() == 14
 
-    # Graine commune, trois vagues allongées et équipement de défi normalisé.
+    # Graine commune, trois vagues allégées et équipement de défi normalisé.
     page.click('#weeklySprint')
     page.wait_for_selector('.weekly-preflight')
     assert 'Trois vagues' in page.locator('.weekly-preflight').inner_text()
+    assert 'tirs automatiques ×2' in page.locator('.weekly-preflight').inner_text()
     page.click('#weeklyLaunch')
     page.wait_for_function('WeeklySprint.active')
     first = page.evaluate("""()=>({
@@ -41,8 +42,24 @@ with sync_playwright() as p:
     assert first['checkpoint'] is None and first['xp'] == 0
     assert first['recent'] == first['records'] == 0
     assert first['ranked'] == first['daily'] == 0
-    assert len(json.loads(first['schedule'])) >= 60
+    assert len(json.loads(first['schedule'])) == 31
     assert page.evaluate("""()=>{prefs.touchLayout='left';savePrefs();const saved=JSON.parse(localStorage.getItem('minuit-settings')).touchLayout==='left';prefs.touchLayout='standard';savePrefs();return saved}""")
+    # Le tir principal est deux fois plus efficace, sans amplifier le familier
+    # ni modifier les dégâts et le périmètre du sort spécial.
+    combat = page.evaluate("""()=>{
+      const sample=()=>{shots=[];player.fire=0;update(.001);return shots.map(shot=>({damage:shot.damage,familiar:!!shot.familiar}))};
+      upgrades.fire=0;upgrades.familiar=0;const base=sample();
+      upgrades.fire=3;const powered=sample();
+      upgrades.fire=0;upgrades.familiar=1;const withFamiliar=sample();
+      upgrades.familiar=0;shots=[];
+      player.inv=999;enemies=[{x:player.x,y:player.y-80,hp:100,max:100,r:19}];hostile=[];
+      Arsenal.active.cooldown=0;transition=0;const cast=Arsenal.cast(),spellDamage=100-enemies[0].hp;
+      enemies=[];hostile=[];return {base,powered,withFamiliar,cast,spellDamage};
+    }""")
+    assert [shot['damage'] for shot in combat['base']] == [2], combat
+    assert len(combat['powered']) == 2 and all(shot['damage'] == 4 for shot in combat['powered']), combat
+    assert any(shot['familiar'] and shot['damage'] == 1 for shot in combat['withFamiliar']), combat
+    assert combat['cast'] and combat['spellDamage'] == 10, combat
     page.evaluate('WeeklySprint.start()')
     page.wait_for_function('WeeklySprint.active')
     second = page.evaluate("({seed:WeeklySprint.config.seed,stage,schedule:JSON.stringify(schedule)})")
@@ -53,10 +70,11 @@ with sync_playwright() as p:
     # victoire de campagne du monde 5 et avant tout record normal.
     page.evaluate("""()=>{
       wave=5;enemies=[];spawnBoss();
-      const guardian=enemies.find(enemy=>enemy.boss);reward(guardian);
+      const guardian=enemies.find(enemy=>enemy.boss);window.__sprintGuardianHP=guardian.hp;reward(guardian);
     }""")
     page.wait_for_selector('.weekly-result')
     assert '3 vagues + gardien' in page.locator('.weekly-result').inner_text()
+    assert page.evaluate('window.__sprintGuardianHP') == 585
     isolated = page.evaluate("""()=>({
       active:WeeklySprint.active,sandbox:SandboxMode,run:Journey.run,
       recent:Journey.state.recent.length,records:records.length,xp:Journey.state.xp,
@@ -127,6 +145,24 @@ with sync_playwright() as p:
     normal.wait_for_function("state==='play'&&Journey.run?.combat?.spell==='sunray'")
     assert normal.evaluate('Journey.run.combat.broom') == 'comet-flight'
     assert not normal_errors, normal_errors
+
+    # Contrôle isolé hors Sprint : mêmes dégâts de sort, tir et gardien d'origine.
+    balance = browser.new_page(viewport={'width': 1100, 'height': 800})
+    balance.add_init_script(TRAINED)
+    balance.goto(URL)
+    balance.wait_for_selector('#playAdventure')
+    balance.evaluate('LocalLeague.play()')
+    balance.wait_for_function("state==='play'")
+    normal_balance = balance.evaluate("""()=>{
+      upgrades.fire=0;upgrades.familiar=0;shots=[];player.fire=0;update(.001);
+      const shotDamage=shots.find(shot=>!shot.familiar)?.damage;shots=[];
+      player.inv=999;enemies=[{x:player.x,y:player.y-80,hp:100,max:100,r:19}];hostile=[];
+      Arsenal.active.cooldown=0;transition=0;const cast=Arsenal.cast(),spellDamage=100-enemies[0].hp;
+      enemies=[];hostile=[];stage=4;world=worlds[4];wave=5;spawnBoss();
+      return {shotDamage,cast,spellDamage,bossHP:enemies.find(enemy=>enemy.boss).hp,sprint:WeeklySprint.active};
+    }""")
+    assert normal_balance == {'shotDamage': 1, 'cast': True, 'spellDamage': 10, 'bossHP': 900, 'sprint': False}, normal_balance
+    balance.close()
 
     # Le partage ami ouvre directement le bon Sprint avec une cible chiffrée.
     week = page.evaluate('WeeklySprint.weekInfo().week')
@@ -200,4 +236,4 @@ with sync_playwright() as p:
     assert not mobile_errors, mobile_errors
 
     browser.close()
-    print('OK : synergies informatives, bilan et relance, Sprint déterministe, décompte, partage, team dédiée et mobile.')
+    print('OK : synergies informatives, bilan et relance, Sprint allégé et dégâts contrôlés, campagne inchangée, décompte, partage, team dédiée et mobile.')

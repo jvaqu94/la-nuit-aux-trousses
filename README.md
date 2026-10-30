@@ -247,6 +247,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `journey.js` | Grimoire, XP, contrats, collection, bilans, avis et export/import. |
 | `online.js` | Défis et cumul locaux, sans compte dans l’interface actuelle. |
 | `arsenal.js` | Sorts, balais, compagnons et équipement. |
+| `arsenal-art.js` | Illustrations vectorielles locales et pastilles courtes des neuf choix d’équipement. |
 | `adventure.js` | Exploits, variantes, Laboratoire et coffres scellés. |
 | `encounters.js` | Formations, séquences de terrain, statistiques de vol et confort. |
 | `night-hazards.js` | Obstacles, charges des gardiens et bonbons. |
