@@ -127,6 +127,8 @@ Ces éléments et leurs variantes se débloquent par objectifs cumulatifs. Les c
 
 Pendant une partie, les reliques ramassées renforcent temporairement l’armement : cadence, projectiles, poison, missiles, familiers, tirs traversants ou rayon. Leur effet est résumé sous leur nom et expliqué au ramassage. Elles ne remplacent pas le sort actif. La plupart de ces améliorations se déchargent au changement d’univers.
 
+Après chacun des quatre premiers gardiens, un écran permet de choisir une compétence durable pour ce vol : tir renforcé, compagnon qui tire, armure de trois projectiles par monde ou vie supplémentaire avec maximum augmenté. Ces choix sont conservés dans le checkpoint ; le cinquième gardien mène directement à la victoire.
+
 ### Équilibrage des dangers et des bonus
 
 - Les **rochers et coffres ordinaires sont tous destructibles** : un rocher ne peut plus devenir aléatoirement un mur infranchissable qui protège indéfiniment une créature. Les gardes et le sceau d’un coffre scellé conservent leurs règles explicites ; les barrières de parcours restent des passages à franchir.
@@ -270,6 +272,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `combat-feel.js` | Impacts, reliques explicites, champions et retour d’esquive sans coach invasif. |
 | `onboarding.js` | Menu hiérarchisé, guide illustré, notifications stables et entraînement guidé. |
 | `synergies.js` | Noms et annonces des combinaisons de reliques, sans modifier leurs statistiques. |
+| `level-rewards.js` | Choix de compétences après les quatre premiers gardiens, effets durables et reprise. |
 | `weekly.js` | Sprint hebdomadaire, records séparés, partage amical et classement de team dédié. |
 | `replay.js` | Bilan personnalisé, prochain objectif et relance avec le même équipement. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |

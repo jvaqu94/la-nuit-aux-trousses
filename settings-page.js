@@ -9,7 +9,7 @@ function updateAudioSummary(){
  status.textContent=!prefs.sound?'Aucun son ne sera joué.':$('opt-music')?.checked?'Musique, thème et ambiances activés.':'Seuls les effets sonores seront actifs.';
 }
 function leaveSettings(){
- if(['play','pause'].includes(previousState)){state=previousState;if(state==='pause')pauseScreen();else hideOverlay()}
+ if(['play','pause','choice'].includes(previousState)){state=previousState;if(state==='pause')pauseScreen();else if(state==='choice')window.LevelRewards?.showChoice?.();else hideOverlay()}
  else window.LocalLeague?.menu?.();
 }
 settings=function(){
