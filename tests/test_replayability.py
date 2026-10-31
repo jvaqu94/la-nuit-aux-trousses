@@ -62,7 +62,7 @@ with sync_playwright() as p:
     assert first['ranked'] == first['daily'] == 0
     expected_spawns = 19 if first['stage'] == 2 else 16
     assert len(json.loads(first['schedule'])) == expected_spawns
-    assert page.evaluate("""()=>{prefs.touchLayout='left';savePrefs();const saved=JSON.parse(localStorage.getItem('minuit-settings')).touchLayout==='left';prefs.touchLayout='standard';savePrefs();return saved}""")
+    assert page.evaluate("""()=>{const before=prefs.touchLayout;prefs.touchLayout='left';savePrefs();const saved=JSON.parse(localStorage.getItem('minuit-settings')).touchLayout==='left';prefs.touchLayout=before;savePrefs();return saved}""")
     # Le tir principal est deux fois plus efficace, sans amplifier le familier
     # ni modifier les dégâts et le périmètre du sort spécial.
     combat = page.evaluate("""()=>{

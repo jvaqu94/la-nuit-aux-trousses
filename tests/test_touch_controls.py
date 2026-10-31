@@ -85,6 +85,32 @@ with sync_playwright() as p:
     dodged = snapshot(mobile)
     assert dodged['dashCooldown'] > 0 and dodged['drag']['touch'] and dodged['stick'], dodged
     touch('touchEnd', [])
+
+    # En mode gaucher, les mêmes vrais contacts multiples doivent fonctionner
+    # après le déplacement des deux actions à droite.
+    mobile.evaluate("prefs.touchLayout='right';savePrefs();player.dashCD=0;Arsenal.active.cooldown=0")
+    special = mobile.locator('#specialCast').bounding_box()
+    dash = mobile.locator('#dash').bounding_box()
+    pause = mobile.locator('#pause').bounding_box()
+    assert pause['x'] < special['x'] < dash['x'], (pause, special, dash)
+    special_point = {'x': special['x'] + special['width'] / 2,
+                     'y': special['y'] + special['height'] / 2, 'id': 2}
+    dash_point = {'x': dash['x'] + dash['width'] / 2,
+                  'y': dash['y'] + dash['height'] / 2, 'id': 2}
+    first = {'x': start_x, 'y': start_y, 'id': 1}
+    touch('touchStart', [first])
+    right_pressed = snapshot(mobile)
+    touch('touchStart', [first, special_point])
+    right_cast = snapshot(mobile)
+    assert right_cast['cooldown'] > 0, right_cast
+    assert right_cast['drag']['id'] == right_pressed['drag']['id'] and right_cast['stick'], right_cast
+    touch('touchEnd', [])
+    mobile.evaluate('player.dashCD=0')
+    touch('touchStart', [first])
+    touch('touchStart', [first, dash_point])
+    right_dodged = snapshot(mobile)
+    assert right_dodged['dashCooldown'] > 0 and right_dodged['drag']['touch'] and right_dodged['stick'], right_dodged
+    touch('touchEnd', [])
     mobile.click('#pause')
     assert mobile.evaluate("state === 'pause'")
     mobile.click('#resume')
@@ -111,4 +137,4 @@ with sync_playwright() as p:
     assert 'F · PRÊT' in desktop.locator('#specialCast').inner_text()
     assert not errors, errors
     browser.close()
-    print('OK : glisser relatif sans saut, indicateur tactile, sort et esquive au second doigt, pilotage conservé, souris compatible. Aucune erreur JS.')
+    print('OK : glisser relatif sans saut, sort et esquive au second doigt dans les profils droitier et gaucher, pilotage conservé, souris compatible. Aucune erreur JS.')
