@@ -48,15 +48,15 @@ with sync_playwright() as p:
     page.wait_for_selector('.settings-page #touchLayout', state='visible')
     labels = page.locator('#touchLayout option').all_text_contents()
     assert labels == [
-        'Équilibrée · disposition actuelle',
-        'Droitière · boutons d’action à gauche',
-        'Gauchère · boutons d’action à droite',
+        'Droitier · Esquive et sort spécial à gauche',
+        'Gaucher · Esquive et sort spécial à droite',
     ], labels
+    assert page.input_value('#touchLayout') == 'left'
     assert 'bond rapide' in page.locator('.settings-touch-controls').inner_text()
-    page.select_option('#touchLayout', 'left')
+    page.select_option('#touchLayout', 'right')
     page.click('#settingsCancel')
     page.wait_for_selector('.home-menu #playAdventure')
-    assert page.evaluate("prefs.touchLayout === 'standard'")
+    assert page.evaluate("prefs.touchLayout === 'left'")
 
     # Droitière : les deux boutons d'action sont à gauche, la pause passe à droite.
     page.click('#localSettings')
@@ -149,13 +149,17 @@ with sync_playwright() as p:
     narrow = browser.new_page(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
     narrow_errors = []
     narrow.on('pageerror', lambda error: narrow_errors.append(str(error)))
-    narrow.add_init_script("localStorage.setItem('minuit-settings',JSON.stringify({sound:false,music:false,touchLayout:'left'}));localStorage.setItem('minuit-journey-v1',JSON.stringify({version:1,trainingDone:true}))")
+    narrow.add_init_script("localStorage.setItem('minuit-settings',JSON.stringify({sound:false,music:false,touchLayout:'standard'}));localStorage.setItem('minuit-journey-v1',JSON.stringify({version:1,trainingDone:true}))")
     narrow.goto('http://localhost:3000', wait_until='domcontentloaded')
     narrow.wait_for_selector('.home-menu #playAdventure')
     narrow.evaluate('Journey.state.tutorialDone=true;Journey.state.dodgeGuideDone=true')
     narrow.click('#playAdventure')
     narrow.wait_for_function("state === 'play'")
     assert button_order(narrow) == ['specialCast', 'dash', 'pause'], button_order(narrow)
+    assert_buttons_fit(narrow)
+    assert narrow.evaluate("prefs.touchLayout === 'left'"), 'La disposition standard historique doit migrer vers droitier.'
+    narrow.evaluate("prefs.touchLayout='right';savePrefs()")
+    assert button_order(narrow) == ['pause', 'specialCast', 'dash'], button_order(narrow)
     assert_buttons_fit(narrow)
     narrow.close()
 
