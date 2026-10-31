@@ -244,15 +244,17 @@ with sync_playwright() as p:
     assert not bob.locator('#teamCopyCode').count()
     assert 'Compte créé' in bob.locator('#archives b').inner_text()
     assert 'Tu es dans la team' in bob.locator('#archives b').inner_text()
-    assert 'Ton prochain score comptera' in bob.locator('#archives small').inner_text()
+    assert 'Ta prochaine partie classée comptera' in bob.locator('#archives small').inner_text()
     assert bob.locator('#archives').evaluate("node=>node.classList.contains('home-account-welcome')")
     assert bob.evaluate('MinuitCloud.inTeam && MinuitCloud.connected')
     assert bob.evaluate("document.querySelector('#overlay').scrollTop === 0")
     bob.screenshot(path='/tmp/invite-home-mobile.png')
 
     # Le premier vol de l’invité compte immédiatement, avant la fin du décompte de mort.
-    bob.click('#playAdventure')
-    bob.wait_for_function("state==='play'")
+    bob.click('#playRanked')
+    bob.wait_for_selector('#launchLocal')
+    bob.click('#launchLocal')
+    bob.wait_for_function("state==='play' && mode==='ranked'")
     bob.evaluate('gameTime=35;score=2345;end(false)')
     bob.wait_for_selector('.death-transition')
     assert bob.locator('#deathCountdown').is_visible()
@@ -268,7 +270,7 @@ with sync_playwright() as p:
     assert bob.locator('.death-transition').count() == 1
     assert submissions[0]['user_id'] == 'user-bob'
     assert submissions[0]['body']['p_score'] == 2345
-    assert submissions[0]['body']['p_mode'] == 'free'
+    assert submissions[0]['body']['p_mode'] == 'ranked'
     bob.screenshot(path='/tmp/death-countdown-mobile.png')
     bob.wait_for_selector('.journey-result-screen')
     bob.wait_for_selector('.journey-result-screen .arcade-score-table')
@@ -309,6 +311,23 @@ with sync_playwright() as p:
     assert not [call for call in calls if call['path'] == '/auth/v1/signup']
     stored = bob.evaluate("Object.keys(localStorage).map(key => localStorage.getItem(key)).join('\\n')")
     assert 'mot-de-passe-bob' not in stored
+
+    # Un score classique reste local : aucun appel de classement team n’est émis.
+    bob.click('#archivesBack')
+    bob.wait_for_selector('#playAdventure')
+    submission_count = len([call for call in calls if call['path'].endswith('/minuit_submit_team_score')])
+    bob.click('#playAdventure')
+    bob.wait_for_function("state==='play' && mode==='story'")
+    bob.evaluate('gameTime=35;score=9999;end(false)')
+    bob.wait_for_selector('.journey-result-screen')
+    bob.wait_for_timeout(250)
+    assert len([call for call in calls if call['path'].endswith('/minuit_submit_team_score')]) == submission_count
+    assert team['members']['user-bob']['score'] == 2345
+    assert 'Partie classique' in bob.locator('#teamResultStatus').inner_text()
+    bob.click('#return')
+    bob.wait_for_selector('#playAdventure')
+    bob.click('#archives')
+    bob.wait_for_selector('#teamCopyCode')
 
     # Le même pseudo et mot de passe retrouvent la team après déconnexion.
     bob.click('#cloudLogout')

@@ -75,8 +75,8 @@ Le tir principal est **automatique**.
 
 | Mode | Règles principales |
 |---|---|
-| **Aventure libre** | Vols illimités, difficulté réglable, progression et records personnels. |
-| **Défi score** | Trois essais par jour, en difficulté **Nuit noire**. Seule l’amélioration du meilleur score du jour augmente le cumul local. |
+| **Partie classique** | Vols illimités, difficulté réglable, progression et highscore classique (`normal`, `easy` ou `hard`). Ce mode ne compte pas pour la team. |
+| **Partie classée** | Trois essais par jour, en difficulté **Nuit noire**, avec prévol et highscore `ranked` séparé. Seule l’amélioration du meilleur score du jour augmente le cumul local ; avec une team, ce mode seul alimente son classement. |
 | **Défi primes** | Un essai séparé par jour et trois objectifs à prime unique. Le score brut de cet essai ne constitue pas un quatrième score classé. |
 | **Sprint hebdo** | Trois vagues puis un gardien, environ 3–5 minutes, graine commune du lundi au dimanche et équipement normalisé. Records hebdomadaires séparés, défi ami par lien et classement de team dédié ; aucun essai quotidien, XP ou record de campagne n’est utilisé. Le bilan détaille les sources de points, le meilleur combo et chaque section par rapport au record précédent. Un bouton permet de s’entraîner contre le gardien de la semaine dans le Laboratoire, puis de revenir au prévol. |
 | **Entraînement guidé** | Dix exercices interactifs avec consignes illustrées et validation manuelle. Aucun score, XP, déblocage ou essai quotidien n’est crédité. |
@@ -191,14 +191,14 @@ Les **Réglages** conservent les exports et imports locaux, tandis que le compte
 
 Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
 
-Après une défaite, une transition affiche un **compte à rebours visible** avant l’ouverture du bilan. Elle dure au moins trois secondes et s’adapte à la durée du jingle, avec un repli identique si l’audio est indisponible. Le score de team est envoyé dès la fin du vol, sans attendre cette transition. La page **HI-SCORES / bilan du vol** utilise ensuite toute la zone de jeu : elle conserve le score, le record, le Top 10 local, le classement de team et les actions pour rejouer ou revenir au menu.
+Après une défaite, une transition affiche un **compte à rebours visible** avant l’ouverture du bilan. Elle dure au moins trois secondes et s’adapte à la durée du jingle, avec un repli identique si l’audio est indisponible. Le score d’une **partie classée** est envoyé à la team dès la fin du vol, sans attendre cette transition ; une partie classique ou un défi quotidien n’est pas envoyé. La page **HI-SCORES / bilan du vol** utilise ensuite toute la zone de jeu : elle conserve le score, le record de la catégorie choisie, le Top 10 local correspondant, le classement de team pour le classé et les actions pour rejouer ou revenir au menu.
 
-- Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
+- Les onglets **Clair de lune**, **Nuit noire**, **Cauchemar**, **Partie classée** et **Défi du jour** conservent des classements distincts ; un défi d’un autre jour ne se mélange pas au défi courant.
 - Lorsque la liste dépasse la fenêtre, elle défile verticalement en boucle. Le survol fait une pause temporaire ; le bouton de défilement, la molette, le toucher et les touches de navigation permettent une consultation manuelle.
 - Avec la préférence système « réduire les animations », le tableau est manuel par défaut. Le défilement peut toujours être activé explicitement.
 - Sur smartphone, trois à six lignes sont visibles selon la hauteur disponible, avec le titre, les scores et les commandes dans la fenêtre plein écran.
 - Quand un compte avec pseudo est connecté, ce pseudo est automatiquement utilisé pour les nouveaux records au lieu de « Sorcière ». Les scores déjà enregistrés conservent leur nom d’origine.
-- Ces records restent locaux à l’appareil. Le classement amical de team et sa synchronisation optionnelle continuent de fonctionner séparément dans le bilan.
+- Ces records restent locaux à l’appareil. Les catégories classique, classée, défi quotidien et Sprint ne sont jamais mélangées. Le classement amical de team et sa synchronisation optionnelle continuent de fonctionner séparément dans le bilan.
 
 ## Supabase : cloud, teams et avis
 
@@ -213,13 +213,13 @@ La confirmation d’adresse reste obligatoire **uniquement pour l’inscription 
 Le menu **Compte & team** permet, après connexion, de créer une team ou de rejoindre celle d’un autre joueur avec un code de 10 caractères. Le pseudo du compte est utilisé dans la team ; les comptes e-mail sans pseudo peuvent choisir leur nom de team. Les adresses e-mail ne sont jamais affichées dans le classement.
 
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
-- **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
+- **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties classées comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
 - Seul l’administrateur peut modifier ces règles, réinitialiser la campagne ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
-- Le créateur dispose aussi d’une page **Statistiques de la team** sur 7, 30, 90 ou 365 jours : synthèse, parties et points par jour, activité par membre et 50 derniers vols avec monde, vague et mode. Les **points gagnés** additionnent les scores de tous les vols comptabilisés, et non les seuls highscores. Cette page et son RPC sont réservés à l’administrateur et ne renvoient aucun e-mail ni identifiant de connexion.
+- Le créateur dispose aussi d’une page **Statistiques de la team** sur 7, 30, 90 ou 365 jours : synthèse, parties et points par jour, activité par membre et 50 derniers vols avec monde, vague et mode. Les **points gagnés** additionnent les scores de tous les vols classés comptabilisés, et non les seuls highscores. Cette page et son RPC sont réservés à l’administrateur et ne renvoient aucun e-mail ni identifiant de connexion.
 - Dans **Compte & team**, la section **Administration · Campagne** reste directement visible pour l’administrateur, hors du volet repliable des règles. **Remettre les scores et les parties à zéro** demande une confirmation puis supprime toutes les tentatives et tous les highscores de la team pour tous les membres. La team, ses membres, son code et ses règles sont conservés ; les autres appareils voient la remise à zéro après actualisation.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team. Après une jointure réussie, le jeu revient automatiquement à l’accueil avec une confirmation ; en cas d’échec, l’erreur et l’invitation restent affichées. Le visiteur peut aussi ignorer l’invitation.
-- Après chaque vol, le score est transmis automatiquement. Chaque vol comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
-- La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol reste jouable localement mais ne compte pas pour la team.
+- Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
+- La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol classé reste jouable localement mais ne compte pas pour la team. Les parties classiques et les défis quotidiens ne sont jamais comptés dans le classement de campagne.
 - Seul le **meilleur score de chaque membre** est conservé ; le tableau affiche aussi le total de ces records et les parties restantes.
 - Quitter la team retire le score et les tentatives du joueur de son classement. Une team vide est supprimée.
 - Les tables de teams ne sont pas accessibles directement par l’API : des fonctions authentifiées contrôlent chaque opération et aucune donnée de team n’est publique.
@@ -334,6 +334,7 @@ python tests/test_soundtrack.py
 python tests/test_music_mp3.py
 python tests/test_supabase.py
 python tests/test_teams.py
+python tests/test_mode_selection_browser.py
 python tests/test_pseudo_invite.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py

@@ -20,7 +20,7 @@ with sync_playwright() as p:
     page.add_init_script(TRAINED)
     page.goto(URL)
     page.wait_for_selector('#weeklySprint')
-    assert page.locator('.main-menu button').count() == 14
+    assert page.locator('.main-menu button').count() == 15
 
     # Graine commune, trois vagues allégées et équipement de défi normalisé.
     page.click('#weeklySprint')

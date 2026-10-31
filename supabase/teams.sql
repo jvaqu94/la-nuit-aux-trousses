@@ -72,7 +72,7 @@ begin
     'name', t.name,
     'code', t.join_code,
     'memberCount', (select count(*) from public.team_members tm where tm.team_id = t.id),
-    'totalScore', (select coalesce(sum(ts.score), 0) from public.team_scores ts where ts.team_id = t.id)
+    'totalScore', (select coalesce(sum(ts.score), 0) from public.team_scores ts where ts.team_id = t.id and ts.mode = 'ranked')
   ) into v_team
   from public.teams t
   where t.id = v_team_id;
@@ -96,7 +96,7 @@ begin
       (tm.user_id = v_uid) as "isYou"
     from public.team_members tm
     left join public.team_scores ts
-      on ts.team_id = tm.team_id and ts.user_id = tm.user_id
+      on ts.team_id = tm.team_id and ts.user_id = tm.user_id and ts.mode = 'ranked'
     where tm.team_id = v_team_id
   ) ranked;
 
@@ -265,7 +265,7 @@ begin
   if p_score is null or p_score not between 0 and 100000000 then
     raise exception 'SCORE_INVALID';
   end if;
-  if p_mode is null or p_mode not in ('free', 'ranked', 'daily') then
+  if p_mode is null or p_mode <> 'ranked' then
     raise exception 'MODE_INVALID';
   end if;
   if p_difficulty is null or p_difficulty not in ('easy', 'normal', 'hard') then
@@ -284,17 +284,17 @@ begin
 
   select ts.score into v_previous
   from public.team_scores ts
-  where ts.team_id = v_team_id and ts.user_id = v_uid;
+  where ts.team_id = v_team_id and ts.user_id = v_uid and ts.mode = 'ranked';
 
   insert into public.team_scores(team_id, user_id, score, mode, difficulty, stage, wave, updated_at)
   values (v_team_id, v_uid, p_score, p_mode, p_difficulty, p_stage, p_wave, now())
   on conflict (team_id, user_id) do update set
-    score = greatest(public.team_scores.score, excluded.score),
-    mode = case when excluded.score > public.team_scores.score then excluded.mode else public.team_scores.mode end,
-    difficulty = case when excluded.score > public.team_scores.score then excluded.difficulty else public.team_scores.difficulty end,
-    stage = case when excluded.score > public.team_scores.score then excluded.stage else public.team_scores.stage end,
-    wave = case when excluded.score > public.team_scores.score then excluded.wave else public.team_scores.wave end,
-    updated_at = case when excluded.score > public.team_scores.score then now() else public.team_scores.updated_at end
+    score = case when public.team_scores.mode <> 'ranked' then excluded.score else greatest(public.team_scores.score, excluded.score) end,
+    mode = case when public.team_scores.mode <> 'ranked' or excluded.score > public.team_scores.score then excluded.mode else public.team_scores.mode end,
+    difficulty = case when public.team_scores.mode <> 'ranked' or excluded.score > public.team_scores.score then excluded.difficulty else public.team_scores.difficulty end,
+    stage = case when public.team_scores.mode <> 'ranked' or excluded.score > public.team_scores.score then excluded.stage else public.team_scores.stage end,
+    wave = case when public.team_scores.mode <> 'ranked' or excluded.score > public.team_scores.score then excluded.wave else public.team_scores.wave end,
+    updated_at = case when public.team_scores.mode <> 'ranked' or excluded.score > public.team_scores.score then now() else public.team_scores.updated_at end
   returning score into v_best;
 
   return json_build_object(

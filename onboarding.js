@@ -299,7 +299,7 @@ function applyRequirement(){
  if(!note&&route){route.id='trainingRequiredNote';route.className='training-required-note home-required-note';note=route}
  if(!note){document.querySelector('.menu-primary')?.insertAdjacentHTML('afterend','<div class="training-required-note" id="trainingRequiredNote"></div>');note=$('trainingRequiredNote')}
  if(note)note.innerHTML='<b>Première connexion</b> · '+steps.length+' exercices obligatoires avant de jouer. Sans score ni récompense.';
- for(const id of ['localResume','localRanked','localDaily','prepareFlight','labMenu','weeklySprint'])if($(id)){$(id).disabled=true;$(id).title='Termine d’abord l’entraînement obligatoire.';$(id).setAttribute('aria-describedby','trainingRequiredNote')}
+ for(const id of ['localResume','playRanked','localRanked','localDaily','prepareFlight','labMenu','weeklySprint'])if($(id)){$(id).disabled=true;$(id).title='Termine d’abord l’entraînement obligatoire.';$(id).setAttribute('aria-describedby','trainingRequiredNote')}
 }
 
 /* Tous les réglages restent accessibles, mais les deux décisions principales et les

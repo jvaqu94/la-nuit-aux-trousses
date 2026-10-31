@@ -1,7 +1,8 @@
 -- La Nuit aux Trousses — statistiques privées du créateur de team.
 -- À exécuter après teams.sql et team_rules.sql.
 -- Les points sont la somme des scores des vols comptabilisés, et non la somme
--- des seuls highscores. Aucun e-mail ni identifiant de connexion n’est renvoyé.
+-- des seuls highscores. Seules les parties classées sont incluses.
+-- Aucun e-mail ni identifiant de connexion n’est renvoyé.
 
 create index if not exists team_score_attempts_team_daily_idx
 on public.team_score_attempts(team_id, played_on);
@@ -57,6 +58,7 @@ begin
   ) into v_summary
   from public.team_score_attempts ta
   where ta.team_id = v_team_id
+    and ta.mode = 'ranked'
     and ta.played_on between v_since and v_until;
 
   select coalesce(
@@ -72,6 +74,7 @@ begin
       max(ta.stage::integer * 10 + ta.wave) as "bestProgress"
     from public.team_score_attempts ta
     where ta.team_id = v_team_id
+      and ta.mode = 'ranked'
       and ta.played_on between v_since and v_until
     group by ta.played_on
   ) daily;
@@ -99,6 +102,7 @@ begin
     left join public.team_score_attempts ta
       on ta.team_id = tm.team_id
       and ta.user_id = tm.user_id
+      and ta.mode = 'ranked'
       and ta.played_on between v_since and v_until
     where tm.team_id = v_team_id
     group by tm.user_id, tm.display_name, t.created_by
@@ -120,6 +124,7 @@ begin
     join public.team_members tm
       on tm.team_id = ta.team_id and tm.user_id = ta.user_id
     where ta.team_id = v_team_id
+      and ta.mode = 'ranked'
       and ta.played_on between v_since and v_until
     order by ta.created_at desc, ta.run_id desc
     limit 50

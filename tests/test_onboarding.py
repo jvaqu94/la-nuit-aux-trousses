@@ -10,12 +10,12 @@ with sync_playwright() as p:
     page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
 
-    assert page.locator('.main-menu button').count() == 14
+    assert page.locator('.main-menu button').count() == 15
     assert 'Éclaircir les ombres' not in page.locator('.main-menu').inner_text()
     assert page.locator('#playAdventure').is_visible()
     assert page.locator('#localRanked').is_visible() and page.locator('#labMenu').is_visible()
     assert page.locator('#trainingRequiredNote').is_visible()
-    assert page.locator('#localRanked').is_disabled() and page.locator('#labMenu').is_disabled() and page.locator('#weeklySprint').is_disabled()
+    assert page.locator('#playRanked').is_disabled() and page.locator('#localRanked').is_disabled() and page.locator('#labMenu').is_disabled() and page.locator('#weeklySprint').is_disabled()
     assert 'Entraînement obligatoire' in page.locator('#playAdventure').inner_text()
 
     page.click('#localHelp')
