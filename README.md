@@ -161,7 +161,9 @@ L’entrée **Grimoire évolutif** de l’accueil réunit la progression dans un
 
 - **Pages** compte les pages dévoilées, résume le dernier vol et indique les objectifs les plus proches dans la Collection, l’Arsenal, les variantes et les maîtrises cosmétiques ;
 - **Sorts & exploits** présente les vraies capacités et leurs compromis avec les illustrations de l’Arsenal, ainsi que la progression des quatre variantes ;
-- **Collection** conserve l’aperçu et l’équipement des apparences, et détaille les sept sceaux de maîtrise avec leurs conditions réelles.
+- **Collection** conserve l’aperçu et l’équipement des apparences, et détaille les sept sceaux de maîtrise avec leurs conditions réelles et des médaillons illustrés.
+
+Les badges de reliques affichés dans **Ton Grimoire** pendant les vols reprennent également les illustrations vectorielles des objets au sol. Le médaillon de progression et les sceaux utilisent les mêmes personnages, matières et couleurs que le jeu ; les sceaux verrouillés sont désaturés et portent un cadenas.
 
 Cette présentation utilise les progressions existantes : elle n’ajoute ni monnaie, ni bonus de puissance, ni nouvelle règle de déblocage. Les défis classés, quotidiens et Sprint restent normalisés.
 
