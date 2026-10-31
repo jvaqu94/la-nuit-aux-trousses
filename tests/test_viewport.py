@@ -84,7 +84,9 @@ with sync_playwright() as p:
         page.click('#wardrobe')
         page.locator('#collectionBack').scroll_into_view_if_needed()
         assert page.locator('#collectionBack').is_visible()
-        check()
+        # Comme l’accueil, le Grimoire est une page plein écran sur téléphone ;
+        # le ratio du terrain ne s’applique pas à cette consultation.
+        check(home=width < 851)
         print(width, height, 'terrain', round(geometry['a']['w'], 1), round(geometry['a']['h'], 1), 'sans débordement')
         page.close()
     assert not errors, errors

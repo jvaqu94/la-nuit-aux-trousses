@@ -21,6 +21,27 @@ PROFILE = {
 SEED = "(()=>localStorage.setItem('minuit-journey-v1'," + json.dumps(json.dumps(PROFILE, ensure_ascii=False)) + "))()"
 
 
+def assert_grimoire_full_page(page, width):
+    geometry = page.evaluate("""() => {
+        const rect = selector => {
+            const r = document.querySelector(selector).getBoundingClientRect();
+            return {top:r.top, bottom:r.bottom, width:r.width, height:r.height};
+        };
+        return {
+            arena:rect('.arena'), holder:rect('.layout>div:first-child'), overlay:rect('#overlay'),
+            touchbar:getComputedStyle(document.querySelector('.touchbar')).display,
+            scrollWidth:document.documentElement.scrollWidth
+        };
+    }""")
+    arena, holder, overlay = geometry['arena'], geometry['holder'], geometry['overlay']
+    assert arena['width'] + 2 >= holder['width'], geometry
+    assert arena['height'] + 2 >= holder['height'], geometry
+    assert abs(arena['top'] - holder['top']) <= 2, geometry
+    assert overlay['height'] + 2 >= arena['height'], geometry
+    assert geometry['touchbar'] == 'none', geometry
+    assert geometry['scrollWidth'] <= width, geometry
+
+
 def check_overview(page):
     page.click('#wardrobe')
     page.wait_for_selector('.grimoire-screen')
@@ -150,9 +171,11 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     mobile.wait_for_selector('#wardrobe')
     mobile.click('#wardrobe')
     mobile.wait_for_selector('.grimoire-book-summary')
+    assert_grimoire_full_page(mobile, 390)
     for tab in ['overview', 'spells', 'collection']:
         mobile.click(f'[data-grimoire-tab="{tab}"]')
         mobile.wait_for_selector(f'#grimoireTab-{tab}[aria-selected="true"]')
+        assert_grimoire_full_page(mobile, 390)
         assert mobile.evaluate('document.documentElement.scrollWidth <= 390')
         if tab == 'spells':
             assert mobile.evaluate("""()=>[...document.querySelectorAll('.grimoire-spellbook .grimoire-reward-card')].every(card=>{const footer=card.querySelector('.grimoire-reward-pick,.grimoire-reward-progress');return !footer||footer.getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1})""")
@@ -170,6 +193,14 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     assert mobile.locator('#badges .relic-badge-icon img').count() == 3
     assert mobile.evaluate("getComputedStyle(document.querySelector('#badges .relic-badge-copy b')).fontSize") == '11px'
     assert mobile.evaluate('document.documentElement.scrollWidth <= 390')
+    mobile.locator('#panelCollection').scroll_into_view_if_needed()
+    mobile.click('#panelCollection')
+    mobile.wait_for_selector('.grimoire-screen')
+    assert_grimoire_full_page(mobile, 390)
+    mobile.locator('#collectionBack').scroll_into_view_if_needed()
+    mobile.click('#collectionBack')
+    assert mobile.evaluate("state === 'pause'")
+    mobile_context.close()
 
     narrow_context = browser.new_context(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
     narrow = narrow_context.new_page()
@@ -178,9 +209,11 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     narrow.goto('http://localhost:3000')
     narrow.click('#wardrobe')
     narrow.wait_for_selector('.grimoire-screen')
+    assert_grimoire_full_page(narrow, 360)
     for tab in ['spells', 'collection']:
         narrow.click(f'[data-grimoire-tab="{tab}"]')
         narrow.wait_for_selector(f'#grimoireTab-{tab}[aria-selected="true"]')
+        assert_grimoire_full_page(narrow, 360)
         assert narrow.evaluate('document.documentElement.scrollWidth <= 360')
     assert narrow.locator('.wardrobe-item .grimoire-reward-art img, .wardrobe-item .grimoire-reward-art svg').count() == 25
     narrow.locator('[data-item="dodge-wisp"]').scroll_into_view_if_needed()

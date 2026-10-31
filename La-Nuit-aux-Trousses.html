@@ -1115,6 +1115,17 @@ body:has(.journey-result-screen) .arena:has(.overlay:not(.hidden)){width:100%!im
 .overlay:has(.journey-result-screen){justify-content:flex-start;padding:14px}
 @media(max-width:850px){.overlay:has(.journey-result-screen){padding:10px}}
 `;
+css.textContent+=`
+/* Le Grimoire est une page de consultation plein écran sur téléphone, pas
+   une carte confinée aux dimensions du terrain de jeu. */
+@media(max-width:850px){
+ body:has(.grimoire-screen) .layout{grid-template-columns:minmax(0,1fr)!important}
+ body:has(.grimoire-screen) .sidebar,body:has(.grimoire-screen) .touchbar{display:none!important}
+ body:has(.grimoire-screen) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+ .overlay:has(.grimoire-screen){justify-content:flex-start;padding:10px}
+ .grimoire-screen{width:100%;min-height:100%}
+}
+`;
 document.head.appendChild(css);
 const holder=document.querySelector('.layout>div:first-child'),arena=document.querySelector('.arena'),aside=document.querySelector('.sidebar'),bar=document.querySelector('.touchbar');
 arena.insertAdjacentHTML('beforeend','<div class="touch-stick hidden" id="touchStick" aria-hidden="true"><i></i></div>');
