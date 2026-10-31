@@ -76,7 +76,7 @@ Le tir principal est **automatique**.
 | Mode | Règles principales |
 |---|---|
 | **Partie classique** | Vols illimités, difficulté réglable, progression et highscore classique (`normal`, `easy` ou `hard`). Ce mode ne compte pas pour la team. |
-| **Partie classée** | Trois essais par jour, en difficulté **Nuit noire**, avec prévol et highscore `ranked` séparé. Seule l’amélioration du meilleur score du jour augmente le cumul local ; avec une team, ce mode seul alimente son classement. |
+| **Partie classée** | Trois essais par jour, en difficulté **Nuit noire**, avec prévol et highscore `ranked` séparé. L’entrée est affichée uniquement lorsqu’une team est confirmée ; sans team, elle est masquée. Seule l’amélioration du meilleur score du jour augmente le cumul local ; ce mode seul alimente le classement de la team. |
 | **Défi primes** | Un essai séparé par jour et trois objectifs à prime unique. Le score brut de cet essai ne constitue pas un quatrième score classé. |
 | **Sprint hebdo** | Trois vagues puis un gardien, environ 3–5 minutes, graine commune du lundi au dimanche et équipement normalisé. Records hebdomadaires séparés, défi ami par lien et classement de team dédié ; aucun essai quotidien, XP ou record de campagne n’est utilisé. Le bilan détaille les sources de points, le meilleur combo et chaque section par rapport au record précédent. Un bouton permet de s’entraîner contre le gardien de la semaine dans le Laboratoire, puis de revenir au prévol. |
 | **Entraînement guidé** | Dix exercices interactifs avec consignes illustrées et validation manuelle. Aucun score, XP, déblocage ou essai quotidien n’est crédité. |

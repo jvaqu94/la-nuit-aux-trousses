@@ -20,6 +20,9 @@ with sync_playwright() as p:
     page.on('dialog',lambda dialog:dialog.accept())
     page.add_init_script(INIT)
     page.goto('http://localhost:3000')
+    page.wait_for_selector('#playAdventure')
+    assert page.locator('#playRanked').count()==0 and page.locator('#localRanked').count()==0
+    page.evaluate("window.MinuitCloud={inTeam:true,connected:false,configured:false};Journey.menu()")
     page.wait_for_selector('#playRanked')
     assert page.locator('#playAdventure').is_visible()
     assert 'Classique' in page.locator('#playAdventure').inner_text()
@@ -90,6 +93,9 @@ with sync_playwright() as p:
     mobile=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True)
     mobile.add_init_script(INIT)
     mobile.goto('http://localhost:3000')
+    mobile.wait_for_selector('#playAdventure')
+    assert mobile.locator('#playRanked').count()==0 and mobile.locator('#localRanked').count()==0
+    mobile.evaluate("window.MinuitCloud={inTeam:true,connected:false,configured:false};Journey.menu()")
     mobile.wait_for_selector('#playRanked')
     assert mobile.locator('#playAdventure').is_visible() and mobile.locator('#playRanked').is_visible()
     assert mobile.evaluate('document.documentElement.scrollWidth<=390')

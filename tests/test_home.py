@@ -76,7 +76,8 @@ with sync_playwright() as p:
     }""")
     assert portrait['src'] and portrait['loaded'] and 'profil' in portrait['alt'], portrait
     assert portrait['menuHeight'] < 760 and not portrait['titleOverflow'], portrait
-    assert portrait['buttons'] == 15, portrait
+    assert portrait['buttons'] == 13, portrait
+    assert page.locator('#playRanked').count() == 0 and page.locator('#localRanked').count() == 0
     assert page.locator('#menuVisual .lesson-icon').count() == 0
 
     page.click('#homeSoundToggle')

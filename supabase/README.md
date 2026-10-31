@@ -83,7 +83,7 @@ Le mot de passe n’est jamais enregistré par le jeu. La session Supabase reste
 
 ## 5. Utiliser les teams et les highscores
 
-Après connexion, le panneau **Team & highscore** permet de :
+Après connexion, le panneau **Team & highscore** permet de créer ou rejoindre une team. Les entrées **Classée** de l’accueil restent masquées tant que la team n’est pas confirmée, puis apparaissent automatiquement. Le panneau permet de :
 
 1. choisir un pseudo de 2 à 24 caractères ;
 2. à la création, définir la limite quotidienne et, si nécessaire, la période de jeu ;

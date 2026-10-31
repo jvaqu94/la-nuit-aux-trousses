@@ -989,6 +989,7 @@ window.MinuitCloud={
  refreshTeam:()=>loadTeam(true),
  get configured(){return enabled},
  get connected(){return!!session},
+ get teamLoaded(){return teamLoaded},
  get inTeam(){return!!session&&!!teamData.team},
  get user(){return session?.user||null}
 };
