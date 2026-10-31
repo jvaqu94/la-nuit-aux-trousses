@@ -22,12 +22,17 @@ function ensure(){
 }
 function maxLives(){return 5+(enabled()?ensure().life:0)}
 function shotDamage(base){return (Number(base)||0)+(enabled()?ensure().power:0)}
-function familiarCount(base){return Math.max(0,Math.floor(Number(base)||0))+(enabled()&&ensure().companion?1:0)}
-function companionDamage(base){return (Number(base)||0)+(enabled()?Math.max(0,ensure().companion-1):0)}
+function familiarCount(base){return Math.max(0,Math.floor(Number(base)||0))+(enabled()?ensure().companion:0)}
+function companionDamage(base){return Number(base)||0}
 function art(item){const src=window.CollectibleArt?.art?.[item.art]?.src;return src?`<img src="${src}" alt="" aria-hidden="true">`:`<span class="level-reward-fallback" aria-hidden="true">${item.icon}</span>`}
 function detail(item,r){
  if(item.id==='power')return `Tir automatique : <strong>+1 dégât</strong><small>Puissance durable actuelle : +${r.power}</small>`;
- if(item.id==='companion')return r.companion?`Le compagnon gagne <strong>+1 dégât</strong> par tir<small>Un compagnon conservé · niveau ${r.companion}</small>`:`Un compagnon <strong>tire avec toi</strong><small>Conservé dans tous les mondes</small>`;
+ if(item.id==='companion'){
+  const next=Math.max(0,Math.floor(Number(upgrades.familiar)||0))+r.companion+1;
+  if(next===1)return `Un compagnon <strong>tire avec toi</strong><small>À gauche de la sorcière · conservé dans tous les mondes</small>`;
+  if(next===2)return `Un 2e compagnon <strong>rejoint le premier</strong><small>Un de chaque côté · chacun tire avec toi</small>`;
+  return `Un ${next}e compagnon <strong>rejoint l’orbite</strong><small>${next} compagnons au total · les suivants tournent autour de la sorcière</small>`;
+ }
  if(item.id==='armor')return r.armor?`Armure : <strong>+1 charge</strong> par monde<small>${capacityFor(r.armor)} charges actuellement · recharge au prochain monde</small>`:`Absorbe <strong>3 projectiles</strong> par monde<small>Recharge à chaque nouveau monde</small>`;
  return `<strong>+1 vie</strong> maintenant et +1 vie maximum<small>Maximum actuel : ${5+r.life} vies</small>`;
 }
@@ -76,7 +81,7 @@ function syncHUD(){
  const el=$('levelRewardsHUD');if(!el)return;
  const r=ensure(),has=r.power||r.companion||r.armor||r.life,visible=enabled()&&has&&['play','pause','choice'].includes(state);
  el.classList.toggle('hidden',!visible);if(!visible)return;
- const parts=[];if(r.power)parts.push('✦ TIR +'+r.power);if(r.companion)parts.push('◆ COMPAGNON N'+r.companion);if(r.armor)parts.push('⬟ '+r.armorCharges+'/'+capacityFor(r.armor)+' BALLES');if(r.life)parts.push('♥ MAX +'+r.life);
+ const parts=[];if(r.power)parts.push('✦ TIR +'+r.power);if(r.companion)parts.push('◆ '+r.companion+' COMPAGNON'+(r.companion>1?'S':''));if(r.armor)parts.push('⬟ '+r.armorCharges+'/'+capacityFor(r.armor)+' BALLES');if(r.life)parts.push('♥ MAX +'+r.life);
  el.textContent=parts.join(' · ');
 }
 function drawArmor(){
