@@ -53,7 +53,14 @@ def check_spellbook(page):
     assert page.locator('.grimoire-variant').count() == 4
     brooms = page.locator('.grimoire-variant').filter(has_text='Cadence concentrée').inner_text()
     assert '2 / 3' in brooms
-    assert page.locator('.grimoire-spellbook .arsenal-illustration').count() == 9
+    assert page.locator('.grimoire-ability .grimoire-reward-art .arsenal-illustration').count() == 9
+    assert page.locator('.grimoire-variant .grimoire-reward-art .arsenal-illustration').count() == 4
+    assert page.locator('.grimoire-spellbook .grimoire-reward-name').count() == 13
+    assert page.locator('.grimoire-spellbook .grimoire-reward-detail').count() == 13
+    assert page.locator('.grimoire-spellbook .grimoire-reward-pick, .grimoire-spellbook .grimoire-reward-progress').count() == 13
+    for variant, source in {'ripple': 'pulse', 'shatter': 'sunray', 'surge': 'tidewave', 'rhythm': 'bruyere'}.items():
+        art = page.locator(f'[data-grimoire-variant="{variant}"] .arsenal-illustration')
+        assert art.get_attribute('aria-label') == page.evaluate(f"LoadoutArt.alt('{source}')")
     spellbook_text = page.locator('.grimoire-spellbook').inner_text()
     assert 'undefined' not in spellbook_text and 'NaN' not in spellbook_text
     assert 'Exploit : Terminer un univers avec chacun des 3 balais de pilotage' in brooms
@@ -63,6 +70,12 @@ def check_collection(page):
     page.click('[data-grimoire-tab="collection"]')
     page.wait_for_selector('.grimoire-collection')
     assert page.locator('.wardrobe-item').count() == 25
+    assert page.locator('.wardrobe-item.grimoire-reward-card').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-art').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-art img, .wardrobe-item .grimoire-reward-art svg').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-name').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-detail').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-pick').count() == 25
     assert page.locator('.mastery-catalog-row').count() == 7
     assert page.locator('.mastery-badge').count() == 7
     assert page.locator('.mastery-badge img').count() == 7
@@ -82,6 +95,8 @@ def check_collection(page):
     page.click('[data-item="emerald"]')
     assert page.evaluate("Journey.state.selected.outfit === 'emerald'")
     assert 'equipped' in page.locator('[data-item="emerald"]').get_attribute('class')
+    assert page.locator('[data-item="emerald"]').get_attribute('aria-pressed') == 'true'
+    assert page.locator('[data-item="emerald"] .grimoire-reward-pick').inner_text() == 'Équipé ✓'
     page.locator('#collectionBack').scroll_into_view_if_needed()
     page.click('#collectionBack')
     page.wait_for_selector('#playAdventure')
@@ -151,6 +166,24 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     assert mobile.locator('#badges .relic-badge-icon img').count() == 3
     assert mobile.evaluate("getComputedStyle(document.querySelector('#badges .relic-badge-copy b')).fontSize") == '11px'
     assert mobile.evaluate('document.documentElement.scrollWidth <= 390')
+
+    narrow_context = browser.new_context(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
+    narrow = narrow_context.new_page()
+    narrow.on('pageerror', lambda error: errors.append(str(error)))
+    narrow.add_init_script(SEED)
+    narrow.goto('http://localhost:3000')
+    narrow.click('#wardrobe')
+    narrow.wait_for_selector('.grimoire-screen')
+    for tab in ['spells', 'collection']:
+        narrow.click(f'[data-grimoire-tab="{tab}"]')
+        narrow.wait_for_selector(f'#grimoireTab-{tab}[aria-selected="true"]')
+        assert narrow.evaluate('document.documentElement.scrollWidth <= 360')
+    assert narrow.locator('.wardrobe-item .grimoire-reward-art img, .wardrobe-item .grimoire-reward-art svg').count() == 25
+    narrow.locator('[data-item="dodge-wisp"]').scroll_into_view_if_needed()
+    assert narrow.locator('[data-item="dodge-wisp"]').is_disabled()
+    narrow.locator('#collectionBack').scroll_into_view_if_needed()
+    assert narrow.locator('#collectionBack').is_visible()
+    narrow_context.close()
 
     fresh_context = browser.new_context(viewport={'width': 1024, 'height': 768})
     fresh = fresh_context.new_page()
