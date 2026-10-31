@@ -60,7 +60,9 @@ def check_spellbook(page):
     assert page.locator('.grimoire-spellbook .grimoire-reward-pick, .grimoire-spellbook .grimoire-reward-progress').count() == 13
     for variant, source in {'ripple': 'pulse', 'shatter': 'sunray', 'surge': 'tidewave', 'rhythm': 'bruyere'}.items():
         art = page.locator(f'[data-grimoire-variant="{variant}"] .arsenal-illustration')
-        assert art.get_attribute('aria-label') == page.evaluate(f"LoadoutArt.alt('{source}')")
+        assert art.get_attribute('data-art-variant') == variant
+        assert art.get_attribute('aria-label').startswith(page.evaluate(f"LoadoutArt.alt('{source}')"))
+    assert page.evaluate("""()=>[...document.querySelectorAll('.grimoire-spellbook .arsenal-illustration')].every(svg=>svg.querySelector('image')?.getAttribute('href')?.startsWith('data:image/svg+xml'))""")
     spellbook_text = page.locator('.grimoire-spellbook').inner_text()
     assert 'undefined' not in spellbook_text and 'NaN' not in spellbook_text
     assert 'Exploit : Terminer un univers avec chacun des 3 balais de pilotage' in brooms
@@ -152,6 +154,8 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
         mobile.click(f'[data-grimoire-tab="{tab}"]')
         mobile.wait_for_selector(f'#grimoireTab-{tab}[aria-selected="true"]')
         assert mobile.evaluate('document.documentElement.scrollWidth <= 390')
+        if tab == 'spells':
+            assert mobile.evaluate("""()=>[...document.querySelectorAll('.grimoire-spellbook .grimoire-reward-card')].every(card=>{const footer=card.querySelector('.grimoire-reward-pick,.grimoire-reward-progress');return !footer||footer.getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1})""")
     mobile.screenshot(path=str(screenshots / 'grimoire-mobile.png'), full_page=True)
     mobile.locator('#collectionBack').scroll_into_view_if_needed()
     assert mobile.locator('#collectionBack').is_visible()
