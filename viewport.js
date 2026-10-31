@@ -60,6 +60,46 @@ css.textContent+=`
  .grimoire-screen{width:100%;min-height:100%}
 }
 `;
+css.textContent+=`
+/* Toutes les pages ouvertes dans l'overlay bénéficient du même traitement :
+   arsenal, exploits, laboratoire, prévols, guide, pause, récompenses et
+   transitions. Le terrain et la touchbar ne changent pas pendant le jeu. */
+@media(max-width:850px){
+ body:has(.arena .overlay:not(.hidden))>header,
+ body:has(.arena .overlay:not(.hidden)) main .heading{display:none!important}
+ body:has(.arena .overlay:not(.hidden)) main{padding-top:0}
+ body:has(.arena .overlay:not(.hidden)) .layout{grid-template-columns:minmax(0,1fr)!important}
+ body:has(.arena .overlay:not(.hidden)) .sidebar.infos-open{top:0}
+ body:has(.arena .overlay:not(.hidden)) .sidebar:not(.infos-open),
+ body:has(.arena .overlay:not(.hidden)) .touchbar{display:none!important}
+ body:has(.arena .overlay:not(.hidden)) .arena:has(.overlay:not(.hidden)){
+  width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important
+ }
+ .guide-nav button,.training-finish-actions button{min-height:44px}
+}
+@media(max-width:600px){
+ .overlay:has(#launchLocal) .local-cards{grid-template-columns:1fr;gap:8px;margin:12px 0}
+ .overlay:has(#launchLocal) .local-card{padding:12px 14px}
+ .overlay:has(#launchLocal) .local-card strong{margin:6px 0}
+ .overlay:has(#launchLocal) .local-card .prize{margin-top:7px}
+}
+@media(max-width:850px) and (min-height:501px){
+ .overlay:has(#launchLocal)>.local-actions,
+ .overlay:has(.lab-fields)>.local-actions,
+ .weekly-preflight>.local-actions:not(.weekly-share-actions){
+  position:sticky;bottom:0;z-index:4;flex-shrink:0;width:100%;padding:9px 0 3px;
+  background:linear-gradient(0deg,#110d22fa,#110d22e8);backdrop-filter:blur(7px)
+ }
+ .overlay:has(#launchLocal)>.local-actions,
+ .overlay:has(.lab-fields)>.local-actions{display:grid;grid-template-columns:minmax(0,1fr) auto}
+ .weekly-preflight>.local-actions:not(.weekly-share-actions){display:grid;grid-template-columns:1fr 1fr}
+ .weekly-preflight>.local-actions:not(.weekly-share-actions) #weeklyLaunch{grid-column:1/-1}
+ .overlay:has(#launchLocal)>.local-actions button,
+ .overlay:has(.lab-fields)>.local-actions button,
+ .weekly-preflight>.local-actions:not(.weekly-share-actions) button{min-height:44px;margin:0;padding:11px 13px}
+ #masteryBack{position:sticky;bottom:0;z-index:4;width:100%;max-width:600px;min-height:44px;margin-top:0;box-shadow:0 -12px 20px 8px #110d22}
+}
+`;
 document.head.appendChild(css);
 const holder=document.querySelector('.layout>div:first-child'),arena=document.querySelector('.arena'),aside=document.querySelector('.sidebar'),bar=document.querySelector('.touchbar');
 arena.insertAdjacentHTML('beforeend','<div class="touch-stick hidden" id="touchStick" aria-hidden="true"><i></i></div>');

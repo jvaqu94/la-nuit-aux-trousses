@@ -77,7 +77,9 @@ with sync_playwright() as p:
         if (width, height) in [(1366, 768), (390, 844)]:
             page.screenshot(path=str(ROOT / f'tests/fit-{width}-{height}.png'), full_page=True)
         page.evaluate('gameTime=40;score=1200;end(false)')
-        check()
+        # Les transitions et bilans sont eux aussi des pages plein écran sur
+        # téléphone ; le ratio 8:9 redevient obligatoire à la reprise du vol.
+        check(home=width < 851)
         page.locator('#return').scroll_into_view_if_needed()
         page.click('#return')
         page.locator('#wardrobe').scroll_into_view_if_needed()
