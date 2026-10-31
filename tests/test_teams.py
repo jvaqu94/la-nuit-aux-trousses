@@ -569,6 +569,10 @@ with sync_playwright() as p:
     assert 'Bob' in alice.locator('.team-row').first.inner_text()
     assert 'Alice' in alice.locator('.team-row').nth(1).inner_text()
     assert score_total(alice) == 4000
+    highscore_cells = alice.locator('#teamCard .team-score')
+    assert highscore_cells.count() == 2
+    assert [int(re.sub(r'\D', '', value)) for value in highscore_cells.all_inner_texts()] == [2200, 1800]
+    assert all(highscore_cells.nth(index).is_visible() for index in range(2))
 
     # Les statistiques additionnent tous les vols acceptés, pas seulement les highscores.
     stats_unauthorized = bob.evaluate("""async () => {
@@ -706,6 +710,12 @@ with sync_playwright() as p:
 schema = (ROOT / 'supabase/teams.sql').read_text()
 rules = (ROOT / 'supabase/team_rules.sql').read_text()
 stats = (ROOT / 'supabase/team_stats.sql').read_text()
+legacy = (ROOT / 'supabase/team_legacy_highscores.sql').read_text()
+legacy_executable = '\n'.join(line for line in legacy.splitlines() if not line.lstrip().startswith('--'))
+assert "update public.team_scores" in legacy_executable
+assert "set mode = 'ranked'" in legacy_executable and "where mode = 'free'" in legacy_executable
+assert "updated_at < '2026-10-31 11:36:25+00'" in legacy_executable
+assert 'team_score_attempts' not in legacy_executable
 assert schema.count('security definer') == 5
 assert rules.count('security definer') == 7
 assert 'revoke all on table public.team_scores from anon, authenticated' in schema
