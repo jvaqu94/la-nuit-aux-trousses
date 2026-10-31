@@ -1,7 +1,7 @@
 /* La Nuit aux Trousses — tableau de highscores arcade local, plein écran sur téléphone. */
 (function(){
 'use strict';
-const categories=[['normal','Nuit noire'],['easy','Clair de lune'],['hard','Cauchemar'],['daily','Défi du jour']];
+const categories=[['normal','Nuit noire'],['easy','Clair de lune'],['hard','Cauchemar'],['ranked','Partie classée'],['daily','Défi du jour']];
 const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)');
 let selected='normal';
 const css=document.createElement('style');
@@ -141,7 +141,7 @@ function summary(category,day){
 function open(category=defaultCategory()){
   selected=validCategory(category)?category:'normal';
   state='arcade-scores';
-  overlay(`<section class="arcade-score-screen"><div class="arcade-marquee"><span>✦ LA NUIT AUX TROUSSES ✦</span><h2>HI-SCORES</h2><p>Les dix plus grands vols de ce navigateur.</p></div><div class="arcade-tabs" role="tablist" aria-label="Catégorie de highscores">${categories.map(([id,name])=>`<button type="button" role="tab" id="arcadeTab-${id}" data-category="${id}" aria-selected="${id===selected}" class="${id===selected?'active':''}">${name}</button>`).join('')}</div><div class="arcade-board-summary" id="arcadeBoardSummary" aria-live="polite">${summary(selected)}</div><div id="arcadeBoardTable" role="tabpanel" aria-labelledby="arcadeTab-${selected}">${table(selected)}</div><div class="arcade-local-note">Records conservés sur cet appareil · les difficultés et le défi du jour restent séparés.</div><div class="menu-actions arcade-board-actions"><button class="primary" id="arcadeScoresBack">Retour au menu</button></div></section>`);
+  overlay(`<section class="arcade-score-screen"><div class="arcade-marquee"><span>✦ LA NUIT AUX TROUSSES ✦</span><h2>HI-SCORES</h2><p>Les dix plus grands vols de ce navigateur.</p></div><div class="arcade-tabs" role="tablist" aria-label="Catégorie de highscores">${categories.map(([id,name])=>`<button type="button" role="tab" id="arcadeTab-${id}" data-category="${id}" aria-selected="${id===selected}" class="${id===selected?'active':''}">${name}</button>`).join('')}</div><div class="arcade-board-summary" id="arcadeBoardSummary" aria-live="polite">${summary(selected)}</div><div id="arcadeBoardTable" role="tabpanel" aria-labelledby="arcadeTab-${selected}">${table(selected)}</div><div class="arcade-local-note">Records conservés sur cet appareil · difficultés, partie classée et défi du jour restent séparés.</div><div class="menu-actions arcade-board-actions"><button class="primary" id="arcadeScoresBack">Retour au menu</button></div></section>`);
   document.body.classList.add('menu-open');
   const paint=()=>{
     document.querySelectorAll('.arcade-tabs [role="tab"]').forEach(button=>{const active=button.dataset.category===selected;button.classList.toggle('active',active);button.setAttribute('aria-selected',String(active))});

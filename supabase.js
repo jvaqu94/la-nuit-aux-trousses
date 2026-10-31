@@ -198,7 +198,7 @@ function returnHomeAfterInvite(signup){
   account.classList.add('home-account-welcome');
   const title=account.querySelector('b'),detail=account.querySelector('small');
   if(title)title.textContent=signup?'✓ Compte créé · Tu es dans la team':'✓ Connexion réussie · Tu es dans la team';
-  if(detail)detail.textContent='Ton prochain score comptera pour la team.';
+  if(detail)detail.textContent='Ta prochaine partie classée comptera pour la team.';
  }
  const overlayNode=document.getElementById('overlay');
  if(overlayNode)overlayNode.scrollTop=0;
@@ -546,7 +546,7 @@ async function joinTeam(){
   clearPendingTeamCode();
   setTeamBusy(false);
   renderTeam();
-  teamStatus('Tu as rejoint la team ! Ton prochain meilleur score sera ajouté.');
+  teamStatus('Tu as rejoint la team ! Ton prochain highscore de partie classée sera ajouté.');
   return true;
  }catch(error){
   setTeamBusy(false);
@@ -661,7 +661,7 @@ function renderTeam(){
   const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque vol comptabilisé utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
   document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
@@ -775,8 +775,9 @@ async function openTeamStats(){
   if(epoch===teamStatsEpoch&&$('teamStatsRefresh'))$('teamStatsRefresh').disabled=false;
  }
 }
-async function finishTeamScore(value){if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result}}
+async function finishTeamScore(value){if(value?.mode!=='ranked')return{skipped:true,reason:'unranked'};if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result}}
 async function submitTeamScore(value){
+ if(value?.mode!=='ranked')return{skipped:true,reason:'unranked'};
  if(!enabled||!session)return{skipped:true};
  if(!teamLoaded)await loadTeam(false);
  if(!teamData.team)return{skipped:true};
@@ -988,6 +989,7 @@ window.MinuitCloud={
  refreshTeam:()=>loadTeam(true),
  get configured(){return enabled},
  get connected(){return!!session},
+ get teamLoaded(){return teamLoaded},
  get inTeam(){return!!session&&!!teamData.team},
  get user(){return session?.user||null}
 };

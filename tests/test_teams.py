@@ -334,8 +334,10 @@ def login(page, email):
 
 def finish_run(page, score, stage_number=1, wave_number=1):
     if page.locator('#playAdventure').count():
-        page.click('#playAdventure')
-    page.wait_for_function("state==='play'")
+        page.click('#playRanked')
+        page.wait_for_selector('#launchLocal')
+        page.click('#launchLocal')
+    page.wait_for_function("state==='play' && mode==='ranked'")
     page.evaluate(f'gameTime=35;score={score};stage={stage_number - 1};wave={wave_number};end(false)')
     page.wait_for_selector('#teamResultStatus', state='attached')
     assert page.evaluate("MinuitLastScore.name===prefs.name && MinuitLastScore.name!=='Sorcière'")
@@ -520,18 +522,25 @@ with sync_playwright() as p:
     bob.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('Nouveau highscore')")
 
     alice.click('#retry')
-    alice.wait_for_function("state==='play'")
+    alice.wait_for_selector('#launchLocal')
+    alice.click('#launchLocal')
+    alice.wait_for_function("state==='play' && mode==='ranked'")
     alice.evaluate('gameTime=40;score=900;end(false)')
     alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('0 partie restante')")
     assert team['members'][ALICE]['score'] == 1500
 
     # La troisième partie est refusée, sans effacer le record ni interdire le jeu local.
     alice.click('#retry')
-    alice.wait_for_function("state==='play'")
+    alice.wait_for_selector('#launchLocal')
+    alice.click('#launchLocal')
+    alice.wait_for_function("state==='play' && mode==='ranked'")
     alice.evaluate('gameTime=45;score=1800;end(false)')
     alice.wait_for_function("document.querySelector('#teamResultStatus')?.textContent.includes('limite de parties comptabilisées')")
     assert len(team['members'][ALICE]['attempts']) == 2
     assert team['members'][ALICE]['score'] == 1500
+    # Le refus team ne rend pas l’essai local : on réouvre un créneau de test
+    # pour vérifier séparément l’acceptation après changement de règle admin.
+    alice.evaluate("LocalLeague.dayState().rankedUsed=2;LocalLeague.save()")
 
     alice.click('#return')
     alice.click('#archives')
@@ -686,7 +695,7 @@ with sync_playwright() as p:
     submissions = [call for call in calls if call['path'].endswith('/minuit_submit_team_score')]
     assert [call['body']['p_score'] for call in submissions] == [1500, 2200, 900, 1800, 1800]
     assert submissions[3]['status'] == 400 and submissions[4]['status'] == 200
-    assert all(call['body']['p_mode'] == 'free' and call['body']['p_run_id'] for call in submissions)
+    assert all(call['body']['p_mode'] == 'ranked' and call['body']['p_run_id'] for call in submissions)
     assert len({(call['user_id'], call['body']['p_run_id']) for call in submissions}) == 5
     assert not errors, errors
     print('OK : statistiques admin, totaux par jour et par membre, refus non-admin, règles, réinitialisation complète, invitations, suppression et mobile.')
@@ -703,6 +712,8 @@ assert 'revoke all on table public.team_scores from anon, authenticated' in sche
 assert 'revoke all on table public.team_score_attempts from anon, authenticated' in rules
 assert "set search_path = ''" in rules
 assert 'minuit_update_team_rules' in rules and 'TEAM_DAILY_LIMIT' in rules
+assert "p_mode <> 'ranked'" in rules and "ts.mode = 'ranked'" in rules
+assert "ta.mode = 'ranked'" in stats
 assert 'TEAM_PERIOD_NOT_STARTED' in rules and 'TEAM_PERIOD_ENDED' in rules
 assert 'grant execute on function public.minuit_update_team_rules(integer, timestamptz, timestamptz) to authenticated' in rules
 assert 'grant execute on function public.minuit_reset_team_campaign() to authenticated' in rules
