@@ -155,6 +155,16 @@ Le **score** et l’**XP** sont deux progressions distinctes :
 
 Le Grimoire contient également les contrats quotidiens, les exploits, les records, le bilan des vols et le journal local.
 
+### Un grimoire évolutif
+
+L’entrée **Grimoire évolutif** de l’accueil réunit la progression dans un même écran, également accessible depuis la pause et le bilan d’un vol :
+
+- **Pages** compte les pages dévoilées, résume le dernier vol et indique les objectifs les plus proches dans la Collection, l’Arsenal, les variantes et les maîtrises cosmétiques ;
+- **Sorts & exploits** présente les vraies capacités et leurs compromis avec les illustrations de l’Arsenal, ainsi que la progression des quatre variantes ;
+- **Collection** conserve l’aperçu et l’équipement des apparences, et détaille les sept sceaux de maîtrise avec leurs conditions réelles.
+
+Cette présentation utilise les progressions existantes : elle n’ajoute ni monnaie, ni bonus de puissance, ni nouvelle règle de déblocage. Les défis classés, quotidiens et Sprint restent normalisés.
+
 ### Reconstitution du coup fatal
 
 Après une défaite, **Revoir le coup fatal** permet de rejouer une reconstitution des cinq dernières secondes disponibles avant le choc, avec pause, ralenti et curseur temporel.
