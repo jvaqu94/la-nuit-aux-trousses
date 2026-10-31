@@ -588,10 +588,21 @@ function clearEnemyFromRoute(e,dt=1/60){
 function drawRoute(g){for(const gate of gates){const center=gate.drawCenter??gate.center;for(const [left,right] of [[-15,center-gate.width/2],[center+gate.width/2,W+15]]){const width=right-left,y=gate.y,h=gate.h;g.save();ellipse(g,left+width/2,y+13,width/2,18,'#090c1666');const stone=g.createLinearGradient(0,y-h/2,0,y+h/2);stone.addColorStop(0,gate.hit>0?'#b8889d':'#82718c');stone.addColorStop(.2,'#4e425f');stone.addColorStop(1,'#231e34');g.fillStyle=stone;g.fillRect(left,y-h/2,width,h);line(g,left,y-h/2,right,y-h/2,'#bba4c19c',2);line(g,left,y+h/2,right,y+h/2,'#100e1e',3);for(let x=left+20;x<right;x+=47){line(g,x,y-h/2,x-7,y+h/2,'#231d33',2);line(g,x-6,y+h/2-5,x+22,y+h/2-5,'#9c87a54c',1);if(stage===1||stage===2){poly(g,[[x-5,y-h/2],[x,y-h/2-13],[x+5,y-h/2]],'#ad97ad','#38283f')}else{line(g,x-12,y+7,x+28,y-7,stage===3?'#648375':'#827061',3);line(g,x+7,y-1,x+12,y-10,'#8b9c75',1)}}const edge=left<0?right:left;sprite(g,stage===3?'rock':'lantern',edge,y,stage===3?.6:.7,ambient);if(stage===0){line(g,edge,y+32,edge,y+49,'#c6dfc588',2)}g.restore()}}}
 function drawBossHealth(g,e){if(e.y<150)return;const width=224,left=Math.max(12,Math.min(W-width-12,e.x-width/2)),top=e.y-112;g.save();g.fillStyle='#120f24eb';g.fillRect(left-7,top-24,width+14,51);g.textAlign='center';g.font=compactView()?'bold 17px Georgia':'13px Georgia';g.fillStyle='#f8d8b6';g.fillText(world.boss,left+width/2,top-9);g.fillStyle='#3a293f';g.fillRect(left,top,width,8);const hp=g.createLinearGradient(left,0,left+width,0);hp.addColorStop(0,'#bc6fbb');hp.addColorStop(1,'#ffc47d');g.fillStyle=hp;g.fillRect(left,top,width*Math.max(0,e.hp/e.max),8);for(const p of [.33,.66])line(g,left+width*p,top,left+width*p,top+8,'#201a2c',2);g.font=(compactView()?12:9)+'px Arial';g.fillStyle=e.phaseShield>0?'#b8e7ee':'#c8b5cf';g.fillText(e.phaseShield>0?'CARAPACE · CHANGEMENT DE PHASE':'PHASE '+e.phase+' / 3 · ARMURE ACTIVE',left+width/2,top+21);if(e.phaseFlash>0){let p=Math.min(1,e.phaseFlash/.35,(1.45-e.phaseFlash)/.8);g.globalAlpha=Math.max(0,p);g.font=compactView()?'bold 24px Georgia':'bold 18px Georgia';g.fillStyle=world.moon;g.shadowBlur=18;g.shadowColor=world.moon;g.fillText('PHASE '+e.phase,left+width/2,top-36)}g.restore()}
 
+function companionFormation(index,count,time=ambient){
+ const i=Math.max(0,Math.floor(Number(index)||0)),n=Math.max(1,Math.floor(Number(count)||1)),t=Number(time)||0;
+ if(i<2)return{x:player.x+(i===0?-40:40),y:player.y+Math.sin(t*4+i)*7,orbital:false,angle:0};
+ const a=-Math.PI/2+t*1.35+(i-2)*Math.PI*2/Math.max(1,n-2);
+ return{x:player.x+Math.cos(a)*64,y:player.y+Math.sin(a)*48,orbital:true,angle:a};
+}
+function drawFamiliarCompanions(g,back=false){
+ const count=window.LevelRewards?.familiarCount?.(upgrades.familiar)??upgrades.familiar;
+ if(back&&count>2){g.save();g.globalAlpha=.2;g.strokeStyle='#b8dfe5';g.lineWidth=1.2;g.setLineDash([3,6]);g.beginPath();g.ellipse(player.x,player.y,64,48,0,0,Math.PI*2);g.stroke();g.restore()}
+ for(let i=0;i<count;i++){const p=companionFormation(i,count),behind=p.orbital&&p.y<player.y;if(behind!==back)continue;sprite(g,'ghost',p.x,p.y,.4,ambient)}
+}
 function update(dt){if(state!=='play')return;lifeFlash=Math.max(0,lifeFlash-dt);window.Adventure?.beforeTick?.(dt);gameTime+=dt;scrollVelocity+=(targetScrollSpeed()-scrollVelocity)*(1-Math.exp(-dt*1.25));terrainDistance+=scrollSpeed()*dt;if(transition<=0)waveTime+=dt;lootPulse=Math.max(0,lootPulse-dt);player.inv=Math.max(0,player.inv-dt);player.dash=Math.max(0,player.dash-dt);player.dashCD=Math.max(0,player.dashCD-dt);player.slow=Math.max(0,player.slow-dt);player.shieldHit=Math.max(0,(player.shieldHit||0)-dt);player.shieldTime=Math.max(0,player.shieldTime-dt);if(!player.shieldTime)player.shield=0;toastTime-=dt;if(toastTime<=0)$('toast').textContent='';comboTime-=dt;if(comboTime<=0){chain=0;combo=1}
 let k=prefs.keys,dx=(held(k.right)||held('d')?1:0)-(held(k.left)||held('q')||held('a')?1:0),dy=(held(k.down)||held('s')?1:0)-(held(k.up)||held('z')||held('w')?1:0),focus=held(k.focus);const gp=navigator.getGamepads?.()[0];if(gp){if(Math.abs(gp.axes[0])>.16)dx=gp.axes[0];if(Math.abs(gp.axes[1])>.16)dy=gp.axes[1];focus=focus||gp.buttons[6]?.pressed||gp.buttons[7]?.pressed;if(gp.buttons[0]?.pressed&&!padDash)dodge();padDash=gp.buttons[0]?.pressed;if(gp.buttons[9]?.pressed&&!padPause)togglePause();padPause=gp.buttons[9]?.pressed}let len=Math.hypot(dx,dy);if(len>1){dx/=len;dy/=len}const oldX=player.x,oldY=player.y;if(Math.hypot(dx,dy)>.1)pointer=null;let speed=(focus?175:425)*(window.Arsenal?.speed?.(focus)||1)*(player.slow>0?.5:1)*(player.dash>0?(window.Arsenal?.dashSpeed?.()||2.2):1);if(pointer){let factor=focus||player.slow>0?1-Math.exp(-dt*(player.slow>0?7:12)):1;player.x+=(pointer.x-player.x)*factor;player.y+=(pointer.y-player.y)*factor}else{player.x+=dx*speed*dt;player.y+=dy*speed*dt}player.x=Math.max(20,Math.min(W-20,player.x));player.y=Math.max(260,Math.min(H-30,player.y));player.focus=focus;player.lean=((player.lean||0)+Math.max(-.24,Math.min(.24,(player.x-oldX)*.018))*.24)/1.24;player.moving=Math.hypot(player.x-oldX,player.y-oldY);if(player.moving>.4)trail.push({x:player.x,y:player.y+57,life:.35});for(let v of trail)v.life-=dt;trail=trail.filter(v=>v.life>0).slice(-30);
 while(transition<=0&&spawnIndex<schedule.length&&waveTime>=schedule[spawnIndex].time)spawnEnemy(schedule[spawnIndex++]);
-	player.fire-=dt;if(player.fire<=0){player.fire=Math.max(.085,.18-upgrades.fire*.025);let angles=upgrades.fire>=3?[-.1,.1]:[0];if(player.candy>0)angles=[-.2,0,.2];for(const a of angles){const muzzle=broomMuzzle(),angle=a+(player.lean||0);window.League?.event?.('shotsFired',1);shots.push({x:muzzle.x,y:muzzle.y,vx:Math.sin(angle)*600,vy:-Math.cos(angle)*600,damage:(window.WeeklySprint?.playerShotDamage?.(window.LevelRewards?.shotDamage?.(upgrades.fire>=2?2:1)??(upgrades.fire>=2?2:1))??(window.LevelRewards?.shotDamage?.(upgrades.fire>=2?2:1)??(upgrades.fire>=2?2:1))),life:2,pierce:upgrades.pierce,seen:new Set()})}for(let i=0;i<(window.LevelRewards?.familiarCount?.(upgrades.familiar)??upgrades.familiar);i++)shots.push({x:player.x+(i?38:-38),y:player.y-7,vx:0,vy:-520,damage:window.LevelRewards?.companionDamage?.(1)??1,life:2,pierce:0,seen:new Set(),familiar:true});playSfx(angles.length>1||upgrades.fire>=2?'spread':'shot',angles.length>1?.16:.11,.055)}player.candy=Math.max(0,(player.candy||0)-dt);
+	player.fire-=dt;if(player.fire<=0){player.fire=Math.max(.085,.18-upgrades.fire*.025);let angles=upgrades.fire>=3?[-.1,.1]:[0];if(player.candy>0)angles=[-.2,0,.2];for(const a of angles){const muzzle=broomMuzzle(),angle=a+(player.lean||0);window.League?.event?.('shotsFired',1);shots.push({x:muzzle.x,y:muzzle.y,vx:Math.sin(angle)*600,vy:-Math.cos(angle)*600,damage:(window.WeeklySprint?.playerShotDamage?.(window.LevelRewards?.shotDamage?.(upgrades.fire>=2?2:1)??(upgrades.fire>=2?2:1))??(window.LevelRewards?.shotDamage?.(upgrades.fire>=2?2:1)??(upgrades.fire>=2?2:1))),life:2,pierce:upgrades.pierce,seen:new Set()})}const companionCount=window.LevelRewards?.familiarCount?.(upgrades.familiar)??upgrades.familiar;for(let i=0;i<companionCount;i++){const p=companionFormation(i,companionCount);shots.push({x:p.x,y:p.y-7,vx:0,vy:-520,damage:window.LevelRewards?.companionDamage?.(1)??1,life:2,pierce:0,seen:new Set(),familiar:true})}playSfx(angles.length>1||upgrades.fire>=2?'spread':'shot',angles.length>1?.16:.11,.055)}player.candy=Math.max(0,(player.candy||0)-dt);
 if((player.missileTime||0)>0){player.missileTime=Math.max(0,player.missileTime-dt);if(player.missileTime===0){upgrades.rocket=0;rockets=[];updateLoadout();say('Missiles épuisés · retour aux sorts',2)}}player.rocket-=dt;if(player.missileTime>0&&upgrades.rocket&&player.rocket<=0){player.rocket=2.25;for(let i=0;i<upgrades.rocket;i++)rockets.push({x:player.x+(i-(upgrades.rocket-1)/2)*18,y:player.y,vx:(i-(upgrades.rocket-1)/2)*80,vy:-220,life:5});playSfx('missile',.2,.3)}player.laser-=dt;if(upgrades.laser&&player.laser<=0){player.laser=4-upgrades.laser*.4;const emitter=broomMuzzle();particles.push({x:emitter.x,y:emitter.y,life:.25,max:.25,laser:true,color:'#bce9ff'});for(let e of enemies.slice())if(!e.dead&&e.y<emitter.y&&Math.abs(e.x-emitter.x)<e.r+13)damageEnemy(e,7+upgrades.laser*4);for(const o of obstacles)if(!o.dead&&o.y<emitter.y&&Math.abs(o.x-emitter.x)<o.r+13)damageObstacle(o,7+upgrades.laser*4);playSfx('laser',.25,.7)}
 for(let r of rockets){r.life-=dt;let target=null,near=1e9;for(let e of enemies)if(!e.dead&&e.y>0){let d=Math.hypot(e.x-r.x,e.y-r.y);if(d<near){near=d;target=e}}if(target){let a=Math.atan2(target.y-r.y,target.x-r.x);r.vx+=(Math.cos(a)*330-r.vx)*Math.min(1,dt*5);r.vy+=(Math.sin(a)*330-r.vy)*Math.min(1,dt*5)}r.x+=r.vx*dt;r.y+=r.vy*dt;let rock=obstacles.find(o=>!o.dead&&o.age>=o.warn&&Math.hypot(r.x-o.x,r.y-o.y)<o.r+8);if(rock){r.life=0;explosion(r.x,r.y,4+upgrades.rocket)}else if(routeSolidAt(r.x,r.y,6)){r.life=0;explosion(r.x,r.y,3)}else if(target&&near<target.r+12){r.life=0;explosion(r.x,r.y,4+upgrades.rocket)}}rockets=rockets.filter(r=>r.life>0&&r.y>-100&&r.x>-100&&r.x<900);
 for(let s of shots){s.x+=s.vx*dt;s.y+=s.vy*dt;s.life-=dt;for(let o of obstacles){if(s.life>0&&!o.dead&&o.age>=o.warn&&Math.hypot(s.x-o.x,s.y-o.y)<o.r+5){damageObstacle(o,s.damage);s.life=0}}for(let e of enemies.slice()){if(!e.dead&&s.life>0&&!s.seen.has(e)&&Math.hypot(s.x-e.x,s.y-e.y)<e.r+5){s.seen.add(e);const beforeHP=e.hp;damageEnemy(e,s.damage);if(e.hp<beforeHP)window.League?.event?.('shotsHit',1);if(s.pierce>0)s.pierce--;else s.life=0}}if(s.life>0&&routeSolidAt(s.x,s.y,4)){s.life=0;particle(s.x,s.y,'#cba58e',3)}}shots=shots.filter(s=>s.life>0&&s.y>-40&&s.y<H+20);
@@ -691,8 +702,8 @@ window.NightHazards?.draw?.(g);window.Adventure?.draw?.(g);window.Encounters?.dr
 for(let r of rockets){g.save();g.translate(r.x,r.y);g.rotate(Math.atan2(r.vy,r.vx)+Math.PI/2);sprite(g,'rocket',0,0,.8,ambient);g.restore()}
 for(let d of drops){drawRelic(g,d,ambient)}
 for(let b of hostile)drawHostile(g,b,ambient)
-for(let v of trail){g.save();g.globalAlpha=v.life*.7;ellipse(g,v.x,v.y,2,2,'#b8a1e7');g.restore()}window.CombatFeel?.drawDashTrail?.(g);g.save();const lifeBlink=lifeFlash>0&&Math.floor(ambient*10)%2===0;if(player.inv>0&&Math.floor(ambient*12)%2===0)g.globalAlpha=lifeFlash>0?.72:.55;sprite(g,'witch',player.x,player.y,1.15,ambient,0,lifeBlink?'sepia(1) saturate(12) hue-rotate(-45deg) brightness(1.35)':'');if(lifeFlash>0){g.save();g.globalAlpha=(lifeBlink?.9:.3)*Math.min(1,lifeFlash/.35);g.strokeStyle='#ff5261';g.lineWidth=3;g.beginPath();g.arc(player.x,player.y,43+Math.sin(ambient*16)*3,0,Math.PI*2);g.stroke();g.restore()}g.restore();{g.save();g.globalAlpha=.25+Math.sin(ambient*25)*.15;ellipse(g,broomMuzzle().x,broomMuzzle().y,6,6,'#c4f7df');g.restore()}if(lootPulse>0)ring(player.x,player.y,35+(1-lootPulse/.7)*45,'#e0c2f8'+Math.floor(lootPulse/.7*180).toString(16).padStart(2,'0'));
-for(let i=0;i<(window.LevelRewards?.familiarCount?.(upgrades.familiar)??upgrades.familiar);i++){let x=player.x+(i?40:-40),y=player.y+Math.sin(ambient*4+i)*7;sprite(g,'ghost',x,y,.4,ambient)}
+for(let v of trail){g.save();g.globalAlpha=v.life*.7;ellipse(g,v.x,v.y,2,2,'#b8a1e7');g.restore()}window.CombatFeel?.drawDashTrail?.(g);drawFamiliarCompanions(g,true);g.save();const lifeBlink=lifeFlash>0&&Math.floor(ambient*10)%2===0;if(player.inv>0&&Math.floor(ambient*12)%2===0)g.globalAlpha=lifeFlash>0?.72:.55;sprite(g,'witch',player.x,player.y,1.15,ambient,0,lifeBlink?'sepia(1) saturate(12) hue-rotate(-45deg) brightness(1.35)':'');if(lifeFlash>0){g.save();g.globalAlpha=(lifeBlink?.9:.3)*Math.min(1,lifeFlash/.35);g.strokeStyle='#ff5261';g.lineWidth=3;g.beginPath();g.arc(player.x,player.y,43+Math.sin(ambient*16)*3,0,Math.PI*2);g.stroke();g.restore()}g.restore();{g.save();g.globalAlpha=.25+Math.sin(ambient*25)*.15;ellipse(g,broomMuzzle().x,broomMuzzle().y,6,6,'#c4f7df');g.restore()}if(lootPulse>0)ring(player.x,player.y,35+(1-lootPulse/.7)*45,'#e0c2f8'+Math.floor(lootPulse/.7*180).toString(16).padStart(2,'0'));
+drawFamiliarCompanions(g,false)
 if(player.focus){ring(player.x,player.y,7,'#fff6d7');ellipse(g,player.x,player.y,3,3,'#fff')}
 if(player.shield>0){if(window.CollectibleArt)CollectibleArt.drawShield(g,ambient);else{ring(player.x,player.y,37+Math.sin(ambient*3),'#87e2d6aa');let x=Math.max(8,Math.min(672,player.x-60)),y=player.y-101;g.fillStyle='#171327df';g.fillRect(x-4,y-15,128,32);g.font='10px Arial';g.fillStyle='#c3eee5';g.textAlign='left';g.fillText('BOUCLIER '+Math.ceil(player.shield),x,y-3);g.textAlign='right';g.fillText(Math.ceil(player.shieldTime)+'s',x+120,y-3);g.fillStyle='#3b344c';g.fillRect(x,y+3,120,5);g.fillStyle='#8de6d6';g.fillRect(x,y+3,120*player.shield/100,5);g.fillStyle='#e0b37c';g.fillRect(x,y+12,120*Math.min(1,player.shieldTime/MINUIT_BALANCE.shield.duration),2)}}
 for(let p of particles){g.save();g.globalAlpha=Math.min(1,p.life*3);if(p.laser){g.fillStyle='#a0dcff55';g.fillRect(p.x-15,100,30,p.y-100);g.fillStyle='#e0f7ff';g.fillRect(p.x-3,100,6,p.y-100)}else ellipse(g,p.x,p.y,p.r,p.r,p.color);g.restore()}window.CombatFeel?.draw?.(g);if(lifeFlash>0&&state==='play'){g.save();const alpha=.16*Math.min(1,lifeFlash/.45),red=g.createRadialGradient(W/2,H/2,180,W/2,H/2,700);red.addColorStop(0,'rgba(255,35,55,0)');red.addColorStop(1,'rgba(255,35,55,'+alpha+')');g.fillStyle=red;g.fillRect(0,0,W,H);g.restore()}}
@@ -895,9 +906,12 @@ let wardrobeTab='overview';
 const grimoireMetricLabels={waves:'vagues terminées',bosses:'gardiens vaincus',dashes:'esquives réalisées',cleanWaves:'vagues sans dégâts',pickups:'objets ramassés',elites:'élites vaincues',kills:'créatures vaincues',graze:'frôlements réalisés',perfectDodges:'esquives parfaites',cleanBosses:'gardiens vaincus sans dégâts',tripleBreaks:'triples destructions',riskChests:'reliquaires ouverts',comboMax:'combo maximal',runs:'vols terminés',wins:'victoires',breaks:'obstacles brisés',obstacles:'obstacles frôlés'};
 function grimoireBroomCount(){return ['bruyere','comet-flight','aurora-flight'].filter(id=>(j.lifetime['world_'+id]||0)>0).length}
 function grimoireVariantValue(variant){return variant.metric==='brooms'?grimoireBroomCount():(j.lifetime[variant.metric]||0)}
-function grimoireMasteryBadge(item,unlocked){
+function grimoireMasterySource(item){
  const collectible={flawless:'bonus-pickup-shield',combo:'bonus-chain',reliquary:'chest-open',precision:'bonus-laser'}[item.mastery],character={dodge:'witch',cleanBoss:'pumpkin',broomMastery:'witch'}[item.mastery];
- const src=collectible?window.CollectibleArt?.art?.[collectible]?.src:window.MinuitArt?.[character]?.src;
+ return collectible?window.CollectibleArt?.art?.[collectible]?.src:window.MinuitArt?.[character]?.src;
+}
+function grimoireMasteryBadge(item,unlocked){
+ const src=grimoireMasterySource(item);
  return `<span class="mastery-badge mastery-badge-${item.mastery} ${unlocked?'is-unlocked':'is-locked'}" data-mastery-badge="${item.mastery}" aria-hidden="true"><span class="mastery-badge-ring"></span>${src?`<img src="${src}" alt="" draggable="false">`:''}<span class="mastery-badge-glint"></span>${unlocked?'':'<span class="mastery-badge-lock"><svg viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3"/><rect x="5" y="10" width="14" height="11" rx="3"/><circle cx="12" cy="15" r="1.4"/><path d="M12 16.5v2"/></svg></span>'}</span>`;
 }
 function grimoirePageMark(empty=false){const src=empty?window.MinuitArt?.ghost?.src:window.MinuitArt?.witch?.src;return `<span class="grimoire-page-mark ${empty?'empty':''}" aria-hidden="true">${src?`<img src="${src}" alt="" draggable="false">`:''}</span>`}
@@ -922,14 +936,17 @@ function grimoireOverview(){
  const unlockedAbilities=abilities.filter(i=>j.combat?.unlocked?.includes(i.id)).length;
  const unlockedVariants=variants.filter(v=>j.mastery.done.includes(v.id)).length;
  const unlockedCosmetics=items.filter(earned).length,total=items.length+abilities.length+variants.length,done=unlockedCosmetics+unlockedAbilities+unlockedVariants,r=j.recent[0],percent=Math.round(done/Math.max(1,total)*100);
- const last=r?`<article class="grimoire-last-page">${grimoirePageMark()}<div><small>DERNIÈRE PAGE ÉCRITE · ${safeText(r.day)}</small><h3>${safeText(r.world)}</h3><p>${r.win?'Les cinq gardiens sont tombés.':'Vol interrompu : '+safeText(r.cause)+'.'}</p><div class="grimoire-last-stats"><span><b>${fmt(r.score)}</b> points</span><span><b>+${fmt(r.xp)}</b> XP</span><span><b>${fmt(r.stats?.kills)}</b> créatures</span></div>${r.unlocks?.length?'<div class="grimoire-new-pages">Nouveau : '+r.unlocks.map(safeText).join(' · ')+'</div>':''}</div></article>`:'<article class="grimoire-last-page grimoire-empty-page">${grimoirePageMark(true)}<div><small>PREMIÈRE PAGE EN ATTENTE</small><h3>Ton histoire commence au prochain vol.</h3><p>Le score, l’expérience et les nouvelles pages du vol apparaîtront ici.</p></div></article>';
+ const last=r?`<article class="grimoire-last-page">${grimoirePageMark()}<div><small>DERNIÈRE PAGE ÉCRITE · ${safeText(r.day)}</small><h3>${safeText(r.world)}</h3><p>${r.win?'Les cinq gardiens sont tombés.':'Vol interrompu : '+safeText(r.cause)+'.'}</p><div class="grimoire-last-stats"><span><b>${fmt(r.score)}</b> points</span><span><b>+${fmt(r.xp)}</b> XP</span><span><b>${fmt(r.stats?.kills)}</b> créatures</span></div>${r.unlocks?.length?'<div class="grimoire-new-pages">Nouveau : '+r.unlocks.map(safeText).join(' · ')+'</div>':''}</div></article>`:`<article class="grimoire-last-page grimoire-empty-page">${grimoirePageMark(true)}<div><small>PREMIÈRE PAGE EN ATTENTE</small><h3>Ton histoire commence au prochain vol.</h3><p>Le score, l’expérience et les nouvelles pages du vol apparaîtront ici.</p></div></article>`;
  return `<section class="grimoire-overview"><div class="grimoire-book-summary"><div><small>LE LIVRE GRANDIT AVEC TOI</small><h3>${done} <span>/ ${total} pages dévoilées</span></h3><p>${unlockedCosmetics} pages de Collection · ${unlockedAbilities} capacités · ${unlockedVariants} variante${unlockedVariants>1?'s':''}</p></div><div class="grimoire-seal" style="--grimoire-progress:${percent*3.6}deg" role="img" aria-label="${percent} % du grimoire dévoilé"><span class="grimoire-seal-crest"><img src="${window.MinuitArt?.witch?.src||''}" alt="" draggable="false"></span><strong>${percent}<small>%</small></strong></div>${grimoireBar(done,total)}</div>${last}<section class="grimoire-next"><div class="grimoire-section-title"><span>PROCHAINS CHAPITRES</span><small>Les objectifs les plus proches dans chaque voie</small></div>${grimoireNextChapters()}</section><div class="journey-small">Les pages de Collection restent cosmétiques. Les capacités et variantes gardent leurs règles actuelles ; les défis classés, quotidiens et Sprint restent normalisés.</div></section>`;
 }
 function grimoireSpellbook(){
  const abilities=window.Arsenal?.catalog||[],variants=window.Adventure?.variants||[];
  const abilityHTML=item=>{const unlocked=j.combat?.unlocked?.includes(item.id),selected=j.combat?.selected?.[item.kind]===item.id,value=item.metric?Math.min(item.target,j.lifetime[item.metric]||0):0;
-  return `<article class="grimoire-ability ${unlocked?'unlocked':'locked'}">${window.LoadoutArt?.illustration?LoadoutArt.illustration(item):''}<div class="grimoire-ability-copy"><small>${({spell:'SORT SPÉCIAL',broom:'BALAI',pet:'COMPAGNON'})[item.kind]} · ${unlocked?(selected?'CHOISI POUR LE PROCHAIN VOL':'PAGE DÉVOILÉE'):'PAGE VERROUILLÉE'}</small><h3 style="color:${item.color}">${safeText(item.name)}</h3><p>${safeText(item.desc)}</p><p class="grimoire-trade">${safeText(item.trade)}</p>${unlocked?'':`<div class="grimoire-lock-progress"><span>${fmt(value)} / ${fmt(item.target)} · ${safeText(grimoireMetricLabels[item.metric]||item.metric)}</span>${grimoireBar(value,item.target)}</div>`}</div></article>`};
- return `<section class="grimoire-spellbook"><div class="grimoire-section-title"><span>ARSENAL · CAPACITÉS RÉELLES</span><small>Équipement et choix dans Préparer mon vol</small></div><div class="grimoire-ability-grid">${abilities.map(abilityHTML).join('')}</div><div class="grimoire-section-title grimoire-variant-title"><span>EXPLOITS & VARIANTES</span><small>Une variante à la fois, avec son compromis</small></div><div class="grimoire-variant-grid">${variants.map(v=>{const unlocked=j.mastery.done.includes(v.id),selected=j.mastery.selected===v.id,value=Math.min(v.target,grimoireVariantValue(v));return `<article class="grimoire-variant ${unlocked?'unlocked':'locked'}"><small>${unlocked?(selected?'✓ VARIANTE CHOISIE':'✦ PAGE DÉVOILÉE'):'EXPLOIT À ACCOMPLIR'}</small><h3>${safeText(v.name)}</h3><p>${safeText(v.desc)}</p><p class="grimoire-trade">Exploit : ${safeText(v.goal)}</p>${unlocked?'':`<div class="grimoire-lock-progress"><span>${fmt(value)} / ${fmt(v.target)}</span>${grimoireBar(value,v.target)}</div>`}</article>`}).join('')}</div><div class="journey-small">Les exploits se réalisent dans les vrais vols, jamais au Laboratoire. Les défis score, primes et Sprint imposent la version de base.</div></section>`;
+  return `<article class="grimoire-ability grimoire-reward-card ${unlocked?'unlocked':'locked'}${selected?' equipped':''}" style="--reward-color:${item.color}"><span class="grimoire-reward-status">${({spell:'SORT SPÉCIAL',broom:'BALAI',pet:'COMPAGNON'})[item.kind]} · ${unlocked?(selected?'CHOISI':'DÉBLOQUÉ'):'VERROUILLÉ'}</span><span class="grimoire-reward-art">${window.LoadoutArt?.illustration?LoadoutArt.illustration(item):''}</span><strong class="grimoire-reward-name">${safeText(item.name)}</strong><span class="grimoire-reward-detail grimoire-ability-copy">${safeText(item.desc)}<small>${safeText(item.trade)}</small></span>${unlocked?`<span class="grimoire-reward-pick">${selected?'Sélectionné pour le prochain vol ✓':'Disponible dans Préparer mon vol'}</span>`:`<div class="grimoire-reward-progress grimoire-lock-progress"><span>${fmt(value)} / ${fmt(item.target)} · ${safeText(grimoireMetricLabels[item.metric]||item.metric)}</span>${grimoireBar(value,item.target)}</div>`}</article>`};
+ const variantArt={ripple:'pulse',shatter:'sunray',surge:'tidewave',rhythm:'bruyere'};
+ const variantHTML=v=>{const unlocked=j.mastery.done.includes(v.id),selected=j.mastery.selected===v.id,value=Math.min(v.target,grimoireVariantValue(v)),source=abilities.find(item=>item.id===variantArt[v.id]);
+  return `<article class="grimoire-variant grimoire-reward-card ${unlocked?'unlocked':'locked'}${selected?' equipped':''}" style="--reward-color:${source?.color||'#d9b5ff'}" data-grimoire-variant="${v.id}"><span class="grimoire-reward-status">VARIANTE · ${unlocked?(selected?'CHOISIE':'DÉBLOQUÉE'):'VERROUILLÉE'}</span><span class="grimoire-reward-art">${source&&window.LoadoutArt?.illustration?LoadoutArt.illustration(source,v):''}</span><strong class="grimoire-reward-name">${safeText(v.name)}</strong><span class="grimoire-reward-detail">${safeText(v.desc)}<small>Exploit : ${safeText(v.goal)}</small></span>${unlocked?`<span class="grimoire-reward-pick">${selected?'Variante choisie ✓':'Exploit accompli · page dévoilée'}</span>`:`<div class="grimoire-reward-progress grimoire-lock-progress"><span>${fmt(value)} / ${fmt(v.target)}</span>${grimoireBar(value,v.target)}</div>`}</article>`};
+ return `<section class="grimoire-spellbook"><div class="grimoire-section-title"><span>ARSENAL · CAPACITÉS RÉELLES</span><small>Équipement et choix dans Préparer mon vol</small></div><div class="grimoire-ability-grid">${abilities.map(abilityHTML).join('')}</div><div class="grimoire-section-title grimoire-variant-title"><span>EXPLOITS & VARIANTES</span><small>Une variante à la fois, avec son compromis</small></div><div class="grimoire-variant-grid">${variants.map(variantHTML).join('')}</div><div class="journey-small">Les exploits se réalisent dans les vrais vols, jamais au Laboratoire. Les défis score, primes et Sprint imposent la version de base.</div></section>`;
 }
 function collectionRequirement(item){
  if(item.mastery)return 'Maîtrise · '+masteryRules[item.mastery].label;
@@ -937,7 +954,21 @@ function collectionRequirement(item){
  return fmt(item.xp)+' XP · encore '+fmt(Math.max(0,item.xp-j.xp));
 }
 function grimoireMasteryCatalog(){const masteries=items.filter(i=>i.mastery);return `<section class="mastery-catalog"><h3>SCEAUX DE MAÎTRISE · RÉCOMPENSES COSMÉTIQUES</h3><div class="mastery-badge-grid">${masteries.map((i,index)=>{const unlocked=earned(i);return `<article class="mastery-catalog-row ${unlocked?'done':'locked'}">${grimoireMasteryBadge(i,unlocked)}<div class="mastery-badge-copy"><small>SCEAU ${String(index+1).padStart(2,'0')} · ${unlocked?'DÉBLOQUÉ':'VERROUILLÉ'}</small><b>${safeText(i.name)}</b><p>${safeText(masteryRules[i.mastery].label)}</p></div></article>`}).join('')}</div></section>`}
-function grimoireCollection(){return `<section class="grimoire-collection"><canvas id="wardrobePreview" width="220" height="160" class="wardrobe-preview" aria-label="Aperçu de la sorcière et de son apparence équipée"></canvas><div class="wardrobe-grid">${['outfit','spell','broom','pet','title'].map(kind=>`<section><h3>${({outfit:'TENUES',spell:'SORTS · COULEURS',broom:'BALAIS · APPARENCE',pet:'COMPAGNONS DÉCORATIFS',title:'TITRES'})[kind]}</h3>${items.filter(i=>i.kind===kind).map(i=>`<button class="wardrobe-item ${j.selected[kind]===i.id?'equipped':''}" data-item="${i.id}" ${earned(i)?'':'disabled'}><i style="background:${i.color||'#f3cd8e'}"></i><span><b>${safeText(i.name)}</b><small>${earned(i)?(j.selected[kind]===i.id?'Équipé':'Débloqué · équiper'):safeText(collectionRequirement(i))}</small></span></button>`).join('')}</section>`).join('')}</div>${grimoireMasteryCatalog()}<div class="journey-small">Aucune arme, vie ou statistique supplémentaire. Les compagnons de collection ne tirent pas.</div></section>`}
+function grimoireCollectionArt(item){
+ if(item.mastery){const src=grimoireMasterySource(item);return src?`<img src="${src}" alt="" draggable="false">`:''}
+ const loadout={violet:'pulse',tide:'tidewave',sun:'sunray',classic:'bruyere',comet:'comet-flight',aurora:'aurora-flight',none:'solo',owl:'scout-owl',bat:'hunter-bat'}[item.id];
+ if(loadout&&window.LoadoutArt?.illustration){const source=window.Arsenal?.catalog?.find(entry=>entry.id===loadout);return LoadoutArt.illustration({...source,...item,id:loadout,color:item.color||source?.color||'#d9b5ff'})}
+ const character=item.kind==='outfit'?'witchFlight':({novice:'witch',hunter:'skull',breaker:'pumpkin',silk:'ghost',regular:'witch',dawn:'witchFlight'}[item.id]||'witch'),src=window.MinuitArt?.[character]?.src;
+ return src?`<img src="${src}" alt="" draggable="false" style="filter:${safeText(item.filter||'none')}">`:'<span class="grimoire-reward-fallback" aria-hidden="true">✦</span>';
+}
+function grimoireCollectionCard(item){
+ const unlocked=earned(item),selected=j.selected[item.kind]===item.id,detail=unlocked?(selected?'Apparence actuellement équipée':'Page dévoilée · prête à équiper'):collectionRequirement(item),note=item.kind==='pet'?'Compagnon décoratif · ne tire pas':'Cosmétique · aucun bonus de statistiques';
+ return `<button type="button" class="wardrobe-item grimoire-reward-card ${unlocked?'unlocked':'locked'}${selected?' equipped':''}" style="--reward-color:${item.color||'#e8b878'}" data-item="${item.id}" aria-label="${safeText(item.name+' · '+(selected?'équipé':unlocked?'débloqué':'verrouillé'))}" aria-pressed="${selected}" ${unlocked?'':'disabled'}><span class="grimoire-reward-status">${selected?'ÉQUIPÉ':unlocked?'DÉBLOQUÉ':'VERROUILLÉ'}</span><span class="grimoire-reward-art">${grimoireCollectionArt(item)}</span><strong class="grimoire-reward-name">${safeText(item.name)}</strong><span class="grimoire-reward-detail"><strong>${safeText(detail)}</strong><small>${safeText(note)}</small></span><span class="grimoire-reward-pick">${selected?'Équipé ✓':unlocked?'Équiper →':'Objectif en cours'}</span></button>`;
+}
+function grimoireCollection(){
+ const kinds=[['outfit','TENUES'],['spell','SORTS · COULEURS'],['broom','BALAIS · APPARENCE'],['pet','COMPAGNONS DÉCORATIFS'],['title','TITRES']];
+ return `<section class="grimoire-collection"><canvas id="wardrobePreview" width="220" height="160" class="wardrobe-preview" aria-label="Aperçu de la sorcière et de son apparence équipée"></canvas><div class="wardrobe-grid grimoire-card-groups">${kinds.map(([kind,label])=>`<section class="grimoire-card-group"><h3>${label}</h3><div class="grimoire-card-grid">${items.filter(item=>item.kind===kind).map(grimoireCollectionCard).join('')}</div></section>`).join('')}</div>${grimoireMasteryCatalog()}<div class="journey-small">Aucune arme, vie ou statistique supplémentaire. Les compagnons de collection ne tirent pas.</div></section>`;
+}
 function wardrobe(tab){
  if(typeof tab==='string'&&['overview','spells','collection'].includes(tab))wardrobeTab=tab;
  if(['play','pause'].includes(state))wardrobePaused=true;else if(state!=='journey-wardrobe')wardrobePaused=false;
@@ -994,6 +1025,16 @@ css.textContent+=`
 @media(max-width:850px){.grimoire-screen>h2{font-size:clamp(28px,8vw,42px)}.grimoire-tabs{gap:3px;margin-bottom:10px}.grimoire-tabs button{padding:7px 3px;font-size:9px;min-height:44px}.grimoire-book-summary{padding:14px;gap:8px 10px}.grimoire-book-summary h3{font-size:27px}.grimoire-book-summary h3 span{font-size:10px}.grimoire-book-summary p{font-size:9px}.grimoire-seal{--seal:82px}.grimoire-seal strong{font-size:18px}.grimoire-last-page{padding:13px;gap:11px}.grimoire-page-mark{flex-basis:46px;width:46px;height:52px}.grimoire-page-mark img{width:52px;height:49px}.grimoire-last-page h3{font-size:15px}.grimoire-section-title{align-items:flex-start;flex-direction:column;gap:3px}.grimoire-section-title>small{text-align:left}.grimoire-chapter{grid-template-columns:1fr;gap:8px;padding:10px 11px}.grimoire-chapter-progress{text-align:left}.grimoire-ability-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grimoire-ability-copy{padding:9px}.grimoire-ability-copy h3{font-size:12px}.grimoire-variant-grid{grid-template-columns:1fr}.mastery-badge-grid{grid-template-columns:1fr}.mastery-catalog .mastery-catalog-row{flex-direction:row;gap:10px;padding:10px}.mastery-badge{flex-basis:70px;width:70px;height:78px}.mastery-badge img{width:65px;height:61px}.grimoire-screen>#collectionBack{width:100%;max-width:420px}}
 @media(max-width:520px){.grimoire-ability-grid{grid-template-columns:1fr}.grimoire-ability{display:grid;grid-template-columns:112px minmax(0,1fr)}.grimoire-ability>.arsenal-illustration{width:112px;height:88px;align-self:start;margin-top:8px}.grimoire-ability-copy>small{min-height:0}.grimoire-ability-copy p{font-size:8px}.grimoire-book-summary h3 span{display:block;margin-top:5px}.grimoire-last-stats{gap:6px 12px}}
 @media(prefers-reduced-motion:reduce){.grimoire-screen *{scroll-behavior:auto}}
+`;
+css.textContent+=`
+/* Les pages du Grimoire reprennent les cartes illustrées des renforcements de gardien. */
+.wardrobe-grid.grimoire-card-groups{display:block;width:100%;max-width:960px;margin:14px 0;text-align:center}.grimoire-card-groups>.grimoire-card-group,.grimoire-card-groups>.grimoire-card-group:last-child{display:block;margin:0 0 18px}.grimoire-card-group>h3{margin:9px 0;color:#b7a1c6;font-size:9px;letter-spacing:2px;text-align:left}.grimoire-card-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;width:100%}
+.grimoire-reward-card{position:relative;display:flex;min-width:0;min-height:270px;flex-direction:column;align-items:center;gap:0;margin:0;padding:12px 10px 10px;overflow:hidden;border:1px solid color-mix(in srgb,var(--reward-color) 45%,transparent);border-radius:11px;background:linear-gradient(150deg,#302239ee,#1a1428f5);color:#e9dcee;text-align:center;transition:transform .15s,border-color .15s,background .15s}.grimoire-reward-card.unlocked{border-color:color-mix(in srgb,var(--reward-color) 45%,transparent);background:linear-gradient(150deg,#302239ee,#1a1428f5)}.grimoire-reward-card.equipped{border-color:var(--reward-color);background:linear-gradient(150deg,#413047,#21172e);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--reward-color) 18%,transparent)}button.grimoire-reward-card{cursor:pointer}button.grimoire-reward-card:not(:disabled):hover,button.grimoire-reward-card:not(:disabled):focus-visible{transform:translateY(-3px);border-color:var(--reward-color);background:#3b2948;outline:none}.grimoire-reward-card:disabled{opacity:.62;cursor:not-allowed}.grimoire-reward-card.locked .grimoire-reward-art{filter:grayscale(.82) saturate(.5);opacity:.55}
+.grimoire-reward-status{position:absolute;z-index:2;top:8px;left:8px;right:8px;overflow:hidden;color:#c4b1ce;font-size:7px;letter-spacing:.8px;line-height:1.4;text-align:left;text-overflow:ellipsis;white-space:nowrap}.grimoire-reward-card.equipped .grimoire-reward-status{color:#f2cc8f}.grimoire-reward-art{display:grid;place-items:center;width:100%;height:108px;flex:none;margin-top:14px}.grimoire-reward-art>.arsenal-illustration{display:block;width:100%;height:108px;margin:0;border-radius:8px;object-fit:contain}.grimoire-reward-art>img{display:block;width:100%;height:108px;object-fit:contain;filter:drop-shadow(0 5px 5px #0006)}.grimoire-reward-fallback{color:var(--reward-color);font-size:60px}.grimoire-reward-name{display:block;min-height:32px;margin-top:7px;color:var(--reward-color);font-size:12px;line-height:1.3}.grimoire-reward-detail{display:block;width:100%;margin-top:9px;padding:0;color:#c9b9d1;font-size:10px;line-height:1.45}.grimoire-reward-detail strong{color:#f1d4a5;font-weight:700}.grimoire-reward-detail small{display:block;margin-top:7px;color:#9585a6;font-size:8px;line-height:1.4}.grimoire-reward-pick{display:block;width:100%;margin-top:auto;padding-top:12px;color:#f2c887;font-size:10px;font-weight:700;line-height:1.4}.grimoire-reward-progress{width:100%;margin-top:auto;padding-top:12px}.grimoire-reward-card .grimoire-lock-progress>span{margin-bottom:6px}.grimoire-reward-card .grimoire-lock-progress .journey-bar{max-width:none}.grimoire-reward-card .grimoire-ability-copy{padding:0}.grimoire-reward-card .grimoire-ability-copy>small{min-height:0;font-size:8px;letter-spacing:0}.grimoire-ability-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.grimoire-variant-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.grimoire-variant.grimoire-reward-card{padding:12px 10px 10px}.grimoire-variant.grimoire-reward-card>small{font-size:7px}.grimoire-collection>.wardrobe-preview{margin-bottom:4px;border:1px solid #a47b6855;border-radius:12px;background:linear-gradient(145deg,#2c203b,#171323)}
+@media(max-width:850px){.grimoire-card-grid,.grimoire-ability-grid,.grimoire-variant-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grimoire-reward-card{min-height:225px;padding:9px 8px}.grimoire-reward-art{height:82px;margin-top:13px}.grimoire-reward-art>.arsenal-illustration,.grimoire-reward-art>img{height:82px}.grimoire-reward-name{min-height:29px;font-size:11px}.grimoire-reward-detail{font-size:10px}.grimoire-reward-detail small{font-size:9px}.grimoire-reward-pick{font-size:9px}.grimoire-reward-status{font-size:6px}.grimoire-variant.grimoire-reward-card{padding:9px 8px}}
+@media(max-width:520px){.grimoire-ability-grid,.grimoire-variant-grid{grid-template-columns:1fr}.grimoire-ability.grimoire-reward-card,.grimoire-variant.grimoire-reward-card{display:flex;min-height:230px}.grimoire-ability.grimoire-reward-card .grimoire-reward-art,.grimoire-variant.grimoire-reward-card .grimoire-reward-art{width:min(232px,100%);height:108px;margin-top:14px}.grimoire-ability.grimoire-reward-card .arsenal-illustration,.grimoire-variant.grimoire-reward-card .arsenal-illustration{width:100%;height:108px;margin:0}.grimoire-reward-detail{font-size:9px}.grimoire-reward-detail small{font-size:8px}}
+@media(max-width:390px){.wardrobe-item.grimoire-reward-card{min-height:202px;padding:8px 6px}.wardrobe-item .grimoire-reward-art{height:65px}.wardrobe-item .grimoire-reward-art>.arsenal-illustration,.wardrobe-item .grimoire-reward-art>img{height:65px}.wardrobe-item .grimoire-reward-name{font-size:10px;min-height:27px}.wardrobe-item .grimoire-reward-detail{font-size:9px}.wardrobe-item .grimoire-reward-detail small{font-size:8px}.wardrobe-item .grimoire-reward-pick{padding-top:8px;font-size:9px}}
+@media(prefers-reduced-motion:reduce){.grimoire-reward-card{transition:none}}
 `;
 css.textContent+=`
 .overlay:has(.account-page){justify-content:flex-start}
@@ -1108,7 +1149,7 @@ if(phoneMode&&(document.documentElement.requestFullscreen||document.documentElem
 }
 schedule();
 })();
-</script><script>/* Illustrations vectorielles des capacités : la forme dessine l’effet réel. */
+</script><script>/* Tableaux des capacités : personnages peints et effets lisibles, sans ressources externes. */
 (()=>{
 'use strict';
 const meta={
@@ -1122,24 +1163,162 @@ const meta={
  'scout-owl':{tags:['Aimant 155','Recharge +15 %'],alt:'Une chouette attire les objets vers la sorcière dans un grand cercle.'},
  'hunter-bat':{tags:['Tir 2,5 s','Recharge +25 %'],alt:'Une chauve-souris compagnon tire un projectile vers une créature.'}
 };
-const witch=(x,y,color='#d5b2ff',extra='')=>`<g transform="translate(${x} ${y}) ${extra}"><path d="M-28 15L28 7" stroke="#b88755" stroke-width="4" stroke-linecap="round"/><path d="M-29 14L-43 12L-38 19L-45 23L-27 23Z" fill="#d39a58"/><path d="M-7 2L-15 19L12 16L7 0Z" fill="${color}"/><circle cx="0" cy="-7" r="7" fill="#edc09e"/><path d="M-12-11L11-11L3-17L-2-32L-7-16Z" fill="#33243f"/><path d="M-14-11H13" stroke="#f2b96e" stroke-width="3"/><circle cx="4" cy="-8" r="1.2" fill="#302238"/></g>`;
-const ghost=(x,y,color='#c4b6dc',scale=1)=>`<g transform="translate(${x} ${y}) scale(${scale})"><path d="M-11 10V-2C-11-17 11-17 11-2V10L5 6L0 11L-5 6Z" fill="${color}" opacity=".9"/><circle cx="-4" cy="-3" r="1.7" fill="#34263f"/><circle cx="4" cy="-3" r="1.7" fill="#34263f"/></g>`;
-const owl=(x,y,color='#a9e9d0')=>`<g transform="translate(${x} ${y})"><ellipse rx="14" ry="18" fill="${color}"/><path d="M-12-9L-7-20L0-13L7-20L12-9" fill="${color}"/><circle cx="-5" cy="-5" r="4" fill="#28243c"/><circle cx="5" cy="-5" r="4" fill="#28243c"/><circle cx="-5" cy="-5" r="1.5" fill="#f4ddab"/><circle cx="5" cy="-5" r="1.5" fill="#f4ddab"/><path d="M-3 2L3 2L0 7Z" fill="#efbf78"/><path d="M-13 0L-22 8M13 0L22 8" stroke="${color}" stroke-width="5" stroke-linecap="round"/></g>`;
-const bat=(x,y,color='#c7a4ec')=>`<g transform="translate(${x} ${y})"><path d="M0-3L-8-15L-18-17L-29-7L-18-4L-14 7L0 14L14 7L18-4L29-7L18-17L8-15Z" fill="${color}"/><ellipse cy="2" rx="6" ry="10" fill="#6f538c"/><path d="M-5-5L-7-15L0-9L7-15L5-5" fill="#6f538c"/><circle cx="-2" cy="-2" r="1" fill="#ffe2a1"/><circle cx="2" cy="-2" r="1" fill="#ffe2a1"/></g>`;
-const gem=(x,y,color='#ffd080')=>`<path d="M${x} ${y-7}L${x+6} ${y}L${x} ${y+8}L${x-6} ${y}Z" fill="${color}"/><circle cx="${x}" cy="${y}" r="11" fill="none" stroke="${color}" stroke-opacity=".25"/>`;
-function frame(item,content){const color=item.color;return`<svg class="arsenal-illustration" viewBox="0 0 240 112" role="img" aria-label="${safeText(meta[item.id].alt)}"><rect width="240" height="112" rx="11" fill="#171323"/><circle cx="196" cy="12" r="55" fill="${color}" opacity=".07"/><circle cx="25" cy="20" r="1.5" fill="#f8dfa8" opacity=".7"/><circle cx="55" cy="35" r="1" fill="#f8dfa8" opacity=".45"/><circle cx="211" cy="46" r="1.5" fill="#f8dfa8" opacity=".55"/><path d="M0 96Q55 84 112 95T240 93V112H0Z" fill="#261b31"/>${content}</svg>`}
-function illustration(item){
+let serial=0;
+function painting(name,x,y,w,h,transform='',opacity=1){
+ const src=window.MinuitArt?.[name]?.src;
+ return src?`<g transform="translate(${x} ${y}) ${transform}" opacity="${opacity}"><image href="${src}" x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet"/></g>`:'';
+}
+function witch(x,y,w=90,transform='',opacity=1){return painting('witch',x,y,w,w*.923,transform,opacity)}
+function ghost(x,y,w=32,transform='',opacity=1){return painting('ghost',x,y,w,w*1.043,transform,opacity)}
+function bat(x,y,w=70,transform='',opacity=1){return painting('bat',x,y,w,w*.726,transform,opacity)}
+function collectible(name,x,y,w=29,transform='',opacity=1){
+ const src=window.CollectibleArt?.art?.[name]?.src;
+ return src?`<g transform="translate(${x} ${y}) ${transform}" opacity="${opacity}"><image href="${src}" x="${-w/2}" y="${-w*.445}" width="${w}" height="${w*.89}" preserveAspectRatio="xMidYMid meet"/></g>`:'';
+}
+function spark(x,y,color,size=1,opacity=.9){return `<path d="M${x} ${y-4*size}L${x+1.2*size} ${y-1.2*size}L${x+4*size} ${y}L${x+1.2*size} ${y+1.2*size}L${x} ${y+4*size}L${x-1.2*size} ${y+1.2*size}L${x-4*size} ${y}L${x-1.2*size} ${y-1.2*size}Z" fill="${color}" opacity="${opacity}"/>`}
+function owl(x,y,color,u){
+ return `<g transform="translate(${x} ${y})">
+  <ellipse cy="30" rx="28" ry="6" fill="#090a16" opacity=".38"/>
+  <path d="M-11-15-20-34-3-25M11-15 20-34 3-25" fill="url(#feather-${u})" stroke="#d9c6b0" stroke-width="1.2"/>
+  <path d="M-15-8Q-37-5-32 19L-17 12-11 28M15-8Q37-5 32 19L17 12 11 28" fill="url(#feather-${u})" stroke="#514255" stroke-width="1.5"/>
+  <path d="M-28 3-17 8M-29 12-18 14M28 3 17 8M29 12 18 14" stroke="#ead9bd" stroke-opacity=".48" stroke-width="1.4"/>
+  <ellipse cy="3" rx="20" ry="29" fill="url(#feather-${u})" stroke="#514255" stroke-width="1.5"/>
+  <path d="M-13 9Q0 20 13 9L10 27 0 34-10 27Z" fill="#d9c5ab" opacity=".72"/>
+  <path d="M-8 15 0 20 8 15M-7 23 0 28 7 23" fill="none" stroke="#7b6870" stroke-width="1.2"/>
+  <path d="M-19-10Q-10-23 0-12 10-23 19-10L16 5 0 12-16 5Z" fill="#e7d7bd" stroke="#6c5764" stroke-width="1.2"/>
+  <circle cx="-9" cy="-5" r="8" fill="#3a3047" stroke="${color}" stroke-width="1.5"/><circle cx="9" cy="-5" r="8" fill="#3a3047" stroke="${color}" stroke-width="1.5"/>
+  <circle cx="-9" cy="-5" r="4.2" fill="url(#eye-${u})"/><circle cx="9" cy="-5" r="4.2" fill="url(#eye-${u})"/>
+  <ellipse cx="-9" cy="-5" rx="1.8" ry="3.4" fill="#171526"/><ellipse cx="9" cy="-5" rx="1.8" ry="3.4" fill="#171526"/>
+  <circle cx="-10" cy="-7" r="1.2" fill="#fff9dc"/><circle cx="8" cy="-7" r="1.2" fill="#fff9dc"/>
+  <path d="M-4 4 0 11 4 4 0 1Z" fill="url(#gold-${u})" stroke="#795049" stroke-width=".7"/>
+  <path d="M-8 31-11 35M-4 32-5 36M8 31 11 35M4 32 5 36" stroke="#d9b878" stroke-width="1.5"/>
+ </g>`;
+}
+function variantOverlay(id,u,color){
+ if(id==='ripple')return `<g fill="none" stroke="#efd8ff"><ellipse cx="120" cy="63" rx="103" ry="49" stroke-width="1.4" stroke-dasharray="3 6" opacity=".65"/><path d="M23 75Q120 123 217 75" stroke-width="2" opacity=".42"/></g>${spark(27,56,'#f2dcff',.8)}${spark(213,55,'#f2dcff',.8)}`;
+ if(id==='shatter')return `<g fill="none" stroke="#ffe3a3" stroke-linecap="round"><path d="M120 84 84 2M120 84 120-2M120 84 156 2" stroke-width="2.2" opacity=".78"/><path d="M120 84 98 3M120 84 142 3" stroke-width="5" opacity=".12" filter="url(#glow-${u})"/></g>${spark(84,15,'#fff0bd',.9)}${spark(156,15,'#fff0bd',.9)}`;
+ if(id==='surge')return `<g fill="none" stroke="#b9fff0" stroke-linecap="round" stroke-linejoin="round"><path d="M213 84Q177 108 136 88" stroke-width="3" opacity=".8"/><path d="M143 80 134 88 145 94" stroke-width="3"/></g>`;
+ if(id==='rhythm')return `<g transform="translate(199 80)" fill="none" stroke="#f3d7a2" stroke-linecap="round"><circle r="15" fill="#191425" fill-opacity=".82" stroke-width="1.5"/><path d="M0-11V-15M11 0H15M0 11V15M-11 0H-15" stroke-width="1.5"/><path d="M0 0V-8M0 0 7 4" stroke-width="2.2"/><circle r="2" fill="#f3d7a2" stroke="none"/></g>`;
+ return '';
+}
+function frame(item,content,variant=null){
+ const u=(item.id||'art').replace(/[^a-z0-9-]/gi,'')+'-'+(++serial),color=item.color||'#d5b2ff';
+ const baseLabel=meta[item.id]?.alt||item.name||'Illustration de la capacité',label=baseLabel+(variant?.name?' Variante '+variant.name+' : '+variant.desc:'');
+ return `<svg class="arsenal-illustration" viewBox="0 0 240 112" role="img" aria-label="${safeText(label)}"${variant?.id?` data-art-variant="${safeText(variant.id)}"`:''}>
+ <defs>
+  <linearGradient id="night-${u}" x2=".85" y2="1"><stop stop-color="#0d1020"/><stop offset=".52" stop-color="#21182e"/><stop offset="1" stop-color="#342039"/></linearGradient>
+  <radialGradient id="aura-${u}" cx=".52" cy=".48" r=".62"><stop stop-color="${color}" stop-opacity=".24"/><stop offset=".55" stop-color="${color}" stop-opacity=".06"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>
+  <linearGradient id="mist-${u}" x2="0" y2="1"><stop stop-color="#33243e" stop-opacity=".15"/><stop offset="1" stop-color="#100f20" stop-opacity=".94"/></linearGradient>
+  <linearGradient id="beam-${u}" x2="0" y2="1"><stop stop-color="#fff8d5"/><stop offset=".36" stop-color="${color}"/><stop offset="1" stop-color="${color}" stop-opacity=".08"/></linearGradient>
+  <linearGradient id="trail-${u}"><stop stop-color="${color}" stop-opacity="0"/><stop offset=".65" stop-color="${color}" stop-opacity=".65"/><stop offset="1" stop-color="#f4ecff" stop-opacity=".9"/></linearGradient>
+  <linearGradient id="feather-${u}" x2=".8" y2="1"><stop stop-color="#f0dfc5"/><stop offset=".42" stop-color="#aa9389"/><stop offset="1" stop-color="#4b4055"/></linearGradient>
+  <linearGradient id="gold-${u}" x2=".7" y2="1"><stop stop-color="#fff0b5"/><stop offset=".5" stop-color="#d5a15c"/><stop offset="1" stop-color="#7b4b42"/></linearGradient>
+  <radialGradient id="eye-${u}" cx=".35" cy=".25"><stop stop-color="#fffbd0"/><stop offset=".45" stop-color="#e9bc67"/><stop offset="1" stop-color="#9b5b45"/></radialGradient>
+  <filter id="glow-${u}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="soft-${u}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>
+  <clipPath id="clip-${u}"><rect width="240" height="112" rx="11"/></clipPath>
+ </defs>
+ <g clip-path="url(#clip-${u})">
+  <rect width="240" height="112" fill="url(#night-${u})"/><rect width="240" height="112" fill="url(#aura-${u})"/>
+  <circle cx="202" cy="11" r="44" fill="${color}" opacity=".055"/><circle cx="202" cy="11" r="30" fill="none" stroke="${color}" stroke-opacity=".08"/>
+  <g fill="#f8e7c0"><circle cx="18" cy="19" r="1" opacity=".65"/><circle cx="43" cy="10" r=".7" opacity=".5"/><circle cx="218" cy="54" r=".9" opacity=".5"/><circle cx="153" cy="12" r=".65" opacity=".55"/></g>
+  <path d="M0 75 24 62 41 69 67 48 89 69 112 57 138 72 165 50 192 68 218 48 240 61V112H0Z" fill="#111322" opacity=".68"/>
+  <path d="M0 91Q55 77 112 90T240 84V112H0Z" fill="url(#mist-${u})"/>
+  ${content(u,color)}
+  ${variantOverlay(variant?.id,u,color)}
+  <path d="M0 105Q62 96 118 105T240 99V112H0Z" fill="#0d0e1b" opacity=".28"/>
+ </g>
+ <rect x=".5" y=".5" width="239" height="111" rx="10.5" fill="none" stroke="${color}" stroke-opacity=".15"/>
+ </svg>`;
+}
+function illustration(item,variant=null){
  switch(item.id){
-  case'pulse':return frame(item,`<circle cx="120" cy="62" r="47" fill="${item.color}" opacity=".09"/><circle cx="120" cy="62" r="42" fill="none" stroke="${item.color}" stroke-width="3" stroke-opacity=".65"/><circle cx="120" cy="62" r="29" fill="none" stroke="${item.color}" stroke-opacity=".25"/>${ghost(120,18,item.color,.75)}${ghost(77,58,item.color,.75)}${ghost(166,60,item.color,.75)}${witch(120,80,item.color)}<path d="M72 27L82 35M168 27L158 35" stroke="#f5d8ff" stroke-width="2" stroke-dasharray="3 3"/>`);
-  case'tidewave':return frame(item,`<path d="M39 74Q120-5 201 74L185 78Q120 23 55 78Z" fill="${item.color}" opacity=".22"/><path d="M45 66Q120 2 195 66M57 75Q120 22 183 75" fill="none" stroke="${item.color}" stroke-width="4" stroke-linecap="round" opacity=".8"/>${ghost(82,29,item.color,.72)}${ghost(157,27,item.color,.72)}<path d="M82 48V37M157 46V35" stroke="#e6fff8" stroke-width="2"/>${witch(120,91,item.color)}`);
-  case'sunray':return frame(item,`<rect x="108" y="0" width="24" height="91" fill="${item.color}" opacity=".2"/><rect x="116" y="0" width="8" height="91" fill="${item.color}" opacity=".85"/><path d="M108 0V88M132 0V88" stroke="#fff2c9" stroke-opacity=".45"/>${ghost(120,25,'#f4d9b0',.8)}${ghost(190,45,'#796e88',.75)}${witch(120,93,item.color)}<path d="M102 17H86M138 17H154" stroke="${item.color}" stroke-opacity=".35" stroke-dasharray="3 4"/>`);
-  case'bruyere':return frame(item,`<circle cx="120" cy="59" r="42" fill="none" stroke="${item.color}" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/><path d="M52 59H83M157 59H188" stroke="${item.color}" stroke-width="3" stroke-linecap="round"/><path d="M75 52L84 59L75 66M165 52L156 59L165 66" fill="none" stroke="${item.color}" stroke-width="3"/>${witch(120,70,item.color)}`);
-  case'comet-flight':return frame(item,`<path d="M19 31H86M8 49H74M25 67H89M13 84H72" stroke="${item.color}" stroke-width="4" stroke-linecap="round" opacity=".45"/><path d="M33 20H67M18 76H54" stroke="#f2fbff" stroke-width="2" opacity=".55"/><circle cx="76" cy="50" r="25" fill="${item.color}" opacity=".09"/>${witch(139,61,item.color,'rotate(-12)')}<path d="M178 27L190 19M183 42L200 39" stroke="${item.color}" stroke-width="3" stroke-linecap="round"/>`);
-  case'aurora-flight':return frame(item,`<g opacity=".16">${witch(70,70,item.color)}</g><g opacity=".32">${witch(98,59,item.color)}</g>${witch(135,48,item.color)}<path d="M176 82A38 38 0 1 1 181 35" fill="none" stroke="${item.color}" stroke-width="3" stroke-linecap="round"/><path d="M177 27L184 36L173 39" fill="${item.color}"/><path d="M47 93H105" stroke="${item.color}" stroke-width="3" stroke-linecap="round" opacity=".4"/>`);
-  case'solo':return frame(item,`<circle cx="57" cy="57" r="20" fill="none" stroke="#796b87" stroke-dasharray="4 5"/><circle cx="184" cy="57" r="20" fill="none" stroke="#796b87" stroke-dasharray="4 5"/><path d="M46 68L68 46M173 68L195 46" stroke="#796b87" stroke-width="2"/>${witch(120,67,item.color)}<path d="M92 29Q120 13 148 29" fill="none" stroke="${item.color}" stroke-opacity=".35"/>`);
-  case'scout-owl':return frame(item,`<circle cx="102" cy="62" r="53" fill="${item.color}" opacity=".05"/><circle cx="102" cy="62" r="49" fill="none" stroke="${item.color}" stroke-dasharray="4 4" opacity=".45"/>${gem(206,23)}${gem(211,78,'#a9e9d0')}<path d="M199 28Q165 35 136 58M202 77Q170 76 140 70" fill="none" stroke="${item.color}" stroke-width="2" stroke-dasharray="4 3"/>${witch(83,82,item.color)}${owl(157,55,item.color)}`);
-  case'hunter-bat':return frame(item,`${ghost(181,20,'#d9c4e5',.82)}<path d="M157 51L177 29" stroke="#ffd18f" stroke-width="4" stroke-linecap="round"/><path d="M160 48L176 32" stroke="#fff4d6" stroke-width="1.5"/>${witch(75,83,item.color)}${bat(145,62,item.color)}<path d="M114 85H131M108 93H126" stroke="${item.color}" stroke-width="2" opacity=".4"/>`);
-  default:return frame(item,witch(120,65,item.color));
+  case'pulse':return frame(item,(u,c)=>`
+   <ellipse cx="120" cy="62" rx="84" ry="47" fill="${c}" opacity=".1" filter="url(#soft-${u})"/>
+   ${ghost(68,33,30,'rotate(-8)',.82)}${ghost(172,33,30,'rotate(8)',.82)}${ghost(120,15,24,'',.68)}
+   <ellipse cx="120" cy="63" rx="76" ry="43" fill="none" stroke="${c}" stroke-width="7" opacity=".13" filter="url(#glow-${u})"/>
+   <ellipse cx="120" cy="63" rx="76" ry="43" fill="none" stroke="${c}" stroke-width="2" opacity=".82"/>
+   <ellipse cx="120" cy="63" rx="59" ry="33" fill="none" stroke="${c}" stroke-width="1" stroke-dasharray="2 5" opacity=".4"/>
+   <g stroke="${c}" stroke-width="1.3" opacity=".68"><path d="M44 63h10M186 63h10M120 20v8M120 98v7M66 32l7 5M167 89l7 5M66 94l7-5M167 37l7-5"/></g>
+   ${witch(120,70,88)}
+   <path d="M46 69Q120 113 194 69" fill="none" stroke="#eedbff" stroke-width="1.7" opacity=".68"/>
+   ${spark(44,48,c,.75)}${spark(196,48,c,.75)}${spark(153,91,'#f4e6ff',.55)}
+  `,variant);
+  case'tidewave':return frame(item,(u,c)=>`
+   <path d="M57 91Q118 9 219 39Q170 35 137 96Z" fill="${c}" opacity=".15"/>
+   ${ghost(150,27,30,'rotate(12)',.78)}${ghost(198,41,26,'rotate(18)',.62)}
+   ${witch(66,75,78,'rotate(-4)')}
+   <path d="M49 85Q117 2 222 43" fill="none" stroke="${c}" stroke-width="12" opacity=".12" filter="url(#glow-${u})"/>
+   <path d="M49 85Q117 2 222 43" fill="none" stroke="${c}" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+   <path d="M68 91Q126 27 207 57" fill="none" stroke="#d6fff4" stroke-width="1.8" stroke-linecap="round" opacity=".66"/>
+   <path d="M92 91Q139 48 192 66" fill="none" stroke="${c}" stroke-width="2" stroke-dasharray="3 5" opacity=".55"/>
+   <g fill="#d9fff5" opacity=".72"><circle cx="116" cy="37" r="2"/><circle cx="134" cy="26" r="1.4"/><circle cx="178" cy="31" r="1.7"/><circle cx="202" cy="43" r="1.2"/></g>
+   ${spark(213,29,c,.65)}${spark(91,69,'#e6fff8',.55)}
+  `,variant);
+  case'sunray':return frame(item,(u,c)=>`
+   <path d="M103-8H137L148 91H92Z" fill="${c}" opacity=".15" filter="url(#soft-${u})"/>
+   <path d="M110-5H130L136 83H104Z" fill="url(#beam-${u})" opacity=".64"/>
+   <rect x="116" y="-4" width="8" height="84" rx="4" fill="#fff4c4" opacity=".82" filter="url(#glow-${u})"/>
+   <path d="M105 0 99 78M135 0 141 78" stroke="${c}" stroke-width="1.4" opacity=".55"/>
+   ${ghost(120,20,32,'',.86)}
+   <ellipse cx="120" cy="82" rx="41" ry="15" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="3 4" opacity=".55"/>
+   ${witch(120,79,82)}
+   <path d="M84 87Q120 105 156 87" fill="none" stroke="#ffe7ad" stroke-width="1.4" opacity=".55"/>
+   ${spark(96,28,c,.8)}${spark(145,48,c,.65)}${spark(105,9,'#fff8d7',.65)}
+  `,variant);
+  case'bruyere':return frame(item,(u,c)=>`
+   <circle cx="120" cy="59" r="48" fill="${c}" opacity=".08" filter="url(#soft-${u})"/>
+   <circle cx="120" cy="59" r="45" fill="none" stroke="${c}" stroke-width="1.7" stroke-dasharray="4 5" opacity=".68"/>
+   <circle cx="120" cy="59" r="37" fill="none" stroke="#f2dbac" stroke-width=".8" opacity=".25"/>
+   <g stroke="${c}" stroke-width="1.5" opacity=".75"><path d="M120 10v8M120 100v7M71 59h9M160 59h9M85 24l6 6M149 88l6 6M85 94l6-6M149 30l6-6"/></g>
+   <path d="M28 57H65M175 57H212M52 50l13 7-13 7M188 50l-13 7 13 7" fill="none" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity=".65"/>
+   ${witch(120,67,90)}
+   <path d="M80 80Q120 111 160 80" fill="none" stroke="#f0d6a4" stroke-width="1.5" opacity=".5"/>
+   ${spark(74,18,c,.65)}${spark(174,83,c,.55)}
+  `,variant);
+  case'comet-flight':return frame(item,(u,c)=>`
+   <g fill="none" stroke="url(#trail-${u})" stroke-linecap="round"><path d="M-12 25Q48 12 111 36" stroke-width="5"/><path d="M-8 48Q50 34 105 50" stroke-width="3.5"/><path d="M-15 76Q48 63 105 65" stroke-width="4"/><path d="M7 94Q56 80 105 78" stroke-width="2"/></g>
+   <g fill="${c}" opacity=".45"><circle cx="29" cy="36" r="2"/><circle cx="57" cy="64" r="1.5"/><circle cx="78" cy="24" r="1.3"/><circle cx="35" cy="87" r="1.2"/></g>
+   <path d="M18 15 69 20M4 57 64 55M22 102 78 89" stroke="#e7faff" stroke-width="1" opacity=".4"/>
+   ${witch(143,61,96,'rotate(-11)')}
+   <path d="M192 24 214 15M197 35 224 32" stroke="${c}" stroke-width="2" stroke-linecap="round" opacity=".68"/>
+   ${spark(198,23,'#ecfeff',1.15)}${spark(219,54,c,.55)}${spark(105,19,c,.55)}
+  `,variant);
+  case'aurora-flight':return frame(item,(u,c)=>`
+   <path d="M-8 31Q47-4 105 20T248 8" fill="none" stroke="${c}" stroke-width="10" opacity=".09" filter="url(#soft-${u})"/>
+   <path d="M-8 29Q47-4 105 20T248 8M-5 40Q52 8 109 30T245 20" fill="none" stroke="${c}" stroke-width="2" opacity=".32"/>
+   ${witch(65,72,70,'rotate(-13)',.12)}${witch(103,65,80,'rotate(-9)',.25)}
+   <ellipse cx="150" cy="60" rx="47" ry="43" fill="none" stroke="${c}" stroke-width="6" opacity=".1" filter="url(#glow-${u})"/>
+   <path d="M177 92A45 40 0 1 1 190 35" fill="none" stroke="${c}" stroke-width="2.5" stroke-linecap="round" opacity=".78"/>
+   <path d="M184 27 193 34 181 39" fill="none" stroke="#eadbff" stroke-width="2" stroke-linejoin="round"/>
+   ${witch(150,63,88,'rotate(-5)')}
+   ${spark(192,18,c,.75)}${spark(112,93,'#f0e3ff',.55)}
+  `,variant);
+  case'solo':return frame(item,(u,c)=>`
+   <circle cx="120" cy="51" r="41" fill="${c}" opacity=".08"/><circle cx="120" cy="51" r="32" fill="none" stroke="${c}" stroke-opacity=".15"/>
+   <g fill="none" stroke="${c}" stroke-width="1.2" stroke-dasharray="3 5" opacity=".28"><circle cx="42" cy="57" r="18"/><circle cx="198" cy="57" r="18"/></g>
+   <path d="M31 69 51 45M187 69 207 45" stroke="${c}" stroke-width="1" opacity=".15"/>
+   ${witch(120,67,96)}
+   <path d="M15 94Q54 82 88 94M152 94Q188 82 226 93" fill="none" stroke="#b9a7cc" stroke-width="2" opacity=".15"/>
+   ${spark(42,25,c,.55)}${spark(200,28,c,.55)}${spark(179,15,'#f5e7ff',.45)}
+  `,variant);
+  case'scout-owl':return frame(item,(u,c)=>`
+   <ellipse cx="116" cy="59" rx="96" ry="46" fill="${c}" opacity=".045"/>
+   <ellipse cx="116" cy="59" rx="96" ry="46" fill="none" stroke="${c}" stroke-width="1.4" stroke-dasharray="4 5" opacity=".42"/>
+   <path d="M203 30Q183 32 165 43M204 78Q183 72 165 63" fill="none" stroke="${c}" stroke-width="1.4" stroke-dasharray="3 4" opacity=".55"/>
+   ${collectible('bonus-points',208,23,28,'rotate(8)',.9)}${collectible('bonus-pickup-shield',209,84,28,'rotate(-8)',.85)}
+   ${witch(65,75,78,'rotate(-3)')}${owl(150,51,c,u)}
+   ${spark(180,19,c,.55)}${spark(116,24,'#efffe9',.55)}${spark(192,61,c,.45)}
+  `,variant);
+  case'hunter-bat':return frame(item,(u,c)=>`
+   ${ghost(207,23,30,'rotate(7)',.78)}
+   <path d="M157 52Q179 36 199 28" fill="none" stroke="#ffd79a" stroke-width="7" opacity=".12" filter="url(#glow-${u})"/>
+   <path d="M157 52Q179 36 199 28" fill="none" stroke="#ffe3aa" stroke-width="1.8" stroke-dasharray="4 3" opacity=".85"/>
+   ${witch(64,76,78,'rotate(-3)')}${bat(145,54,70,'rotate(-5)')}
+   <circle cx="184" cy="35" r="4" fill="#fff1bd" filter="url(#glow-${u})"/><circle cx="184" cy="35" r="1.7" fill="#fffbe4"/>
+   ${spark(199,28,'#ffe5a5',.75)}${spark(113,24,c,.55)}${spark(211,65,c,.45)}
+  `,variant);
+  default:return frame(item,(u,c)=>`${witch(120,66,92)}${spark(181,28,c,.8)}`,variant);
  }
 }
 window.LoadoutArt={illustration,tags:id=>meta[id]?.tags||[],alt:id=>meta[id]?.alt||''};
@@ -3669,12 +3848,17 @@ function ensure(){
 }
 function maxLives(){return 5+(enabled()?ensure().life:0)}
 function shotDamage(base){return (Number(base)||0)+(enabled()?ensure().power:0)}
-function familiarCount(base){return Math.max(0,Math.floor(Number(base)||0))+(enabled()&&ensure().companion?1:0)}
-function companionDamage(base){return (Number(base)||0)+(enabled()?Math.max(0,ensure().companion-1):0)}
+function familiarCount(base){return Math.max(0,Math.floor(Number(base)||0))+(enabled()?ensure().companion:0)}
+function companionDamage(base){return Number(base)||0}
 function art(item){const src=window.CollectibleArt?.art?.[item.art]?.src;return src?`<img src="${src}" alt="" aria-hidden="true">`:`<span class="level-reward-fallback" aria-hidden="true">${item.icon}</span>`}
 function detail(item,r){
  if(item.id==='power')return `Tir automatique : <strong>+1 dégât</strong><small>Puissance durable actuelle : +${r.power}</small>`;
- if(item.id==='companion')return r.companion?`Le compagnon gagne <strong>+1 dégât</strong> par tir<small>Un compagnon conservé · niveau ${r.companion}</small>`:`Un compagnon <strong>tire avec toi</strong><small>Conservé dans tous les mondes</small>`;
+ if(item.id==='companion'){
+  const next=Math.max(0,Math.floor(Number(upgrades.familiar)||0))+r.companion+1;
+  if(next===1)return `Un compagnon <strong>tire avec toi</strong><small>À gauche de la sorcière · conservé dans tous les mondes</small>`;
+  if(next===2)return `Un 2e compagnon <strong>rejoint le premier</strong><small>Un de chaque côté · chacun tire avec toi</small>`;
+  return `Un ${next}e compagnon <strong>rejoint l’orbite</strong><small>${next} compagnons au total · les suivants tournent autour de la sorcière</small>`;
+ }
  if(item.id==='armor')return r.armor?`Armure : <strong>+1 charge</strong> par monde<small>${capacityFor(r.armor)} charges actuellement · recharge au prochain monde</small>`:`Absorbe <strong>3 projectiles</strong> par monde<small>Recharge à chaque nouveau monde</small>`;
  return `<strong>+1 vie</strong> maintenant et +1 vie maximum<small>Maximum actuel : ${5+r.life} vies</small>`;
 }
@@ -3723,7 +3907,7 @@ function syncHUD(){
  const el=$('levelRewardsHUD');if(!el)return;
  const r=ensure(),has=r.power||r.companion||r.armor||r.life,visible=enabled()&&has&&['play','pause','choice'].includes(state);
  el.classList.toggle('hidden',!visible);if(!visible)return;
- const parts=[];if(r.power)parts.push('✦ TIR +'+r.power);if(r.companion)parts.push('◆ COMPAGNON N'+r.companion);if(r.armor)parts.push('⬟ '+r.armorCharges+'/'+capacityFor(r.armor)+' BALLES');if(r.life)parts.push('♥ MAX +'+r.life);
+ const parts=[];if(r.power)parts.push('✦ TIR +'+r.power);if(r.companion)parts.push('◆ '+r.companion+' COMPAGNON'+(r.companion>1?'S':''));if(r.armor)parts.push('⬟ '+r.armorCharges+'/'+capacityFor(r.armor)+' BALLES');if(r.life)parts.push('♥ MAX +'+r.life);
  el.textContent=parts.join(' · ');
 }
 function drawArmor(){

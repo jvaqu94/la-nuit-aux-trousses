@@ -33,6 +33,19 @@ with sync_playwright() as p:
     page.wait_for_function("state==='play'&&stage===1")
     assert page.evaluate('player.rewards.power')==1
     assert page.evaluate("JSON.parse(localStorage.getItem('minuit-checkpoint')).player.rewards.power")==1
+    formation=page.evaluate("""()=>{
+      enemies=[];hostile=[];drops=[];hazards=[];obstacles=[];schedule=[];waveTime=-999;
+      player.rewards.companion=3;upgrades.familiar=0;player.fire=0;shots=[];ambient=0;update(1/60);
+      return {count:LevelRewards.familiarCount(0),playerX:player.x,positions:[0,1,2].map(i=>companionFormation(i,3,ambient)),shots:shots.filter(s=>s.familiar).map(s=>({x:s.x,damage:s.damage})),hud:document.getElementById('levelRewardsHUD').textContent};
+    }""")
+    assert formation['count']==3 and len(formation['shots'])==3,formation
+    assert formation['positions'][0]['x']<formation['playerX']<formation['positions'][1]['x'],formation
+    assert formation['positions'][2]['orbital'] and not formation['positions'][0]['orbital'] and not formation['positions'][1]['orbital'],formation
+    for i,shot in enumerate(formation['shots']):
+        assert abs(shot['x']-formation['positions'][i]['x'])<1e-9 and shot['damage']==1,formation
+    assert '3 COMPAGNONS' in formation['hud'],formation
+    restored=page.evaluate("()=>{saveCheckpoint();player.rewards.companion=0;resumeCheckpoint();return {rank:player.rewards.companion,count:LevelRewards.familiarCount(0)}}")
+    assert restored=={'rank':3,'count':3},restored
     browser.close()
 
     # Le Chromium embarqué fonctionne en processus unique : isoler le téléphone.

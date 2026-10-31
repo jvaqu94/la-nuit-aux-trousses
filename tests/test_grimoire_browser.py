@@ -53,7 +53,16 @@ def check_spellbook(page):
     assert page.locator('.grimoire-variant').count() == 4
     brooms = page.locator('.grimoire-variant').filter(has_text='Cadence concentrée').inner_text()
     assert '2 / 3' in brooms
-    assert page.locator('.grimoire-spellbook .arsenal-illustration').count() == 9
+    assert page.locator('.grimoire-ability .grimoire-reward-art .arsenal-illustration').count() == 9
+    assert page.locator('.grimoire-variant .grimoire-reward-art .arsenal-illustration').count() == 4
+    assert page.locator('.grimoire-spellbook .grimoire-reward-name').count() == 13
+    assert page.locator('.grimoire-spellbook .grimoire-reward-detail').count() == 13
+    assert page.locator('.grimoire-spellbook .grimoire-reward-pick, .grimoire-spellbook .grimoire-reward-progress').count() == 13
+    for variant, source in {'ripple': 'pulse', 'shatter': 'sunray', 'surge': 'tidewave', 'rhythm': 'bruyere'}.items():
+        art = page.locator(f'[data-grimoire-variant="{variant}"] .arsenal-illustration')
+        assert art.get_attribute('data-art-variant') == variant
+        assert art.get_attribute('aria-label').startswith(page.evaluate(f"LoadoutArt.alt('{source}')"))
+    assert page.evaluate("""()=>[...document.querySelectorAll('.grimoire-spellbook .arsenal-illustration')].every(svg=>svg.querySelector('image')?.getAttribute('href')?.startsWith('data:image/svg+xml'))""")
     spellbook_text = page.locator('.grimoire-spellbook').inner_text()
     assert 'undefined' not in spellbook_text and 'NaN' not in spellbook_text
     assert 'Exploit : Terminer un univers avec chacun des 3 balais de pilotage' in brooms
@@ -63,6 +72,12 @@ def check_collection(page):
     page.click('[data-grimoire-tab="collection"]')
     page.wait_for_selector('.grimoire-collection')
     assert page.locator('.wardrobe-item').count() == 25
+    assert page.locator('.wardrobe-item.grimoire-reward-card').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-art').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-art img, .wardrobe-item .grimoire-reward-art svg').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-name').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-detail').count() == 25
+    assert page.locator('.wardrobe-item .grimoire-reward-pick').count() == 25
     assert page.locator('.mastery-catalog-row').count() == 7
     assert page.locator('.mastery-badge').count() == 7
     assert page.locator('.mastery-badge img').count() == 7
@@ -82,6 +97,8 @@ def check_collection(page):
     page.click('[data-item="emerald"]')
     assert page.evaluate("Journey.state.selected.outfit === 'emerald'")
     assert 'equipped' in page.locator('[data-item="emerald"]').get_attribute('class')
+    assert page.locator('[data-item="emerald"]').get_attribute('aria-pressed') == 'true'
+    assert page.locator('[data-item="emerald"] .grimoire-reward-pick').inner_text() == 'Équipé ✓'
     page.locator('#collectionBack').scroll_into_view_if_needed()
     page.click('#collectionBack')
     page.wait_for_selector('#playAdventure')
@@ -137,6 +154,8 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
         mobile.click(f'[data-grimoire-tab="{tab}"]')
         mobile.wait_for_selector(f'#grimoireTab-{tab}[aria-selected="true"]')
         assert mobile.evaluate('document.documentElement.scrollWidth <= 390')
+        if tab == 'spells':
+            assert mobile.evaluate("""()=>[...document.querySelectorAll('.grimoire-spellbook .grimoire-reward-card')].every(card=>{const footer=card.querySelector('.grimoire-reward-pick,.grimoire-reward-progress');return !footer||footer.getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1})""")
     mobile.screenshot(path=str(screenshots / 'grimoire-mobile.png'), full_page=True)
     mobile.locator('#collectionBack').scroll_into_view_if_needed()
     assert mobile.locator('#collectionBack').is_visible()
@@ -152,6 +171,24 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     assert mobile.evaluate("getComputedStyle(document.querySelector('#badges .relic-badge-copy b')).fontSize") == '11px'
     assert mobile.evaluate('document.documentElement.scrollWidth <= 390')
 
+    narrow_context = browser.new_context(viewport={'width': 360, 'height': 640}, is_mobile=True, has_touch=True)
+    narrow = narrow_context.new_page()
+    narrow.on('pageerror', lambda error: errors.append(str(error)))
+    narrow.add_init_script(SEED)
+    narrow.goto('http://localhost:3000')
+    narrow.click('#wardrobe')
+    narrow.wait_for_selector('.grimoire-screen')
+    for tab in ['spells', 'collection']:
+        narrow.click(f'[data-grimoire-tab="{tab}"]')
+        narrow.wait_for_selector(f'#grimoireTab-{tab}[aria-selected="true"]')
+        assert narrow.evaluate('document.documentElement.scrollWidth <= 360')
+    assert narrow.locator('.wardrobe-item .grimoire-reward-art img, .wardrobe-item .grimoire-reward-art svg').count() == 25
+    narrow.locator('[data-item="dodge-wisp"]').scroll_into_view_if_needed()
+    assert narrow.locator('[data-item="dodge-wisp"]').is_disabled()
+    narrow.locator('#collectionBack').scroll_into_view_if_needed()
+    assert narrow.locator('#collectionBack').is_visible()
+    narrow_context.close()
+
     fresh_context = browser.new_context(viewport={'width': 1024, 'height': 768})
     fresh = fresh_context.new_page()
     fresh.on('pageerror', lambda error: errors.append(str(error)))
@@ -162,6 +199,13 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     assert '8 / 38 pages dévoilées' in fresh.locator('.grimoire-book-summary').inner_text()
     assert fresh.locator('.grimoire-chapter').count() == 4
     assert 'Ton histoire commence au prochain vol.' in fresh.locator('.grimoire-empty-page').inner_text()
+    assert '${grimoirePageMark' not in fresh.locator('.grimoire-empty-page').inner_text()
+    empty_mark = fresh.locator('.grimoire-empty-page .grimoire-page-mark.empty img')
+    assert empty_mark.count() == 1
+    fresh.wait_for_function("document.querySelector('.grimoire-empty-page .grimoire-page-mark.empty img')?.naturalWidth > 0")
+    fresh.click('[data-grimoire-tab="spells"]')
+    assert fresh.locator('.grimoire-ability .grimoire-reward-art .arsenal-illustration').count() == 9
+    assert fresh.locator('.grimoire-variant .grimoire-reward-art .arsenal-illustration').count() == 4
     assert not errors, errors
     browser.close()
     print('OK : badges illustrés, Grimoire évolutif, nouveau profil, dernière page, objectifs, capacités, variantes, 7 sceaux, pause et mobile.')
