@@ -195,6 +195,13 @@ with tempfile.TemporaryDirectory() as tmp, sync_playwright() as p:
     assert '8 / 38 pages dévoilées' in fresh.locator('.grimoire-book-summary').inner_text()
     assert fresh.locator('.grimoire-chapter').count() == 4
     assert 'Ton histoire commence au prochain vol.' in fresh.locator('.grimoire-empty-page').inner_text()
+    assert '${grimoirePageMark' not in fresh.locator('.grimoire-empty-page').inner_text()
+    empty_mark = fresh.locator('.grimoire-empty-page .grimoire-page-mark.empty img')
+    assert empty_mark.count() == 1
+    fresh.wait_for_function("document.querySelector('.grimoire-empty-page .grimoire-page-mark.empty img')?.naturalWidth > 0")
+    fresh.click('[data-grimoire-tab="spells"]')
+    assert fresh.locator('.grimoire-ability .grimoire-reward-art .arsenal-illustration').count() == 9
+    assert fresh.locator('.grimoire-variant .grimoire-reward-art .arsenal-illustration').count() == 4
     assert not errors, errors
     browser.close()
     print('OK : badges illustrés, Grimoire évolutif, nouveau profil, dernière page, objectifs, capacités, variantes, 7 sceaux, pause et mobile.')
