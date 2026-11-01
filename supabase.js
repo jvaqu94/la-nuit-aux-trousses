@@ -748,9 +748,9 @@ function teamStatsTable(kind,headers,rows,empty){
 function renderTeamStats(data){
  const summary=data.summary;
  const card=(key,label,value,note,extra='')=>'<div class="team-stats-card'+extra+'"><span>'+safeText(label)+'</span><b data-stat="'+key+'">'+safeText(value)+'</b><small>'+safeText(note)+'</small></div>';
- const dailyRows=data.daily.map(row=>`<tr class="team-stats-day"><td>${safeText(teamStatsDay(row.playedOn))}</td><td>${teamNumber(row.games)}</td><td>${safeText(teamStatsProgress(row.bestProgress))}</td><td class="team-stats-points">${teamNumber(row.points)}</td><td>${teamNumber(row.bestScore)}</td></tr>`).join('');
- const memberRows=data.members.map(row=>`<tr class="team-stats-member${row.isYou?' team-stats-you':''}"><td><b>${safeText(row.displayName||'Sorcière')}</b>${row.isAdmin?'<small class="team-role">ADMIN</small>':''}</td><td>${teamNumber(row.games)}</td><td>${safeText(teamStatsProgress(row.bestProgress))}</td><td class="team-stats-points">${teamNumber(row.points)}</td><td>${teamNumber(row.bestScore)}</td><td>${safeText(row.lastPlayedAt?teamDate(row.lastPlayedAt):'Aucun vol')}</td></tr>`).join('');
- const runRows=data.runs.map(row=>`<tr class="team-stats-run${row.isYou?' team-stats-you':''}"><td>${safeText(teamDate(row.playedAt)||teamStatsDay(row.playedOn))}</td><td>${safeText(row.displayName||'Sorcière')}</td><td>${safeText(teamStatsRunProgress(row))}<small>${safeText(teamStatsMode(row))}</small></td><td class="team-stats-points">${teamNumber(row.score)}</td></tr>`).join('');
+ const dailyRows=data.daily.map(row=>`<tr class="team-stats-day"><td data-label="Date">${safeText(teamStatsDay(row.playedOn))}</td><td data-label="Parties">${teamNumber(row.games)}</td><td data-label="Monde atteint">${safeText(teamStatsProgress(row.bestProgress))}</td><td data-label="Points gagnés" class="team-stats-points">${teamNumber(row.points)}</td><td data-label="Record">${teamNumber(row.bestScore)}</td></tr>`).join('');
+ const memberRows=data.members.map(row=>`<tr class="team-stats-member${row.isYou?' team-stats-you':''}"><td data-label="Membre"><b>${safeText(row.displayName||'Sorcière')}</b>${row.isAdmin?'<small class="team-role">ADMIN</small>':''}</td><td data-label="Parties">${teamNumber(row.games)}</td><td data-label="Monde atteint">${safeText(teamStatsProgress(row.bestProgress))}</td><td data-label="Points gagnés" class="team-stats-points">${teamNumber(row.points)}</td><td data-label="Record">${teamNumber(row.bestScore)}</td><td data-label="Dernier vol">${safeText(row.lastPlayedAt?teamDate(row.lastPlayedAt):'Aucun vol')}</td></tr>`).join('');
+ const runRows=data.runs.map(row=>`<tr class="team-stats-run${row.isYou?' team-stats-you':''}"><td data-label="Date">${safeText(teamDate(row.playedAt)||teamStatsDay(row.playedOn))}</td><td data-label="Membre">${safeText(row.displayName||'Sorcière')}</td><td data-label="Monde atteint et mode">${safeText(teamStatsRunProgress(row))}<small>${safeText(teamStatsMode(row))}</small></td><td data-label="Points gagnés" class="team-stats-points">${teamNumber(row.score)}</td></tr>`).join('');
  return `<div class="team-stats-summary" aria-label="Synthèse de la période">${card('games','Parties',teamNumber(summary.games),'vols comptabilisés')}${card('points','Points gagnés',teamNumber(summary.points),'somme de tous les vols',' team-stats-points-card')}${card('bestScore','Meilleur score',teamNumber(summary.bestScore),'record d’un vol')}${card('bestProgress','Monde maximum',teamStatsProgress(summary.bestProgress),'monde et vague atteints',' team-stats-progress-card')}${card('activePlayers','Joueurs actifs',teamNumber(summary.activePlayers),'sur '+teamNumber(data.members.length)+' membre'+(data.members.length>1?'s':''))}</div><p class="team-stats-explanation"><b>Points gagnés</b> = somme des scores de tous les vols comptabilisés, pas seulement des highscores. Les vols refusés par les règles et les données locales non transmises sont exclus.</p><section class="team-stats-section"><h3>PARTIES ET POINTS PAR JOUR</h3>${teamStatsTable('daily',['Date','Parties','Monde atteint','Points gagnés','Record'],dailyRows,'Aucun vol comptabilisé sur cette période.')}</section><section class="team-stats-section"><h3>ACTIVITÉ PAR MEMBRE</h3>${teamStatsTable('members',['Membre','Parties','Monde atteint','Points gagnés','Record','Dernier vol'],memberRows,'Aucun membre dans la team.')}</section><section class="team-stats-section"><h3>DERNIERS VOLS COMPTABILISÉS</h3>${teamStatsTable('runs',['Date','Membre','Monde atteint et mode','Points gagnés'],runRows,'Aucun vol à afficher sur cette période.')}<p class="team-stats-limit">Les 50 vols les plus récents de la période sont affichés.</p></section>`;
 }
 async function openTeamStats(){
@@ -972,6 +972,22 @@ css.textContent=`
  .team-run{display:none}
  .team-summary{flex-direction:column;gap:4px}
 }`;
+css.textContent+=`
+/* Sur téléphone, chaque ligne de statistiques devient une carte complète :
+   toutes les valeurs restent visibles sans balayage horizontal du tableau. */
+@media(max-width:600px){
+ .team-stats-table-wrap{overflow:visible;border:0}
+ .team-stats-table{display:block;min-width:0;font-size:11px}
+ .team-stats-table thead{display:none}
+ .team-stats-table tbody{display:grid;gap:8px}
+ .team-stats-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px;padding:11px;border:1px solid #6d5a7c44;border-radius:8px;background:#1c1629}
+ .team-stats-table td{display:flex;min-width:0;flex-direction:column;gap:4px;padding:0;border:0;overflow-wrap:anywhere;font-size:11px;line-height:1.45}
+ .team-stats-table td::before{content:attr(data-label);color:#a996ba;font-size:8px;letter-spacing:.7px;text-transform:uppercase}
+ .team-stats-table td:first-child{grid-column:1/-1}
+ .team-stats-members td:last-child,.team-stats-runs td:nth-child(2){grid-column:1/-1}
+ .team-stats-table td>small{margin:0;font-size:9px}
+}
+`;
 document.head.appendChild(css);
 
 window.MinuitCloud={

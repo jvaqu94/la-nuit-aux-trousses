@@ -97,7 +97,19 @@ css.textContent+=`
  .overlay:has(#launchLocal)>.local-actions button,
  .overlay:has(.lab-fields)>.local-actions button,
  .weekly-preflight>.local-actions:not(.weekly-share-actions) button{min-height:44px;margin:0;padding:11px 13px}
- #masteryBack{position:sticky;bottom:0;z-index:4;width:100%;max-width:600px;min-height:44px;margin-top:0;box-shadow:0 -12px 20px 8px #110d22}
+ #masteryBack,#collectionBack,.training-bonus-gallery>.primary,.overlay>#back{position:sticky;bottom:0;z-index:4;width:100%;max-width:600px;min-height:44px;margin-top:0;box-shadow:0 -12px 20px 8px #110d22}
+ .journey-result-screen .replay-result-actions{
+  position:sticky;bottom:0;z-index:4;display:grid;grid-template-columns:1fr 1fr;gap:6px;flex-shrink:0;width:100%;padding:9px 0 3px;
+  background:linear-gradient(0deg,#110d22fa,#110d22e8);backdrop-filter:blur(7px)
+ }
+ .journey-result-screen .replay-result-actions button{min-width:0;min-height:44px;margin:0;padding:10px 8px;line-height:1.25}
+ .journey-result-screen .replay-result-actions>button:last-child:nth-child(odd){grid-column:1/-1}
+ .account-team-stats .team-stats-back{position:sticky;top:0;z-index:5;width:100%;min-height:44px;flex-shrink:0;background:#251c32;box-shadow:0 0 0 12px #110d22}
+}
+@media(max-width:850px){
+ .training-finish{min-width:0;max-width:100%}
+ .finish-art{max-width:100%;flex-wrap:wrap;gap:6px}
+ .finish-art .lesson-icon{width:48px;height:48px}
 }
 `;
 document.head.appendChild(css);
