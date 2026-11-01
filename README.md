@@ -217,10 +217,10 @@ Le menu **Compte & team** permet, après connexion, de créer une team ou de rej
 - Un compte appartient à une seule team à la fois ; il doit la quitter avant d’en rejoindre une autre.
 - **Le créateur devient administrateur** et configure les règles dès la création : 1 à 100 parties classées comptabilisées par joueur et par jour, ou illimité, ainsi qu’une période optionnelle de début et de fin.
 - Seul l’administrateur peut modifier ces règles, réinitialiser la campagne ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
-- Le créateur dispose aussi d’une page **Statistiques de la team** sur 7, 30, 90 ou 365 jours : synthèse, parties et points par jour, activité par membre et 50 derniers vols avec monde, vague et mode. Les **points gagnés** additionnent les scores de tous les vols classés comptabilisés, et non les seuls highscores. Cette page et son RPC sont réservés à l’administrateur et ne renvoient aucun e-mail ni identifiant de connexion.
+- Le créateur dispose aussi d’une page **Statistiques de la team** sur 7, 30, 90 ou 365 jours : synthèse de tous les vols classiques et classés transmis, répartition des parties et des points par mode, activité par jour et par membre, derniers vols et 50 vols récents avec monde, vague et mode. Cette répartition permet de voir qui joue régulièrement et qui oublie de lancer une classée. Les **points gagnés** de cette page mesurent l’activité classique + classée ; ils ne sont pas le score de la team. Les highscores actuels restent affichés séparément. Cette page et son RPC sont réservés à l’administrateur et ne renvoient aucun e-mail ni identifiant de connexion.
 - Dans **Compte & team**, la section **Administration · Campagne** reste directement visible pour l’administrateur, hors du volet repliable des règles. **Remettre les scores et les parties à zéro** demande une confirmation puis supprime toutes les tentatives et tous les highscores de la team pour tous les membres. La team, ses membres, son code et ses règles sont conservés ; les autres appareils voient la remise à zéro après actualisation.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team. Après une jointure réussie, le jeu revient automatiquement à l’accueil avec une confirmation ; en cas d’échec, l’erreur et l’invitation restent affichées. Le visiteur peut aussi ignorer l’invitation.
-- Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record ; un identifiant unique évite le double comptage en cas de renvoi.
+- Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record. Une partie classique transmet uniquement son activité au suivi privé du créateur : elle ne change ni le highscore, ni le total, ni le quota de la team. Un identifiant unique évite le double comptage en cas de renvoi.
 - La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol classé reste jouable localement mais ne compte pas pour la team. Les parties classiques et les défis quotidiens ne sont jamais comptés dans le classement de campagne.
 - Seul le **meilleur score de chaque membre** est conservé ; le tableau affiche aussi le total de ces records et les parties restantes.
 - Quitter la team retire le score et les tentatives du joueur de son classement. Une team vide est supprimée.
@@ -301,7 +301,7 @@ Modifier les fichiers sources plutôt que le HTML autonome, qui est régénéré
 
 ### Prérequis
 
-Les tests `.cjs` demandent **Node.js**. Les tests navigateur demandent **Python**, **Playwright** et **Chromium** :
+Les tests `.cjs` demandent **Node.js**. Le test SQL `test_team_activity_sql.cjs` utilise aussi PostgreSQL WASM, installable avec `npm install --no-save --no-package-lock @electric-sql/pglite`. Les tests navigateur demandent **Python**, **Playwright** et **Chromium** :
 
 ```bash
 python -m pip install playwright
@@ -326,6 +326,7 @@ node tests/test_loot.cjs
 node tests/test_flight.cjs
 node tests/test_arcade.cjs
 node tests/balance-node.cjs
+node tests/test_team_activity_sql.cjs
 ```
 
 ### Tests navigateur principaux
@@ -337,6 +338,7 @@ python tests/test_soundtrack.py
 python tests/test_music_mp3.py
 python tests/test_supabase.py
 python tests/test_teams.py
+python tests/test_team_stats_activity.py
 python tests/test_mode_selection_browser.py
 python tests/test_pseudo_invite.py
 python tests/test_journey_browser.py
