@@ -325,6 +325,7 @@ node tests/test_highscore.cjs
 node tests/test_loot.cjs
 node tests/test_flight.cjs
 node tests/test_arcade.cjs
+node tests/test_boss_zones.cjs
 node tests/balance-node.cjs
 node tests/test_team_activity_sql.cjs
 ```
