@@ -329,7 +329,7 @@ begin
   if p_score is null or p_score not between 0 and 100000000 then
     raise exception 'SCORE_INVALID';
   end if;
-  if p_mode is null or p_mode <> 'ranked' then
+  if p_mode is null or p_mode not in ('ranked', 'free') then
     raise exception 'MODE_INVALID';
   end if;
   if p_difficulty is null or p_difficulty not in ('easy', 'normal', 'hard') then
@@ -371,22 +371,28 @@ begin
       'bestScore', coalesce(v_best, 0),
       'improved', false,
       'duplicate', true,
+      'mode', p_mode,
+      'activityOnly', p_mode <> 'ranked',
       'gamesToday', v_games_today,
       'gamesRemaining', case when v_daily_limit is null then null else greatest(v_daily_limit - v_games_today, 0) end
     );
   end if;
 
-  if not v_rules_configured then
-    raise exception 'TEAM_RULES_REQUIRED';
-  end if;
-  if v_starts_at is not null and now() < v_starts_at then
-    raise exception 'TEAM_PERIOD_NOT_STARTED';
-  end if;
-  if v_ends_at is not null and now() >= v_ends_at then
-    raise exception 'TEAM_PERIOD_ENDED';
-  end if;
-  if v_daily_limit is not null and v_games_today >= v_daily_limit then
-    raise exception 'TEAM_DAILY_LIMIT';
+  -- Les règles, la période et le quota ne bloquent que le classement. Une
+  -- classique illimitée peut toujours transmettre son activité au créateur.
+  if p_mode = 'ranked' then
+    if not v_rules_configured then
+      raise exception 'TEAM_RULES_REQUIRED';
+    end if;
+    if v_starts_at is not null and now() < v_starts_at then
+      raise exception 'TEAM_PERIOD_NOT_STARTED';
+    end if;
+    if v_ends_at is not null and now() >= v_ends_at then
+      raise exception 'TEAM_PERIOD_ENDED';
+    end if;
+    if v_daily_limit is not null and v_games_today >= v_daily_limit then
+      raise exception 'TEAM_DAILY_LIMIT';
+    end if;
   end if;
 
   select ts.score into v_previous
@@ -398,6 +404,23 @@ begin
   ) values (
     v_team_id, v_uid, v_run_id, v_today, p_score, p_mode, p_difficulty, p_stage, p_wave
   );
+
+  -- Une classique est une trace d’activité uniquement : elle ne met jamais à
+  -- jour team_scores, le highscore, le total de la team ou le quota classé.
+  if p_mode = 'free' then
+    select ts.score into v_best
+    from public.team_scores ts
+    where ts.team_id = v_team_id and ts.user_id = v_uid and ts.mode = 'ranked';
+    return json_build_object(
+      'bestScore', coalesce(v_best, 0),
+      'improved', false,
+      'duplicate', false,
+      'mode', p_mode,
+      'activityOnly', true,
+      'gamesToday', v_games_today,
+      'gamesRemaining', case when v_daily_limit is null then null else greatest(v_daily_limit - v_games_today, 0) end
+    );
+  end if;
 
   insert into public.team_scores(team_id, user_id, score, mode, difficulty, stage, wave, updated_at)
   values (v_team_id, v_uid, p_score, p_mode, p_difficulty, p_stage, p_wave, now())
@@ -414,6 +437,8 @@ begin
     'bestScore', v_best,
     'improved', v_previous is null or p_score > v_previous,
     'duplicate', false,
+    'mode', p_mode,
+    'activityOnly', false,
     'gamesToday', v_games_today + 1,
     'gamesRemaining', case when v_daily_limit is null then null else greatest(v_daily_limit - v_games_today - 1, 0) end
   );

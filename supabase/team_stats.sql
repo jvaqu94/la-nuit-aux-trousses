@@ -1,8 +1,8 @@
--- La Nuit aux Trousses — statistiques privées du créateur de team.
+-- La Nuit aux Trousses — suivi privé de l’activité par le créateur de team.
 -- À exécuter après teams.sql et team_rules.sql.
--- Les points sont la somme des scores des vols comptabilisés, et non la somme
--- des seuls highscores. Seules les parties classées sont incluses.
--- Aucun e-mail ni identifiant de connexion n’est renvoyé.
+-- Les statistiques réunissent les vols classiques et classés transmis, avec une
+-- répartition par mode. Seules les classées alimentent highscores, score total
+-- et quotas de la team. Aucun e-mail ni identifiant de connexion n’est renvoyé.
 
 create index if not exists team_score_attempts_team_daily_idx
 on public.team_score_attempts(team_id, played_on);
@@ -23,6 +23,7 @@ declare
   v_daily json;
   v_members json;
   v_runs json;
+  v_highscores json;
 begin
   if v_uid is null then
     raise exception 'AUTH_REQUIRED' using errcode = '42501';
@@ -49,16 +50,24 @@ begin
 
   v_since := v_until - (p_days - 1);
 
+  -- Activité complète : les deux modes sont additionnés pour le suivi, puis
+  -- détaillés séparément pour repérer les joueurs qui oublient la classée.
   select json_build_object(
     'games', count(*),
     'points', coalesce(sum(ta.score), 0),
     'bestScore', coalesce(max(ta.score), 0),
     'bestProgress', coalesce(max(ta.stage::integer * 10 + ta.wave), 0),
-    'activePlayers', count(distinct ta.user_id)
+    'activePlayers', count(distinct ta.user_id),
+    'rankedGames', count(*) filter (where ta.mode = 'ranked'),
+    'rankedPoints', coalesce(sum(ta.score) filter (where ta.mode = 'ranked'), 0),
+    'rankedBestScore', coalesce(max(ta.score) filter (where ta.mode = 'ranked'), 0),
+    'freeGames', count(*) filter (where ta.mode = 'free'),
+    'freePoints', coalesce(sum(ta.score) filter (where ta.mode = 'free'), 0),
+    'freeBestScore', coalesce(max(ta.score) filter (where ta.mode = 'free'), 0)
   ) into v_summary
   from public.team_score_attempts ta
   where ta.team_id = v_team_id
-    and ta.mode = 'ranked'
+    and ta.mode in ('ranked', 'free')
     and ta.played_on between v_since and v_until;
 
   select coalesce(
@@ -71,10 +80,14 @@ begin
       count(*) as games,
       sum(ta.score) as points,
       max(ta.score) as "bestScore",
-      max(ta.stage::integer * 10 + ta.wave) as "bestProgress"
+      max(ta.stage::integer * 10 + ta.wave) as "bestProgress",
+      count(*) filter (where ta.mode = 'ranked') as "rankedGames",
+      count(*) filter (where ta.mode = 'free') as "freeGames",
+      coalesce(sum(ta.score) filter (where ta.mode = 'ranked'), 0) as "rankedPoints",
+      coalesce(sum(ta.score) filter (where ta.mode = 'free'), 0) as "freePoints"
     from public.team_score_attempts ta
     where ta.team_id = v_team_id
-      and ta.mode = 'ranked'
+      and ta.mode in ('ranked', 'free')
       and ta.played_on between v_since and v_until
     group by ta.played_on
   ) daily;
@@ -95,6 +108,12 @@ begin
       coalesce(max(ta.score), 0) as "bestScore",
       coalesce(max(ta.stage::integer * 10 + ta.wave), 0) as "bestProgress",
       max(ta.created_at) as "lastPlayedAt",
+      count(ta.run_id) filter (where ta.mode = 'ranked') as "rankedGames",
+      count(ta.run_id) filter (where ta.mode = 'free') as "freeGames",
+      coalesce(sum(ta.score) filter (where ta.mode = 'ranked'), 0) as "rankedPoints",
+      coalesce(sum(ta.score) filter (where ta.mode = 'free'), 0) as "freePoints",
+      max(ta.created_at) filter (where ta.mode = 'ranked') as "lastRankedAt",
+      max(ta.created_at) filter (where ta.mode = 'free') as "lastFreeAt",
       (tm.user_id = t.created_by) as "isAdmin",
       (tm.user_id = v_uid) as "isYou"
     from public.team_members tm
@@ -102,7 +121,7 @@ begin
     left join public.team_score_attempts ta
       on ta.team_id = tm.team_id
       and ta.user_id = tm.user_id
-      and ta.mode = 'ranked'
+      and ta.mode in ('ranked', 'free')
       and ta.played_on between v_since and v_until
     where tm.team_id = v_team_id
     group by tm.user_id, tm.display_name, t.created_by
@@ -124,19 +143,46 @@ begin
     join public.team_members tm
       on tm.team_id = ta.team_id and tm.user_id = ta.user_id
     where ta.team_id = v_team_id
-      and ta.mode = 'ranked'
+      and ta.mode in ('ranked', 'free')
       and ta.played_on between v_since and v_until
     order by ta.created_at desc, ta.run_id desc
     limit 50
   ) recent;
 
+  -- Les highscores restent strictement classés et ne sont pas transformés en
+  -- parties ou en points lorsqu'aucune tentative détaillée n'existe.
+  select coalesce(
+    json_agg(row_to_json(highscore) order by highscore.score desc, lower(highscore."displayName"), highscore."displayName"),
+    '[]'::json
+  ) into v_highscores
+  from (
+    select
+      tm.display_name as "displayName",
+      ts.score,
+      ts.stage,
+      ts.wave,
+      ts.mode,
+      ts.difficulty,
+      ts.updated_at as "updatedAt",
+      (tm.user_id = t.created_by) as "isAdmin",
+      (tm.user_id = v_uid) as "isYou"
+    from public.team_scores ts
+    join public.team_members tm
+      on tm.team_id = ts.team_id and tm.user_id = ts.user_id
+    join public.teams t on t.id = ts.team_id
+    where ts.team_id = v_team_id
+      and ts.mode = 'ranked'
+  ) highscore;
+
   return json_build_object(
     'team', json_build_object('name', v_team_name),
     'period', json_build_object('days', p_days, 'since', v_since, 'until', v_until),
+    'activityScope', 'classic-and-ranked',
     'summary', v_summary,
     'daily', coalesce(v_daily, '[]'::json),
     'members', coalesce(v_members, '[]'::json),
-    'runs', coalesce(v_runs, '[]'::json)
+    'runs', coalesce(v_runs, '[]'::json),
+    'highscores', coalesce(v_highscores, '[]'::json)
   );
 end;
 $$;

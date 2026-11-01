@@ -722,8 +722,8 @@ assert 'revoke all on table public.team_scores from anon, authenticated' in sche
 assert 'revoke all on table public.team_score_attempts from anon, authenticated' in rules
 assert "set search_path = ''" in rules
 assert 'minuit_update_team_rules' in rules and 'TEAM_DAILY_LIMIT' in rules
-assert "p_mode <> 'ranked'" in rules and "ts.mode = 'ranked'" in rules
-assert "ta.mode = 'ranked'" in stats
+assert "p_mode not in ('ranked', 'free')" in rules and "ts.mode = 'ranked'" in rules
+assert "and ta.mode in ('ranked', 'free')" in stats and "and ts.mode = 'ranked'" in stats
 assert 'TEAM_PERIOD_NOT_STARTED' in rules and 'TEAM_PERIOD_ENDED' in rules
 assert 'grant execute on function public.minuit_update_team_rules(integer, timestamptz, timestamptz) to authenticated' in rules
 assert 'grant execute on function public.minuit_reset_team_campaign() to authenticated' in rules
