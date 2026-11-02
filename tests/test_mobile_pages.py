@@ -56,9 +56,12 @@ GEOMETRY = """()=>{
   status:rect('.game-status'),hud:rect('.hud'),hudOutside:!!document.querySelector('.game-status>.hud'),
   arenaHud:document.querySelectorAll('.arena .hud').length,secondTitle:document.querySelectorAll('main .heading h1').length,
   arenaFlightPanels:document.querySelectorAll('.arena #synergyHUD,.arena #combatHUD,.arena #adventureStatus').length,
-  details:rect('#gameDetails'),detailsInArena:!!document.querySelector('.arena>#gameDetails'),
+  details:rect('#gameDetails'),detailsInArena:!!document.querySelector('.arena #gameDetails'),
   buildParent:document.querySelector('#synergyHUD').parentElement.id,
-  equipmentParents:['combatHUD','adventureStatus'].map(id=>document.getElementById(id).parentElement.id),
+  adventureParent:document.querySelector('#adventureStatus').parentElement.id,
+  toastParent:document.querySelector('#toast').parentElement.id,
+  combatDirect:!!document.querySelector('.arena>#combatHUD'),combat:rect('#combatHUD'),
+  combatOpacity:Number(getComputedStyle(document.querySelector('#combatHUD')).opacity),
   header:getComputedStyle(document.querySelector('header')).display,
   touchbar:getComputedStyle(document.querySelector('.touchbar')).display,
   bar:rect('.touchbar'),scrollWidth:document.documentElement.scrollWidth,
@@ -108,10 +111,13 @@ def assert_game(page):
     assert data['scrollWidth'] <= data['innerWidth'], data
     assert data['hudOutside'] and data['arenaHud'] == 0 and data['secondTitle'] == 0, data
     assert data['arenaFlightPanels'] == 3 and data['detailsInArena'], data
-    assert data['buildParent'] == 'gameBuildSlot', data
-    assert data['equipmentParents'] == ['gameEquipmentSlot', 'gameEquipmentSlot'], data
+    assert data['buildParent'] == 'gameBuildSlot' and data['adventureParent'] == 'gameEquipmentSlot', data
+    assert data['toastParent'] == 'gameDetails' and data['combatDirect'], data
+    assert data['combatOpacity'] < .7 and arena['bottom'] - 60 <= data['combat']['bottom'] <= arena['bottom'] + 1, data
     assert abs(data['details']['top'] - arena['top']) <= 2 and data['details']['bottom'] <= arena['top'] + 90, data
     assert data['hud']['bottom'] <= arena['top'] + 1 and data['status']['bottom'] <= arena['top'] + 1, data
+    if data['innerWidth'] <= 850 and data['innerHeight'] > data['innerWidth']:
+        assert -1 <= arena['top'] - data['status']['bottom'] <= 8, data
 
 
 with sync_playwright() as p:
