@@ -235,7 +235,7 @@ La procédure complète et les consignes de sécurité sont dans [`supabase/READ
 ## Affichage et son
 
 - Terrain au format 8:9 sur ordinateur et en paysage. En portrait sur mobile, il peut occuper davantage de hauteur, jusqu’à un rapport hauteur/largeur de 1,45, selon la place disponible.
-- Le titre n’apparaît qu’une seule fois. **Score, record, univers, vague, mode et vies sont regroupés dans un bandeau externe, au-dessus du terrain**, sans recouvrir le canvas. Sur téléphone, ce bandeau est compact et laisse toute la hauteur du décor visible ; en paysage, seules les lignes secondaires sont masquées.
+- Le titre n’apparaît qu’une seule fois. **Score, record, univers, vague, mode et vies sont regroupés dans un bandeau externe, au-dessus du terrain**, sans recouvrir le canvas. Les synergies et le build sont affichés à gauche de ce même bandeau ; l’équipement, les effets temporisés comme les missiles et la disponibilité du sort sont à droite. Sur téléphone, l’ensemble reste compact ; en paysage, les informations de vol et le build sont côte à côte pour préserver la hauteur du décor. La formation guidée masque cette zone secondaire afin de laisser toute la place aux exercices.
 - Interface dédiée sur mobile, commandes principales agrandies et panneau d’informations séparé avec mise en pause.
 - Mode plein écran lorsque le navigateur l’autorise.
 - Volume, musique et ambiance réglables sans modifier la partie.

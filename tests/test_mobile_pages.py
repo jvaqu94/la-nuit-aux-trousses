@@ -55,6 +55,9 @@ GEOMETRY = """()=>{
  return{arena:rect('.arena'),holder:rect('.layout>div:first-child'),overlay:rect('#overlay'),
   status:rect('.game-status'),hud:rect('.hud'),hudOutside:!!document.querySelector('.game-status>.hud'),
   arenaHud:document.querySelectorAll('.arena .hud').length,secondTitle:document.querySelectorAll('main .heading h1').length,
+  arenaFlightPanels:document.querySelectorAll('.arena #synergyHUD,.arena #combatHUD,.arena #adventureStatus').length,
+  buildParent:document.querySelector('#synergyHUD').parentElement.id,
+  equipmentParents:['combatHUD','adventureStatus'].map(id=>document.getElementById(id).parentElement.id),
   header:getComputedStyle(document.querySelector('header')).display,
   touchbar:getComputedStyle(document.querySelector('.touchbar')).display,
   bar:rect('.touchbar'),scrollWidth:document.documentElement.scrollWidth,
@@ -103,6 +106,8 @@ def assert_game(page):
     assert arena['bottom'] <= data['innerHeight'] + 1 and data['bar']['bottom'] <= data['innerHeight'] + 1, data
     assert data['scrollWidth'] <= data['innerWidth'], data
     assert data['hudOutside'] and data['arenaHud'] == 0 and data['secondTitle'] == 0, data
+    assert data['arenaFlightPanels'] == 0 and data['buildParent'] == 'gameBuildSlot', data
+    assert data['equipmentParents'] == ['gameEquipmentSlot', 'gameEquipmentSlot'], data
     assert data['hud']['bottom'] <= arena['top'] + 1 and data['status']['bottom'] <= arena['top'] + 1, data
 
 
