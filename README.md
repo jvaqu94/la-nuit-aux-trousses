@@ -121,15 +121,17 @@ La victoire sur le cinquième gardien enregistre **immédiatement** l’accompli
 
 Le nouveau monde **Les Cinq Heures Perdues** et la carte de Grimoire **Le Serment de l’Aube** restent définitivement débloqués, même si le jeu est fermé pendant la rencontre. Au lancement suivant, **Continuer** propose la nouvelle campagne. Le premier monde reste rejouable par le sélecteur de campagne, sans déplacer le point de reprise par défaut vers l’ancien monde.
 
-| Nouvel univers | Gardien |
-|---|---|
-| La Ville sans ombres | Le Lanternier blanc |
-| Le Désert de midi | La Reine de verre |
-| La Forêt du cadran | Le Cerf des heures |
-| L’Express du soleil | Le Contrôleur céleste |
-| Le Palais de l’aube | L’Horloger de l’Aube |
+| Nouvel univers | Faune exclusive | Gardien et règle de combat |
+|---|---|---|
+| La Ville sans ombres | Lueurs téléportées et Facteurs d’ombre | Le Lanternier blanc impose de rejoindre un halo avant le blackout. |
+| Le Désert de midi | Mites qui se divisent et Miroirs à ricochet | La Reine de verre utilise des miroirs destructibles et des rayons réfléchis. |
+| La Forêt du cadran | Racines ralentissantes et Larves des heures | Le Cerf des heures attaque les anciennes positions de la sorcière. |
+| L’Express du soleil | Lutins contrôleurs et Valises qui libèrent des renforts | Le Contrôleur céleste envoie des convois en laissant une voie libre. |
+| Le Palais de l’aube | Spectres-aiguilles et Chiffres creux | L’Horloger de l’Aube suspend les projectiles et anime les aiguilles du cadran. |
 
-Cette deuxième campagne conserve les 25 vagues et les combats de shoot’em up, avec trois **fragments d’heure à libérer par monde** pour ajouter un objectif d’exploration. Le joueur peut rester la sorcière ou choisir le **Veilleur**, dont le vol est plus lourd, les carreaux en éventail et la lanterne protectrice au départ. Les records du monde 2 sont séparés de ceux du premier. La carte de campagne est unique, persistante et ne donne aucun bonus de puissance.
+Cette deuxième campagne conserve le pilotage, l’esquive et le tir du shoot’em up, mais **pas les déplacements, formations, salves ou charges du premier bestiaire**. La deuxième vague demande de libérer deux heures captives, la troisième impose une survie et la quatrième deux ancres à saboter. Les anciens événements de territoire, apparitions surprises et formations coopératives sont désactivés dans cette campagne. Tous les dangers spéciaux sont télégraphiés, y compris sur téléphone, sans aide automatique permanente.
+
+Les 25 vagues comportent aussi trois **fragments d’heure à libérer par monde** pour l’exploration. Le joueur peut rester la sorcière ou choisir le **Veilleur**, dont le vol est plus lourd, les carreaux en éventail et la lanterne protectrice au départ. Les records du monde 2 sont séparés de ceux du premier. La carte de campagne est unique, persistante et ne donne aucun bonus de puissance.
 
 ### Arsenal et reliques
 
@@ -295,6 +297,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `weekly.js` | Sprint hebdomadaire, records séparés, partage amical et classement de team dédié. |
 | `replay.js` | Bilan personnalisé, prochain objectif et relance avec le même équipement. |
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
+| `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
@@ -378,6 +381,7 @@ python tests/test_surprise_ui.py
 python tests/test_vertical_drift.py
 python tests/test_coven_dawn.py
 python tests/test_sequel.py
+python tests/test_sequel_bestiary.py
 python tests/test_rival_replay.py
 python tests/test_sealed_chest.py
 python tests/test_bonus_art.py
@@ -393,7 +397,7 @@ La campagne technique complète se vérifie avec :
 python tests/test_journey_campaign.py
 ```
 
-Cette campagne automatique utilise l’invulnérabilité pour contrôler les 25 vagues, les cinq gardiens, la rencontre et les événements. `test_sequel.py` vérifie aussi la deuxième campagne complète, la sauvegarde avant cinématique, la reprise, les fragments et le mobile. Ces tests valident l’intégration technique, **pas l’équilibrage ressenti par un joueur**.
+Cette campagne automatique utilise l’invulnérabilité pour contrôler les 25 vagues, les cinq gardiens, la rencontre et les événements. `test_sequel.py` vérifie aussi la deuxième campagne complète, la sauvegarde avant cinématique, la reprise, les fragments et le mobile. `test_sequel_bestiary.py` contrôle les nouvelles créatures, les objectifs, les télégraphes, les dégâts du blackout, les miroirs et le gel du temps, ainsi que la non-régression du premier monde. Ces tests valident l’intégration technique, **pas l’équilibrage ressenti par un joueur**.
 
 Les tests `tests/test_league_server.py` et `tests/test_league_browser.py` concernent l’ancienne ligue avec comptes et utilisent des données temporaires. Ils sont distincts du parcours local actuel.
 

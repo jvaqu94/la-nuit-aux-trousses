@@ -150,7 +150,9 @@ with sync_playwright() as p:
         if(state!=='play')break;
         player.inv=100;
         const boss=enemies.find(enemy=>enemy.boss);
-        if(boss){seen.add(boss.kind);player.x=boss.x;player.y=700}
+        const captive=SequelBestiary.captives.find(item=>!item.rescued);
+        if(captive){player.x=captive.x;player.y=captive.y}
+        else if(boss){seen.add(boss.kind);player.x=boss.x;player.y=700}
         else{
           const target=enemies.find(enemy=>enemy.y>0&&enemy.y<550);
           if(target)player.x=target.x;

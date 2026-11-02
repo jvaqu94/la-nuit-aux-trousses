@@ -18,13 +18,12 @@ try{progress=normalize(JSON.parse(localStorage.getItem(KEY)||'null'))}catch{}
 let activeWorld=1,menuWorld=progress.world2Unlocked?progress.lastWorld:1,finale=null,sequelGradientCache=[];
 const firstWorlds=worlds.map(item=>({...item}));
 const secondWorlds=[
- {name:'La Ville sans ombres',short:'VILLE BLANCHE',colors:['#25384b','#111d30','#476273'],moon:'#ffe4a8',boss:'Le Lanternier blanc',kind:'lanternier',foes:['ghost','bat','skull'],hour:'L’heure des refuges'},
- {name:'Le Désert de midi',short:'DÉSERT DE VERRE',colors:['#4a3044','#191b30','#806052'],moon:'#ffd69b',boss:'La Reine de verre',kind:'glassqueen',foes:['vampire','bat','ghost'],hour:'L’heure des mirages'},
- {name:'La Forêt du cadran',short:'FORÊT DU CADRAN',colors:['#173b3b','#0d202a','#315a52'],moon:'#b8efd4',boss:'Le Cerf des heures',kind:'clockstag',foes:['spider','pumpkin','ghost'],hour:'L’heure des racines'},
- {name:'L’Express du soleil',short:'EXPRESS DU SOLEIL',colors:['#3b2947','#151a2c','#72505b'],moon:'#ffca91',boss:'Le Contrôleur céleste',kind:'conductor',foes:['skull','bat','demon'],hour:'L’heure du voyage'},
- {name:'Le Palais de l’aube',short:'PALAIS DE L’AUBE',colors:['#30384e','#141a2b','#696174'],moon:'#fff0bd',boss:'L’Horloger de l’Aube',kind:'clockmaker',foes:['demon','vampire','ghost'],hour:'L’heure du grand cadran'}
+ {name:'La Ville sans ombres',short:'VILLE BLANCHE',colors:['#25384b','#111d30','#476273'],moon:'#ffe4a8',boss:'Le Lanternier blanc',kind:'lanternier',foes:['lampWisp','shadePostman'],hour:'L’heure des refuges'},
+ {name:'Le Désert de midi',short:'DÉSERT DE VERRE',colors:['#4a3044','#191b30','#806052'],moon:'#ffd69b',boss:'La Reine de verre',kind:'glassqueen',foes:['glassMite','sunMirror'],hour:'L’heure des mirages'},
+ {name:'La Forêt du cadran',short:'FORÊT DU CADRAN',colors:['#173b3b','#0d202a','#315a52'],moon:'#b8efd4',boss:'Le Cerf des heures',kind:'clockstag',foes:['rootClock','timeLarva'],hour:'L’heure des racines'},
+ {name:'L’Express du soleil',short:'EXPRESS DU SOLEIL',colors:['#3b2947','#151a2c','#72505b'],moon:'#ffca91',boss:'Le Contrôleur céleste',kind:'conductor',foes:['railImp','sunLuggage'],hour:'L’heure du voyage'},
+ {name:'Le Palais de l’aube',short:'PALAIS DE L’AUBE',colors:['#30384e','#141a2b','#696174'],moon:'#fff0bd',boss:'L’Horloger de l’Aube',kind:'clockmaker',foes:['needleWraith','hourHollow'],hour:'L’heure du grand cadran'}
 ];
-const secondKinds=secondWorlds.map(item=>item.kind);
 function save(){
  if(window.MinuitImporting)return;
  try{localStorage.setItem(KEY,JSON.stringify(progress));window.MinuitCloud?.schedule?.()}catch{}
@@ -136,34 +135,7 @@ function drawSecondBackground(t){
 const baseBackground=drawBackground;
 drawBackground=function(t){if(activeWorld===2)drawSecondBackground(t);else baseBackground(t)};
 
-/* Les gardiens gardent les trois phases et les charges lisibles du moteur initial. */
-const baseBossAttack=bossAttack;
-bossAttack=function(e,dt){
- if(activeWorld!==2||!secondKinds.includes(e.kind))return baseBossAttack(e,dt);
- const due=e.fire-dt<=0,ready=e.y>=160&&e.phaseShield<=0&&!e.charge;
- baseBossAttack(e,dt);
- if(!due||!ready||e.phaseShield>0||e.charge||e.dead)return;
- const phase=e.phase,aim=Math.atan2(player.y-e.y,player.x-e.x),speed=(130+stage*22)*diff,cycle=e.cycle;
- if(e.kind==='lanternier'){
-  const count=3+phase*2;shootHostile(e,'fire',Array.from({length:count},(_,i)=>(i-(count-1)/2)*.17),speed,aim);
-  if(phase>=2&&cycle%3===0)zone('glare',player.x,player.y-75,88);
- }else if(e.kind==='glassqueen'){
-  shootHostile(e,'spirit',[-.3,0,.3],speed*1.05,aim);
-  if(phase>=2)for(const side of [-1,1])shootHostile({x:Math.max(45,Math.min(755,e.x+side*150)),y:e.y+25},'spirit',[-.12,.12],speed*.9,aim+side*.15);
-  if(phase===3&&cycle%3===0)zone('glare',W-player.x,player.y-90,82);
- }else if(e.kind==='clockstag'){
-  const count=6+phase*2;shootHostile(e,'bone',Array.from({length:count},(_,i)=>i*Math.PI*2/count+cycle*.11),speed*.82,0);
-  if(cycle%2===0)shootHostile(e,'hunter',[-.18,.18],speed,aim);
-  if(phase>=2&&cycle%3===0)zone('web',player.x,player.y-35,78);
- }else if(e.kind==='conductor'){
-  const gap=(cycle%5)*145+60;for(let x=35;x<800;x+=58)if(Math.abs(x-gap)>72)shootHostile({x,y:e.y},'hex',[0],speed*.78);
-  if(phase>=2)shootHostile(e,'hunter',phase===3?[-.32,-.16,0,.16,.32]:[-.18,0,.18],speed,aim);
- }else if(e.kind==='clockmaker'){
-  const count=8+phase*2;shootHostile(e,'hex',Array.from({length:count},(_,i)=>i*Math.PI*2/count+cycle*.15),speed*.85,0);
-  shootHostile(e,'fire',phase===1?[0]:[-.22,0,.22],speed*1.08,aim);
-  if(phase>=2&&cycle%3===0){zone('glare',player.x,player.y-65,92);zone('web',W-player.x,player.y-30,70)}
- }
-};
+/* Les gardiens du monde 2 utilisent SequelBestiary, sans salves ni charges du monde 1. */
 
 /* Le Veilleur ne chasse plus pendant la seconde campagne. */
 if(window.Nemesis){
@@ -234,7 +206,7 @@ LocalLeague.startTransient=function(...args){applyWorld(1);return startTransient
 function briefing(){
  if(!progress.world2Unlocked)return;
  state='sequel-briefing';applyWorld(2);
- overlay(`<section class="sequel-briefing"><div class="eyebrow">DEUXIÈME CAMPAGNE · CINQ HEURES À RETROUVER</div><h2 class="local-title">Les Cinq Heures<br>Perdues</h2><p>L’aube s’est figée après Halloween. L’Horloger a volé cinq heures de la nuit pour instaurer un jour permanent. La sorcière n’est plus une proie : elle choisit d’aider le Veilleur à rétablir le cycle.</p><blockquote>« Je t’ai chassée. Je ne te demande pas de l’oublier. Je te demande de m’aider à sauver la nuit. »</blockquote><div class="local-rule">Nouvel objectif : dans chaque monde, vole vers les trois fragments d’heure pour libérer la voie. Les gardiens restent des combats de shoot’em up ; les fragments récompensent l’exploration.</div><div class="sequel-character-grid"><button class="sequel-character" id="chooseWitch"><span class="sequel-character-art"><img src="${window.MinuitArt.witch.src}" alt=""></span><b>La sorcière</b><small>Pilotage et attaque actuels, mobile et familière.</small></button><button class="sequel-character" id="chooseHunter"><span class="sequel-character-art"><img src="${window.MinuitArt.hunter.src}" alt=""></span><b>Le Veilleur</b><small>Vol plus lourd, carreaux en éventail et lanterne protectrice au départ.</small></button></div><div class="tiny">Cette campagne possède ses propres records. Les modes classés et quotidiens du premier monde restent inchangés.</div><div class="local-actions"><button class="secondary" id="sequelBriefBack">Retour au menu</button></div></section>`);
+ overlay(`<section class="sequel-briefing"><div class="eyebrow">DEUXIÈME CAMPAGNE · CINQ HEURES À RETROUVER</div><h2 class="local-title">Les Cinq Heures<br>Perdues</h2><p>L’aube s’est figée après Halloween. L’Horloger a volé cinq heures de la nuit pour instaurer un jour permanent. La sorcière n’est plus une proie : elle choisit d’aider le Veilleur à rétablir le cycle.</p><blockquote>« Je t’ai chassée. Je ne te demande pas de l’oublier. Je te demande de m’aider à sauver la nuit. »</blockquote><div class="local-rule">Pilotage et tir sont conservés, mais la faune est inédite : libération, survie et sabotage rythment les vagues. Chaque gardien possède ses propres attaques télégraphiées. Les trois fragments d’heure récompensent l’exploration.</div><div class="sequel-character-grid"><button class="sequel-character" id="chooseWitch"><span class="sequel-character-art"><img src="${window.MinuitArt.witch.src}" alt=""></span><b>La sorcière</b><small>Pilotage et attaque actuels, mobile et familière.</small></button><button class="sequel-character" id="chooseHunter"><span class="sequel-character-art"><img src="${window.MinuitArt.hunter.src}" alt=""></span><b>Le Veilleur</b><small>Vol plus lourd, carreaux en éventail et lanterne protectrice au départ.</small></button></div><div class="tiny">Cette campagne possède ses propres records. Les modes classés et quotidiens du premier monde restent inchangés.</div><div class="local-actions"><button class="secondary" id="sequelBriefBack">Retour au menu</button></div></section>`);
  $('chooseWitch').onclick=()=>{progress.character='witch';save();startWorld(2)};
  $('chooseHunter').onclick=()=>{progress.character='hunter';save();startWorld(2)};
  $('sequelBriefBack').onclick=()=>LocalLeague.menu();
