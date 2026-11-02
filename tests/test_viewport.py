@@ -5,6 +5,35 @@ from playwright.sync_api import sync_playwright
 ROOT = Path(__file__).resolve().parents[1]
 SIZES = [(1366, 768), (1440, 900), (1024, 600), (390, 844), (360, 640), (844, 390)]
 
+
+def assert_hud_outside(page):
+    data = page.evaluate('''() => {
+      const box = selector => {
+        const r = document.querySelector(selector).getBoundingClientRect();
+        return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,width:r.width,height:r.height};
+      };
+      const hud = document.querySelector('.hud');
+      return {
+        status:box('.game-status'), hud:box('.hud'), arena:box('.arena'),
+        blocks:['#score','#wave','#lives'].map(box),
+        parent:hud.parentElement.id, arenaHud:document.querySelectorAll('.arena .hud').length,
+        secondTitle:document.querySelectorAll('main .heading h1').length,
+        modeInHud:!!document.querySelector('.hud #modeLabel'),
+        position:getComputedStyle(hud).position,
+        scrollWidth:document.documentElement.scrollWidth,innerWidth
+      };
+    }''')
+    assert data['parent'] == 'gameStatus' and data['modeInHud'], data
+    assert data['arenaHud'] == 0 and data['secondTitle'] == 0 and data['position'] == 'static', data
+    assert data['hud']['bottom'] <= data['arena']['top'] + 1, data
+    assert data['status']['bottom'] <= data['arena']['top'] + 1, data
+    assert data['hud']['top'] >= data['status']['top'] - 1, data
+    for block in data['blocks']:
+        assert block['height'] > 0 and block['top'] >= data['status']['top'] - 1, data
+        assert block['bottom'] <= data['status']['bottom'] + 1, data
+    assert data['scrollWidth'] <= data['innerWidth'], data
+
+
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
     errors = []
@@ -57,7 +86,9 @@ with sync_playwright() as p:
         page.click('#playAdventure')
         page.wait_for_function("state === 'play'")
         page.wait_for_timeout(100)
+        page.wait_for_function("document.querySelector('.arena').getBoundingClientRect().bottom <= innerHeight + 1")
         check()
+        assert_hud_outside(page)
         if width < 851:
             controls = page.evaluate('''() => ['pause', 'specialCast', 'dash'].map(id => {
               const r = document.getElementById(id).getBoundingClientRect();
@@ -93,4 +124,4 @@ with sync_playwright() as p:
         page.close()
     assert not errors, errors
     browser.close()
-    print('OK : terrain extensible en portrait, format 8:9 ailleurs, commandes tactiles dimensionnées, aucun débordement sur six tailles. Aucune erreur JS.')
+    print('OK : HUD externe sans second titre ni recouvrement, terrain extensible, format 8:9 ailleurs, commandes tactiles et six tailles sans débordement.')
