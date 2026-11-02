@@ -67,9 +67,9 @@ const steps=[
  {id:'move',icon:'move',title:'Pilote ton balai',
   text:()=>coarse()?'Glisse un doigt dans la zone de jeu. Le balai suit ton geste sans téléportation.':'Utilise les flèches ou ZQSD/WASD. Maintien Maj pour un déplacement de précision.',
   goal:'Déplace-toi dans la zone. Le tir vers les cibles est automatique.',success:'Pilotage compris · le tir est automatique.'},
- {id:'dodge',icon:'dodge',title:'Traverse un tir avec l’esquive',
-  text:()=>coarse()?'Pilote avec un doigt et touche « Esquive » avec un autre au contact du projectile orange.':'Appuie sur Espace au contact du projectile orange. Le bond protège brièvement, puis doit se recharger.',
-  goal:'Le halo et le bouton signalent le bon moment. Traverse le tir sans perdre de vie.',success:'Esquive réussie · tu as traversé le tir sans dégâts.'},
+ {id:'dodge',icon:'dodge',title:'Esquive un tir sans dégâts',
+  text:()=>coarse()?'Pilote avec un doigt et touche « Esquive » avec un autre juste avant l’arrivée du projectile orange. La protection commence immédiatement ; tu n’as pas besoin de toucher le tir.':'Appuie sur Espace juste avant l’arrivée du projectile orange. La protection commence immédiatement ; tu n’as pas besoin de toucher le tir.',
+  goal:'Le halo et le bouton signalent le bon moment. Un contact ou un frôlement pendant la protection valide l’esquive.',success:'Esquive réussie · tu as évité le tir sans dégâts.'},
  {id:'dodgeStyles',icon:'dodge',title:'Compare les évolutions d’esquive',
   text:()=> 'Les balais modifient réellement le bond, la protection et la recharge. Déclenche une esquive avec Comète vive : après la fin complète de l’esquive, Aurore agile est sélectionnée automatiquement.',
   goal:'Déclenche une esquive avec Comète, puis une avec Aurore. Le passage à Aurore est automatique.',success:'Comète et Aurore essayées · chaque évolution a un avantage et un compromis.'},
@@ -277,7 +277,7 @@ function showBonusGallery(){
 
 const guidePages=[
  {icon:'move',title:'Pilotage et tir automatique',text:()=>coarse()?'Glisse dans la zone de jeu pour piloter. Le second doigt reste libre pour l’esquive et le sort spécial.':'Flèches ou ZQSD/WASD pour piloter ; Maj pour la précision. Le tir est automatique.',notes:['Le balai ne se téléporte pas au doigt.','Les cibles sont touchées par les projectiles violets.']},
- {icon:'dodge',title:'Esquive : traverser sans dégâts',text:()=>coarse()?'Touche « Esquive » au contact d’un tir avec un second doigt.':'Appuie sur Espace au contact d’un tir.',notes:['0,45 seconde d’invulnérabilité.','4 secondes de recharge. Maj ne rend pas invulnérable.']},
+ {icon:'dodge',title:'Esquive : protection immédiate',text:()=>coarse()?'Touche « Esquive » avec un second doigt juste avant l’arrivée d’un tir.':'Appuie sur Espace juste avant l’arrivée d’un tir.',notes:['La protection de 0,45 seconde commence dès l’appui.','Le contact n’est pas obligatoire : un frôlement pendant la protection valide aussi l’esquive.','4 secondes de recharge. Maj ne rend pas invulnérable.']},
  {icon:'special',title:'Sort spécial et recharge',text:()=>coarse()?'Le bouton « Sort spécial » déclenche l’équipement choisi dans Préparer mon vol.':'La touche F déclenche l’équipement choisi dans Préparer mon vol.',notes:['L’Onde améthyste blesse autour de toi et dissipe les tirs proches.','La Marée attaque devant toi et repousse ; la Lance solaire frappe une ligne étroite plus fortement.','La jauge du bouton indique la recharge ; aucun sort ne change la difficulté des ennemis.']},
  {icons:['bonus-rocket','bonus-fragment','bonus-familiar'],title:'Reliques : image, nom et effet',text:()=> 'Ramasse les reliques sur le terrain. Leur illustration et leur nom permettent de les reconnaître avant et après le ramassage.',notes:[`Roquettes : missiles guidés pendant ${MINUIT_BALANCE.missiles.duration} secondes.`,'Fragmentation : chaque roquette libère 8 tirs en cercle.','Familier lunaire : un compagnon tire à tes côtés.']},
  {icons:['pickup-shield','xp','points','shield'],title:'Bouclier et bonbons',text:()=> 'Le bouclier spectral absorbe les dégâts pendant '+MINUIT_BALANCE.shield.duration+' secondes. Les bonbons ont des couleurs et des emblèmes distincts.',notes:['Violet : expérience de collection.','Doré : points. Turquoise : recharge de bouclier.','Le bouclier ne rend pas invulnérable et ne remplace pas une vie.']},

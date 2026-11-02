@@ -23,6 +23,10 @@ with sync_playwright() as p:
     titles = []
     for index in range(6):
         titles.append(page.locator('.guide-card h2').inner_text())
+        if index == 1:
+            guide_text = page.locator('.guide-card').inner_text()
+            assert titles[-1] == 'Esquive : protection immédiate'
+            assert 'contact n’est pas obligatoire' in guide_text and 'dès l’appui' in guide_text
         if index == 3:
             assert page.locator('#guideArt img').count() == 3
             page.wait_for_function("[...document.querySelectorAll('#guideArt img')].every(i=>i.complete&&i.naturalWidth)")
@@ -51,6 +55,8 @@ with sync_playwright() as p:
 
     page.wait_for_function("GuidedTraining.step==='dodge'&&hostile.length>0&&hostile[0].y>player.y-45", timeout=10000)
     assert page.evaluate("hostile[0].type==='fire'&&hostile[0].damage===25")
+    assert 'pas besoin de toucher le tir' in page.locator('#trainingText').inner_text()
+    assert page.evaluate("Math.hypot(hostile[0].x-player.x,hostile[0].y-player.y)>hostile[0].r+6"), 'l’exercice doit pouvoir réussir avant le contact'
     page.keyboard.press('Space')
     page.wait_for_function('GuidedTraining.exerciseDone', timeout=3000)
     assert page.evaluate('lives===5&&player.dashCD>0&&!!CombatFeel.success')

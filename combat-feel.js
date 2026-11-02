@@ -3,11 +3,15 @@
 (()=>{
 'use strict';
 let guideThreat=null,success=null,dashVisual=null,dashCredit=false,localGuideDone=false,lastChampion=-99,lastCoachKey='',lastTime=0;
+/* La reconnaissance d’une esquive réussie est plus large que la hitbox de dégâts :
+   un frôlement suffit, sans supprimer le projectile ni déclencher l’esquive à la place du joueur. */
+const DODGE_NEAR_RADIUS=44;
 const coach=document.createElement('div');coach.id='dodgeCoach';coach.className='dodge-coach hidden';coach.setAttribute('role','status');coach.setAttribute('aria-live','polite');document.querySelector('.arena').appendChild(coach);
 const css=document.createElement('style');css.textContent=`
 .dodge-coach{position:absolute;z-index:5;top:126px;left:50%;transform:translateX(-50%);width:min(390px,88%);padding:10px 14px;border:1px solid #f2ca8caa;border-radius:10px;background:#191326ed;box-shadow:0 8px 28px #08050f88;pointer-events:none;text-align:center;backdrop-filter:blur(4px)}
 .dodge-coach b{display:block;color:#ffe0a9;font-size:12px;letter-spacing:.7px;line-height:1.35}.dodge-coach span{display:block;color:#e4d6ec;font-size:11px;line-height:1.45;margin-top:4px}
 #dash.dash-ready{border-color:#c9b6f2;color:#f2e8ff;background:linear-gradient(145deg,#49345f,#2d213e)}
+#dash.dash-active{border-color:#bcefff;color:#effcff;background:linear-gradient(145deg,#285268,#253148);box-shadow:0 0 18px #8de7ff44}
 #dash.dash-coach{border-color:#ffe0a1;color:#fff3d4;background:linear-gradient(145deg,#725042,#3d2940);animation:dashCoachPulse .48s ease-in-out infinite alternate}
 #dash small{display:none}
 @keyframes dashCoachPulse{from{box-shadow:0 0 0 0 #ffda8a22}to{box-shadow:0 0 0 5px #ffda8a38,0 0 22px #ffc56e55}}
@@ -46,7 +50,7 @@ function effect(key){
 function guideDone(){return window.Journey?!!Journey.state.dodgeGuideDone:localGuideDone}
 function completeGuide(){localGuideDone=true;window.Journey?.completeDodgeGuide?.()}
 function hideCoach(){coach.classList.add('hidden');lastCoachKey=''}
-function reset(){guideThreat=null;success=null;dashVisual=null;dashCredit=false;lastChampion=-99;lastTime=0;hideCoach();const dash=$('dash');dash?.classList.remove('dash-ready','dash-coach')}
+function reset(){guideThreat=null;success=null;dashVisual=null;dashCredit=false;lastChampion=-99;lastTime=0;hideCoach();const dash=$('dash');dash?.classList.remove('dash-ready','dash-active','dash-coach')}
 
 /* Les champions existants deviennent de vraies rencontres annoncées, sans
    toucher à leurs statistiques ni à leur fréquence d’apparition. */
@@ -55,10 +59,10 @@ const spawnBase=spawnEnemy;spawnEnemy=function(d){const count=enemies.length;spa
 /* Le nom seul ne suffit pas : l’effet utile est annoncé au ramassage. */
 const collectBase=collectUpgrade;collectUpgrade=function(d){const wasTaken=d?.taken,beforeRank=d?.key?upgrades[d.key]:0,beforeScore=score,result=collectBase(d),def=upgradeDefs.find(v=>v[0]===d?.key);if(!wasTaken&&def){if(d.key!=='rocket'&&beforeRank===upgrades[d.key]&&score>beforeScore)say(def[2]+' · rang maximum · points bonus',3,'bonus-'+d.key);else say(def[2]+' · '+effect(d.key),3.8,'bonus-'+d.key)}return result};
 
-/* Une salve ne crédite qu’une esquive précise, même avec plusieurs projectiles. */
+/* Une activation ne crédite qu’une esquive précise, au contact ou au frôlement. */
 function onDodge(){dashCredit=false;const duration=dashInv();dashVisual={life:duration,max:duration,sample:0,ghosts:[{x:player.x,y:player.y,life:.28,max:.28}]}}
-function perfectDodge(){if(dashCredit)return;const first=!guideDone();dashCredit=true;success={x:player.x,y:player.y,life:.55,max:.55};guideThreat=null;hideCoach();window.League?.event?.('perfectDodges',1);if(first){completeGuide();say('ESQUIVE RÉUSSIE · tir traversé sans dégâts',2.8,'dodge')}particle(player.x,player.y,'#d9f5ff',10);tone(920,.13,'sine',.06,1.35);noiseBurst(.07,.012,1450)}
-const hurtBase=hurt;hurt=function(n,source,detail){const precise=state==='play'&&player.dash>0&&detail?.kind==='shot',result=hurtBase(n,source,detail);if(precise)perfectDodge();return result};
+function perfectDodge(){if(dashCredit)return;const first=!guideDone();dashCredit=true;success={x:player.x,y:player.y,life:.55,max:.55};guideThreat=null;hideCoach();window.League?.event?.('perfectDodges',1);if(first){completeGuide();say('ESQUIVE RÉUSSIE · tir évité sans dégâts',2.8,'dodge')}particle(player.x,player.y,'#d9f5ff',10);tone(920,.13,'sine',.06,1.35);noiseBurst(.07,.012,1450)}
+const hurtBase=hurt;hurt=function(n,source,detail){const precise=state==='play'&&dashVisual?.life>0&&(player.inv>0||player.dash>0)&&detail?.kind==='shot',result=hurtBase(n,source,detail);if(precise)perfectDodge();return result};
 
 function threatTime(b){
  const rx=b.x-player.x,ry=b.y-player.y,vx=b.vx||0,vy=b.vy||0,a=vx*vx+vy*vy;if(a<1)return null;
@@ -71,13 +75,19 @@ function syncCoach(){
  if(!guideThreat||guideDone()||state!=='play')return hideCoach();
  const ready=player.dashCD<=0,now=ready&&guideThreat.time<=Math.max(.3,dashInv()),mode=!ready?'wait':now?'now':'prepare',key=mode+(ready?'':'-'+Math.ceil(player.dashCD));if(key===lastCoachKey&&!coach.classList.contains('hidden'))return;lastCoachKey=key;
  const touch=window.matchMedia?.('(pointer:coarse)').matches||innerWidth<=850,action=touch?'Touche ESQUIVE':'Appuie sur ESPACE';
- coach.innerHTML=mode==='wait'?'<b>ESQUIVE EN RECHARGE · '+Math.ceil(player.dashCD)+' s</b><span>Déplace-toi hors de la trajectoire et attends qu’elle soit prête.</span>':mode==='now'?'<b>ESQUIVE MAINTENANT</b><span>Tir ciblé : '+action+' · '+dashInv().toFixed(2).replace('.',',')+' s sans dégâts.</span>':'<b>TIR EN APPROCHE · PRÉPARE L’ESQUIVE</b><span>'+action+' quand l’anneau se referme, pas trop tôt.</span>';
+ coach.innerHTML=mode==='wait'?'<b>ESQUIVE EN RECHARGE · '+Math.ceil(player.dashCD)+' s</b><span>Déplace-toi hors de la trajectoire et attends qu’elle soit prête.</span>':mode==='now'?'<b>ESQUIVE MAINTENANT</b><span>Tir ciblé : '+action+' · '+dashInv().toFixed(2).replace('.',',')+' s sans dégâts.</span>':'<b>TIR EN APPROCHE · PRÉPARE L’ESQUIVE</b><span>'+action+' juste avant l’arrivée du tir ; le contact n’est pas obligatoire.</span>';
  coach.classList.remove('hidden');
 }
 function syncTouchLayout(){const bar=document.querySelector('.touchbar');if(!bar)return;const layout=['left','right'].includes(prefs.touchLayout)?prefs.touchLayout:'left';if(bar.dataset.touchLayout!==layout)bar.dataset.touchLayout=layout}
-function syncDash(){syncTouchLayout();const dash=$('dash');if(!dash)return;const ready=state==='play'&&player.dashCD<=0,now=ready&&guideThreat&&guideThreat.time<=Math.max(.3,dashInv());dash.classList.toggle('dash-ready',ready);dash.classList.toggle('dash-coach',!!now);dash.setAttribute('aria-disabled',String(!ready));dash.title=ready?'Esquive prête : bond rapide + '+dashInv().toFixed(2)+' s sans dégâts. Utilise-la au contact d’un tir.':'Esquive en recharge : '+Math.max(0,player.dashCD).toFixed(1)+' s';dash.setAttribute('aria-label',ready?'Esquive prête · bond rapide · '+dashInv().toFixed(2)+' secondes de protection':'Esquive en recharge · '+Math.ceil(player.dashCD)+' secondes')}
+function syncDash(){
+ syncTouchLayout();const dash=$('dash');if(!dash)return;
+ const ready=state==='play'&&player.dashCD<=0,active=state==='play'&&dashVisual?.life>0,now=ready&&guideThreat&&guideThreat.time<=Math.max(.3,dashInv());
+ dash.classList.toggle('dash-ready',ready);dash.classList.toggle('dash-active',!!active);dash.classList.toggle('dash-coach',!!now);dash.setAttribute('aria-disabled',String(!ready));
+ dash.title=active?'Protection d’esquive active pendant encore '+dashVisual.life.toFixed(1)+' s · la recharge a déjà commencé.':ready?'Esquive prête : bond rapide + '+dashInv().toFixed(2)+' s sans dégâts. Déclenche juste avant l’arrivée d’un tir ; le contact n’est pas obligatoire.':'Esquive en recharge : '+Math.max(0,player.dashCD).toFixed(1)+' s';
+ dash.setAttribute('aria-label',active?'Protection d’esquive active · encore '+Math.ceil(dashVisual.life*10)/10+' secondes · recharge en cours':ready?'Esquive prête · bond rapide · '+dashInv().toFixed(2)+' secondes de protection · contact non obligatoire':'Esquive en recharge · '+Math.ceil(player.dashCD)+' secondes');
+}
 const hudBase=updateHUD;updateHUD=function(){hudBase();syncDash()};
-const updateBase=update;update=function(dt){updateBase(dt);if(gameTime<lastTime)reset();lastTime=gameTime;if(dashVisual){dashVisual.life=Math.max(0,dashVisual.life-dt);dashVisual.sample-=dt;if(player.dash>0&&dashVisual.sample<=0){dashVisual.ghosts.unshift({x:player.x,y:player.y,life:.28,max:.28});dashVisual.ghosts.length=Math.min(5,dashVisual.ghosts.length);dashVisual.sample=.045}for(const ghost of dashVisual.ghosts)ghost.life-=dt;dashVisual.ghosts=dashVisual.ghosts.filter(ghost=>ghost.life>0);if(dashVisual.life<=0&&!dashVisual.ghosts.length)dashVisual=null}if(success){success.life-=dt;if(success.life<=0)success=null}guideThreat=state==='play'&&window.GuidedTraining?.showProjectileCue?nearestThreat():null;if(window.GuidedTraining?.showCoach)syncCoach();else hideCoach();syncDash()};
+const updateBase=update;update=function(dt){updateBase(dt);if(gameTime<lastTime)reset();lastTime=gameTime;if(dashVisual){dashVisual.life=Math.max(0,dashVisual.life-dt);dashVisual.sample-=dt;if(player.dash>0&&dashVisual.sample<=0){dashVisual.ghosts.unshift({x:player.x,y:player.y,life:.28,max:.28});dashVisual.ghosts.length=Math.min(5,dashVisual.ghosts.length);dashVisual.sample=.045}for(const ghost of dashVisual.ghosts)ghost.life-=dt;dashVisual.ghosts=dashVisual.ghosts.filter(ghost=>ghost.life>0);if(dashVisual.life<=0&&!dashVisual.ghosts.length)dashVisual=null}if(dashVisual?.life>0&&!dashCredit&&(player.inv>0||player.dash>0)&&state==='play'){const near=hostile.find(b=>b.life>0&&b.type!=='web'&&Math.hypot(b.x-player.x,b.y-player.y)<=DODGE_NEAR_RADIUS+(b.r||7));if(near)perfectDodge()}if(success){success.life-=dt;if(success.life<=0)success=null}guideThreat=state==='play'&&window.GuidedTraining?.showProjectileCue?nearestThreat():null;if(window.GuidedTraining?.showCoach)syncCoach();else hideCoach();syncDash()};
 
 function drawDashTrail(g){
  if(!dashVisual)return;
@@ -97,10 +107,10 @@ function draw(g){
  if(state!=='play'){guideThreat=null;hideCoach();syncDash();return}
  if(guideThreat&&hostile.includes(guideThreat.b)){const {b,time}=guideThreat,p=Math.max(0,Math.min(1,time/1.25));g.save();g.strokeStyle=time<=dashInv()?'#fff0b9':'#f2c987';g.lineWidth=2.5;g.globalAlpha=.7+.25*Math.sin(ambient*14);g.beginPath();g.arc(b.x,b.y,(b.r||7)+7+p*25,0,Math.PI*2);g.stroke();g.restore()}
  if(dashVisual?.life>0){const remain=Math.max(0,Math.min(1,dashVisual.life/dashVisual.max)),elapsed=1-remain;g.save();g.fillStyle='#9de7ff';g.globalAlpha=.055+.07*remain;g.beginPath();g.arc(player.x,player.y,42,0,Math.PI*2);g.fill();g.strokeStyle='#bfefff';g.lineWidth=4;g.globalAlpha=.35+.5*remain;g.beginPath();g.arc(player.x,player.y,44+Math.sin(ambient*20)*2,0,Math.PI*2);g.stroke();g.strokeStyle='#fff0ae';g.lineWidth=3;g.globalAlpha=.95;g.beginPath();g.arc(player.x,player.y,49,-Math.PI/2,-Math.PI/2+Math.PI*2*remain);g.stroke();if(elapsed<.6){g.strokeStyle='#c8f5ff';g.lineWidth=3;g.globalAlpha=(1-elapsed/.6)*.7;g.beginPath();g.arc(player.x,player.y,40+elapsed*105,0,Math.PI*2);g.stroke()}g.fillStyle='#effcff';g.globalAlpha=Math.min(1,remain*4);g.font='bold '+(compactView()?19:15)+'px Arial';g.textAlign='center';g.fillText('ESQUIVE · PROTÉGÉE',player.x,player.y-66);g.restore()}
- if(success){const p=1-success.life/success.max;g.save();g.globalAlpha=Math.max(0,success.life/success.max);g.strokeStyle='#dff8ff';g.fillStyle='#effcff';g.lineWidth=3;g.beginPath();g.arc(success.x,success.y,25+p*65,0,Math.PI*2);g.stroke();for(let i=0;i<8;i++){const a=i*Math.PI/4,r=28+p*45;line(g,success.x+Math.cos(a)*r,success.y+Math.sin(a)*r,success.x+Math.cos(a)*(r+12),success.y+Math.sin(a)*(r+12),'#e8fbff',2)}g.font='bold '+(compactView()?22:17)+'px Arial';g.textAlign='center';g.fillText('ESQUIVE !',success.x,success.y-48-p*22);g.restore()}
+ if(success){const p=1-success.life/success.max;g.save();g.globalAlpha=Math.max(0,success.life/success.max);g.strokeStyle='#dff8ff';g.fillStyle='#effcff';g.lineWidth=3;g.beginPath();g.arc(success.x,success.y,25+p*65,0,Math.PI*2);g.stroke();for(let i=0;i<8;i++){const a=i*Math.PI/4,r=28+p*45;line(g,success.x+Math.cos(a)*r,success.y+Math.sin(a)*r,success.x+Math.cos(a)*(r+12),success.y+Math.sin(a)*(r+12),'#e8fbff',2)}g.font='bold '+(compactView()?22:17)+'px Arial';g.textAlign='center';g.fillText('ESQUIVE RÉUSSIE !',success.x,success.y-48-p*22);g.restore()}
 }
 const begin=window.Journey?.begin,restore=window.Journey?.restore;if(begin)Journey.begin=function(...a){reset();return begin(...a)};if(restore)Journey.restore=function(...a){reset();return restore(...a)};
 const startBase=start;start=function(...a){reset();return startBase(...a)};const resumeBase=resumeCheckpoint;resumeCheckpoint=function(...a){reset();return resumeBase(...a)};
 syncTouchLayout();
-window.CombatFeel={shortEffect,effect,draw,drawEnemy,drawDashTrail,nearestThreat,reset,onDodge,syncTouchLayout,get dashVisual(){return dashVisual},get guideThreat(){return guideThreat},get success(){return success}};
+window.CombatFeel={shortEffect,effect,draw,drawEnemy,drawDashTrail,nearestThreat,reset,onDodge,syncTouchLayout,nearRadius:DODGE_NEAR_RADIUS,get dashVisual(){return dashVisual},get guideThreat(){return guideThreat},get success(){return success}};
 })();

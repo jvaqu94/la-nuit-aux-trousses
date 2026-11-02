@@ -119,7 +119,7 @@ with sync_playwright() as p:
     assert 0 < effect['visual']['life'] < .45, effect
     assert 'ESQUIVE · PROTÉGÉE' in effect['texts'], effect
     assert any(44 <= radius <= 50 for radius in effect['arcRadii']), effect
-    assert 'Recharge' in effect['dashLabel'], effect
+    assert 'Esquive active' in effect['dashLabel'] and 'Recharge' not in effect['dashLabel'], effect
     if os.environ.get('DODGE_SCREENSHOT'):
         page.screenshot(path=os.environ['DODGE_SCREENSHOT'], full_page=True)
 
@@ -127,10 +127,12 @@ with sync_playwright() as p:
     expired = page.evaluate("""() => {
         for(let i=0;i<60;i++)update(1/60);
         return {visual:CombatFeel.dashVisual,dash:player.dash,inv:player.inv,
-            cooldown:player.dashCD,order:document.querySelector('.touchbar').dataset.touchLayout};
+            cooldown:player.dashCD,order:document.querySelector('.touchbar').dataset.touchLayout,
+            dashLabel:document.querySelector('#dash').innerText};
     }""")
     assert expired['visual'] is None and expired['dash'] == 0 and expired['inv'] == 0, expired
     assert 0 < expired['cooldown'] < 4 and expired['order'] == 'right', expired
+    assert 'Recharge' in expired['dashLabel'] and 'Esquive active' not in expired['dashLabel'], expired
 
     # Le choix survit au rechargement et une nouvelle annulation le laisse intact.
     page.reload(wait_until='domcontentloaded')
@@ -184,6 +186,7 @@ with sync_playwright() as p:
     }""")
     assert desktop_effect['ghosts'] >= 2 and desktop_effect['max'] == .45, desktop_effect
     assert desktop_effect['small'] == 0 and 'Bond + protection' not in desktop_effect['label'], desktop_effect
+    assert 'Protégée' in desktop_effect['label'], desktop_effect
     desktop.close()
 
     assert not errors and not narrow_errors and not desktop_errors, errors + narrow_errors + desktop_errors
