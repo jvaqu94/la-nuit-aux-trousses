@@ -164,8 +164,15 @@ with sync_playwright() as p:
     names = normal.evaluate('BuildSynergies.current.activated')
     assert {'rocket-fragment', 'poison-spread', 'familiar-laser'} <= set(names)
     assert 'Contagion de minuit' in normal.locator('#synergyHUD').inner_text()
+    normal.wait_for_function("document.querySelector('#adventureStatus').innerText.includes('MISSILES')")
+    assert 'SORT PRÊT' in normal.locator('#adventureStatus').inner_text()
+    flight_panels = normal.evaluate("""()=>['synergyHUD','combatHUD','adventureStatus'].map(id=>{
+      const el=document.getElementById(id);return {id,external:!!el.closest('#gameStatus'),inArena:!!el.closest('.arena')};
+    })""")
+    assert all(panel['external'] and not panel['inArena'] for panel in flight_panels), flight_panels
     normal.evaluate("Journey.state.combat.selected.spell='pulse';lives=1;player.inv=0;player.dash=0;hurt(25,'test bilan')")
     normal.wait_for_selector('.journey-result-screen:not(.weekly-result)', timeout=15000)
+    assert normal.evaluate("document.querySelector('#adventureStatus').classList.contains('hidden')")
     build_card = normal.locator('.replay-build-card').inner_text()
     assert 'Essaim crépitant' in build_card and 'Contagion de minuit' in build_card and 'Chœur spectral' in build_card
     assert 'Lance solaire' in build_card and 'Comète vive' in build_card

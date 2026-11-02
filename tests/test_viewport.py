@@ -17,6 +17,12 @@ def assert_hud_outside(page):
         status:box('.game-status'), hud:box('.hud'), arena:box('.arena'),
         blocks:['#score','#wave','#lives'].map(box),
         parent:hud.parentElement.id, arenaHud:document.querySelectorAll('.arena .hud').length,
+        arenaFlightPanels:document.querySelectorAll('.arena #synergyHUD,.arena #combatHUD,.arena #adventureStatus').length,
+        flightPanels:['synergyHUD','combatHUD','adventureStatus'].map(id=>{
+          const el=document.getElementById(id),r=el.getBoundingClientRect();
+          return {id,parent:el.parentElement.id,hidden:el.classList.contains('hidden'),top:r.top,bottom:r.bottom,height:r.height};
+        }),
+        build:box('#gameBuildSlot'),equipment:box('#gameEquipmentSlot'),
         secondTitle:document.querySelectorAll('main .heading h1').length,
         modeInHud:!!document.querySelector('.hud #modeLabel'),
         position:getComputedStyle(hud).position,
@@ -24,13 +30,21 @@ def assert_hud_outside(page):
       };
     }''')
     assert data['parent'] == 'gameStatus' and data['modeInHud'], data
-    assert data['arenaHud'] == 0 and data['secondTitle'] == 0 and data['position'] == 'static', data
+    assert data['arenaHud'] == 0 and data['arenaFlightPanels'] == 0, data
+    assert data['secondTitle'] == 0 and data['position'] == 'static', data
     assert data['hud']['bottom'] <= data['arena']['top'] + 1, data
     assert data['status']['bottom'] <= data['arena']['top'] + 1, data
     assert data['hud']['top'] >= data['status']['top'] - 1, data
     for block in data['blocks']:
         assert block['height'] > 0 and block['top'] >= data['status']['top'] - 1, data
         assert block['bottom'] <= data['status']['bottom'] + 1, data
+    for panel in data['flightPanels']:
+        expected_parent = 'gameBuildSlot' if panel['id'] == 'synergyHUD' else 'gameEquipmentSlot'
+        assert panel['parent'] == expected_parent, data
+        if not panel['hidden']:
+            assert panel['height'] > 0 and panel['top'] >= data['status']['top'] - 1, data
+            assert panel['bottom'] <= data['status']['bottom'] + 1, data
+    assert data['build']['right'] <= data['equipment']['left'] + 1, data
     assert data['scrollWidth'] <= data['innerWidth'], data
 
 
@@ -89,6 +103,15 @@ with sync_playwright() as p:
         page.wait_for_function("document.querySelector('.arena').getBoundingClientRect().bottom <= innerHeight + 1")
         check()
         assert_hud_outside(page)
+        # Cas réel : une synergie nommée et un effet à compte à rebours doivent
+        # rester dans le bandeau, y compris après le réajustement du terrain.
+        page.evaluate("upgrades.poison=1;upgrades.spread=1;player.missileTime=5;updateLoadout()")
+        page.wait_for_function("document.querySelector('#synergyHUD').innerText.includes('Contagion de minuit') && document.querySelector('#adventureStatus').innerText.includes('MISSILES')")
+        page.wait_for_function("document.querySelector('#gameStatus').getBoundingClientRect().bottom <= document.querySelector('.arena').getBoundingClientRect().top + 1")
+        assert 'SORT PRÊT' in page.locator('#adventureStatus').inner_text()
+        assert 'MISSILES' not in page.locator('#graze').inner_text()
+        check()
+        assert_hud_outside(page)
         if width < 851:
             controls = page.evaluate('''() => ['pause', 'specialCast', 'dash'].map(id => {
               const r = document.getElementById(id).getBoundingClientRect();
@@ -108,9 +131,11 @@ with sync_playwright() as p:
         if (width, height) in [(1366, 768), (390, 844)]:
             page.screenshot(path=str(ROOT / f'tests/fit-{width}-{height}.png'), full_page=True)
         page.evaluate('gameTime=40;score=1200;end(false)')
-        # Les transitions et bilans sont eux aussi des pages plein écran sur
-        # téléphone ; le ratio 8:9 redevient obligatoire à la reprise du vol.
-        check(home=width < 851)
+        page.wait_for_selector('.journey-result-screen')
+        assert page.evaluate("document.querySelector('#adventureStatus').classList.contains('hidden')")
+        # Le bilan est une page plein écran sur toutes les tailles ; le ratio
+        # 8:9 redevient obligatoire à la reprise du vol.
+        check(home=True)
         page.locator('#return').scroll_into_view_if_needed()
         page.click('#return')
         page.locator('#wardrobe').scroll_into_view_if_needed()
@@ -124,4 +149,4 @@ with sync_playwright() as p:
         page.close()
     assert not errors, errors
     browser.close()
-    print('OK : HUD externe sans second titre ni recouvrement, terrain extensible, format 8:9 ailleurs, commandes tactiles et six tailles sans débordement.')
+    print('OK : HUD, build et effets externes sans second titre ni recouvrement, terrain extensible, format 8:9 ailleurs, commandes tactiles et six tailles sans débordement.')

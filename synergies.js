@@ -71,7 +71,7 @@ const css=document.createElement('style');css.textContent=`
 @media(max-width:850px){.synergy-hud{top:98px;left:8px;max-width:62%;padding:5px 7px}.synergy-hud b{font-size:8px}.synergy-hud span{font-size:6px}.replay-card{padding:10px}.replay-synergy-list{grid-template-columns:1fr}.replay-result-actions{display:grid;grid-template-columns:1fr;width:100%}.replay-result-actions button{width:100%}}
 @media(max-height:500px){.synergy-hud{top:58px;max-width:48%}.synergy-hud b{font-size:7px}}
 `;document.head.appendChild(css);
-document.querySelector('.arena').insertAdjacentHTML('beforeend','<div id="synergyHUD" class="synergy-hud hidden"></div>');
+($('gameBuildSlot')||document.querySelector('.arena')).insertAdjacentHTML('beforeend','<div id="synergyHUD" class="synergy-hud hidden"></div>');
 $('badges').insertAdjacentHTML('afterend','<div id="synergyLoadout" class="synergy-loadout hidden"></div>');
 window.BuildSynergies={definitions,byId,equipmentNames,snapshot,get current(){return snapshot()},get last(){return last},get discovered(){return[...seen]},scan};
 render();
