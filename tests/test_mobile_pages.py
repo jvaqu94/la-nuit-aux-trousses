@@ -53,6 +53,8 @@ GEOMETRY = """()=>{
   return{top:r.top,bottom:r.bottom,width:r.width,height:r.height}};
  const overlay=document.querySelector('#overlay');
  return{arena:rect('.arena'),holder:rect('.layout>div:first-child'),overlay:rect('#overlay'),
+  status:rect('.game-status'),hud:rect('.hud'),hudOutside:!!document.querySelector('.game-status>.hud'),
+  arenaHud:document.querySelectorAll('.arena .hud').length,secondTitle:document.querySelectorAll('main .heading h1').length,
   header:getComputedStyle(document.querySelector('header')).display,
   touchbar:getComputedStyle(document.querySelector('.touchbar')).display,
   bar:rect('.touchbar'),scrollWidth:document.documentElement.scrollWidth,
@@ -100,6 +102,8 @@ def assert_game(page):
     assert data['header'] == 'flex' and data['touchbar'] == 'flex', data
     assert arena['bottom'] <= data['innerHeight'] + 1 and data['bar']['bottom'] <= data['innerHeight'] + 1, data
     assert data['scrollWidth'] <= data['innerWidth'], data
+    assert data['hudOutside'] and data['arenaHud'] == 0 and data['secondTitle'] == 0, data
+    assert data['hud']['bottom'] <= arena['top'] + 1 and data['status']['bottom'] <= arena['top'] + 1, data
 
 
 with sync_playwright() as p:
@@ -152,6 +156,13 @@ with sync_playwright() as p:
         page.wait_for_function("state==='play'")
         page.wait_for_timeout(120)
         assert_game(page)
+        # La ligne de bonus quotidien peut agrandir le bandeau sans jamais
+        # recouvrir le terrain ni sortir de l’écran.
+        page.evaluate("mode='daily';dailyBonus=150;updateHUD()")
+        page.wait_for_function("document.querySelector('#dailyBonusHUD').textContent.includes('150')")
+        page.wait_for_timeout(50)
+        assert_game(page)
+        page.evaluate("mode='story';dailyBonus=0;updateHUD()")
         page.click('#pause')
         page.wait_for_selector('#resume')
         assert_full_page(page, f'{width} pause')

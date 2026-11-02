@@ -235,6 +235,7 @@ La procédure complète et les consignes de sécurité sont dans [`supabase/READ
 ## Affichage et son
 
 - Terrain au format 8:9 sur ordinateur et en paysage. En portrait sur mobile, il peut occuper davantage de hauteur, jusqu’à un rapport hauteur/largeur de 1,45, selon la place disponible.
+- Le titre n’apparaît qu’une seule fois. **Score, record, univers, vague, mode et vies sont regroupés dans un bandeau externe, au-dessus du terrain**, sans recouvrir le canvas. Sur téléphone, ce bandeau est compact et laisse toute la hauteur du décor visible ; en paysage, seules les lignes secondaires sont masquées.
 - Interface dédiée sur mobile, commandes principales agrandies et panneau d’informations séparé avec mise en pause.
 - Mode plein écran lorsque le navigateur l’autorise.
 - Volume, musique et ambiance réglables sans modifier la partie.
@@ -280,7 +281,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
 | `arcade-scores.js` | Top 10 arcade, catégories locales, surlignage du dernier vol et défilement contrôlable. |
 | `collectible-art.js` | Illustrations des bonus et objets ramassables. |
-| `viewport.js` | Mode téléphone, plein écran automatique dès que permis, terrain et commandes adaptés à la fenêtre. |
+| `viewport.js` | Mode téléphone, HUD externe compact, plein écran automatique dès que permis, terrain et commandes adaptés à la fenêtre. |
 | `supabase.js` | Client REST Supabase optionnel, accès pseudo/e-mail, invitations, cloud, teams, highscores et avis. |
 | `supabase/functions/pseudo-auth/index.ts` | Fonction serveur d’inscription et connexion par pseudo, sans e-mail ni clé secrète dans le navigateur. |
 | `supabase-config.js` | URL et clé publiable du projet ; des valeurs vides désactivent le cloud pour un fonctionnement local. |

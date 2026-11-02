@@ -112,11 +112,52 @@ css.textContent+=`
  .finish-art .lesson-icon{width:48px;height:48px}
 }
 `;
+css.textContent+=`
+/* Un seul bandeau d’informations, au-dessus du terrain : le second titre est
+   supprimé et aucun score, cœur ou compteur ne masque le haut du canvas. */
+.heading.game-status{
+ display:block;flex:none;align-self:center;width:min(100%,calc(var(--field-width,400px) + 274px));height:auto;min-height:60px;margin:0 0 8px;padding:7px 12px;
+ border:1px solid #765d8544;border-radius:10px;background:linear-gradient(110deg,#21182dcc,#171220cc);box-shadow:inset 0 1px #ffffff06
+}
+.game-status .hud{
+ position:static;inset:auto;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(100px,.9fr) minmax(0,1fr);align-items:center;gap:12px;width:100%;
+ font-size:8px;letter-spacing:.7px;line-height:1.1;text-shadow:none;pointer-events:none
+}
+.game-status .hud>div{min-width:0;text-align:left}.game-status .hud-progress{text-align:center}.game-status .hud-lives{text-align:right}
+.game-status .hud-label{display:block;color:#c9b8d5;font-size:8px;letter-spacing:1.1px}
+.game-status .hud b{display:block;margin:3px 0 0;color:#f7eefc;font-size:19px;line-height:1;letter-spacing:1px}
+.game-status .hud .hearts{font-size:17px}
+.game-status .hud-subline{display:flex;align-items:center;flex-wrap:wrap;gap:3px 7px;margin-top:5px;line-height:1}
+.game-status .highscore-line{display:inline-block;margin:0;font-size:7px;letter-spacing:.2px;white-space:nowrap}
+.game-status #combo{display:inline-block;color:#ba9fd0;font-size:7px;white-space:nowrap}
+.game-status #dailyBonusHUD:empty{display:none}.game-status #dailyBonusHUD{margin-top:4px;font-size:7px;line-height:1.1;white-space:nowrap}
+.game-status .hud-mode{display:block;margin-top:5px;color:#c7a6dc;font-size:7px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.game-status #graze{display:block;margin-top:5px;color:#b6a4c6;font-size:7px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.replay-mode main .game-status,.dawn-flight main .game-status{display:none!important}
+@media(max-width:850px){
+ .heading.game-status{width:100%;min-height:62px;margin-bottom:5px;padding:6px 8px;border-radius:9px}
+ .game-status .hud{grid-template-columns:minmax(0,1.1fr) minmax(82px,.85fr) minmax(0,1fr);gap:7px;font-size:8px;letter-spacing:.4px}
+ .game-status .hud-label{font-size:8px}.game-status .hud b{font-size:18px;margin-top:3px}.game-status .hud .hearts{font-size:15px;letter-spacing:2px!important}
+ .game-status .hud-subline{gap:3px 5px;margin-top:4px}
+ .game-status .highscore-line,.game-status #combo,.game-status .hud-mode,.game-status #graze{font-size:7px}
+}
+@media(max-width:370px) and (min-height:501px){
+ .heading.game-status{padding-left:7px;padding-right:7px}
+ .game-status .hud{grid-template-columns:minmax(0,1.08fr) minmax(70px,.8fr) minmax(0,.92fr);gap:5px}
+ .game-status .hud-label{font-size:7px}.game-status .hud b{font-size:16px}.game-status .hud .hearts{font-size:13px;letter-spacing:1px!important}
+}
+@media(max-height:500px){
+ .heading.game-status{display:block;height:40px;min-height:40px;margin-bottom:4px;padding:4px 8px}
+ .game-status .hud{grid-template-columns:1fr 100px 1fr;gap:7px}
+ .game-status .hud-label{font-size:7px}.game-status .hud b,.game-status .hud .hearts{font-size:13px;margin-top:2px}
+ .game-status .hud-subline,.game-status .hud-mode,.game-status #graze,.game-status #dailyBonusHUD{display:none}
+}
+`;
 document.head.appendChild(css);
 const holder=document.querySelector('.layout>div:first-child'),arena=document.querySelector('.arena'),aside=document.querySelector('.sidebar'),bar=document.querySelector('.touchbar');
 arena.insertAdjacentHTML('beforeend','<div class="touch-stick hidden" id="touchStick" aria-hidden="true"><i></i></div>');
 let scheduled=false;
-function fit(){scheduled=false;const space=Math.max(80,holder.clientHeight-bar.offsetHeight-6),width=Math.max(80,innerWidth>850?document.querySelector('.layout').clientWidth-274:holder.clientWidth),portrait=innerWidth<=850&&innerHeight>innerWidth;const h=Math.floor(Math.min(space,width*(portrait?1.45:9/8))),w=Math.floor(portrait?Math.min(width,h*8/9):h*8/9);document.querySelector('.layout').style.setProperty('--field-width',w+'px');holder.style.setProperty('--field-width',w+'px');holder.style.setProperty('--field-height',h+'px');resize()}
+function fit(){scheduled=false;const space=Math.max(80,holder.clientHeight-bar.offsetHeight-6),width=Math.max(80,innerWidth>850?document.querySelector('.layout').clientWidth-274:holder.clientWidth),portrait=innerWidth<=850&&innerHeight>innerWidth;const h=Math.floor(Math.min(space,width*(portrait?1.45:9/8))),w=Math.floor(portrait?Math.min(width,h*8/9):h*8/9);document.querySelector('main').style.setProperty('--field-width',w+'px');document.querySelector('.layout').style.setProperty('--field-width',w+'px');holder.style.setProperty('--field-width',w+'px');holder.style.setProperty('--field-height',h+'px');resize()}
 function schedule(){if(!scheduled){scheduled=true;requestAnimationFrame(fit)}}
 if(window.ResizeObserver)new ResizeObserver(schedule).observe(holder);
 window.addEventListener('resize',schedule);window.visualViewport?.addEventListener('resize',schedule);document.addEventListener('fullscreenchange',schedule);
