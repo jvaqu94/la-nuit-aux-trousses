@@ -23,14 +23,18 @@ def assert_flight_hud(page):
           return {id,parent:el.parentElement.id,hidden:el.classList.contains('hidden'),top:r.top,bottom:r.bottom,height:r.height};
         }),
         build:box('#gameBuildSlot'),equipment:box('#gameEquipmentSlot'),details:box('#gameDetails'),
-        detailsInArena:!!document.querySelector('.arena>#gameDetails'),
+        detailsInArena:!!document.querySelector('.arena #gameDetails'),
+        toast:box('#toast'),toastText:document.querySelector('#toast').textContent,
+        toastParent:document.querySelector('#toast').parentElement.id,
+        overlayParent:document.querySelector('#overlay').parentElement.className,
         secondTitle:document.querySelectorAll('main .heading h1').length,
         modeInHud:!!document.querySelector('.hud #modeLabel'),
         position:getComputedStyle(hud).position,
-        scrollWidth:document.documentElement.scrollWidth,innerWidth
+        scrollWidth:document.documentElement.scrollWidth,innerWidth,innerHeight
       };
     }''')
     assert data['parent'] == 'gameStatus' and data['modeInHud'], data
+    assert data['toastParent'] == 'arenaTop' and data['overlayParent'] == 'arena', data
     assert data['arenaHud'] == 0 and data['arenaFlightPanels'] == 3 and data['detailsInArena'], data
     assert data['secondTitle'] == 0 and data['position'] == 'static', data
     assert data['hud']['bottom'] <= data['arena']['top'] + 1, data
@@ -38,6 +42,12 @@ def assert_flight_hud(page):
     assert data['hud']['top'] >= data['status']['top'] - 1, data
     assert data['details']['height'] > 0 and abs(data['details']['top'] - data['arena']['top']) <= 2, data
     assert data['details']['bottom'] <= data['arena']['top'] + 90, data
+    if data['innerWidth'] <= 850:
+        if data['innerHeight'] > data['innerWidth']:
+            assert -1 <= data['arena']['top'] - data['status']['bottom'] <= 8, data
+        if data['toastText']:
+            assert data['toast']['top'] >= data['details']['bottom'] - 1, data
+            assert data['toast']['bottom'] <= data['arena']['top'] + data['arena']['height'] * .25, data
     for block in data['blocks']:
         assert block['height'] > 0 and block['top'] >= data['status']['top'] - 1, data
         assert block['bottom'] <= data['status']['bottom'] + 1, data
@@ -108,7 +118,7 @@ with sync_playwright() as p:
         assert_flight_hud(page)
         # Cas réel : une synergie nommée et un effet à compte à rebours doivent
         # rester dans le bandeau, y compris après le réajustement du terrain.
-        page.evaluate("upgrades.poison=1;upgrades.spread=1;player.missileTime=5;updateLoadout()")
+        page.evaluate("upgrades.poison=1;upgrades.spread=1;player.missileTime=5;updateLoadout();say('Information haute de test',5)")
         page.wait_for_function("document.querySelector('#synergyHUD').innerText.includes('Contagion de minuit') && document.querySelector('#adventureStatus').innerText.includes('MISSILES')")
         page.wait_for_function("document.querySelector('#gameDetails').getBoundingClientRect().height > 0 && document.querySelector('#gameDetails').getBoundingClientRect().bottom <= document.querySelector('.arena').getBoundingClientRect().top + 90")
         assert 'SORT PRÊT' in page.locator('#adventureStatus').inner_text()

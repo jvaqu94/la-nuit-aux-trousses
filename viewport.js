@@ -134,6 +134,7 @@ css.textContent+=`
 .game-status #graze{display:block;margin-top:5px;color:#b6a4c6;font-size:7px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Build à gauche, équipement et effets à droite : la ligne appartient au
    cadre de jeu et reste alignée sur son bord supérieur. */
+.arena-top{display:contents}
 .game-details{position:absolute;top:0;left:0;right:0;z-index:4;display:none;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:10px;width:100%;min-width:0;padding:6px 10px;border-bottom:1px solid #765d8544;background:linear-gradient(180deg,#171220f5,#171220d9);pointer-events:none;text-shadow:0 1px 3px #000}
 .game-details:has(#synergyHUD:not(.hidden),#combatHUD:not(.hidden),#adventureStatus:not(.hidden)){display:grid}
 .game-build-slot,.game-equipment-slot{min-width:0}
@@ -148,6 +149,11 @@ css.textContent+=`
 .guided-training #gameDetails,.replay-mode #gameDetails,.dawn-flight #gameDetails,.arena:has(.overlay:not(.hidden)) #gameDetails{display:none!important}
 .replay-mode main .game-status,.dawn-flight main .game-status{display:none!important}
 @media(max-width:850px){
+ .layout>div:first-child{justify-content:flex-start}
+ .arena-top{position:absolute;top:0;left:0;right:0;z-index:4;display:block;pointer-events:none}
+ #arenaTop #gameDetails{position:static;inset:auto}
+ #arenaTop .toast{position:static;inset:auto;margin:0;padding:5px 9px 6px;border-bottom:1px solid #765d8544;background:#171220d9;font-size:13px;line-height:1.3;text-align:center;text-shadow:0 1px 3px #000}
+ #arenaTop .toast:empty{display:none}
  .heading.game-status{width:100%;min-height:62px;margin-bottom:5px;padding:6px 8px;border-radius:9px}
  .game-status .hud{grid-template-columns:minmax(0,1.1fr) minmax(82px,.85fr) minmax(0,1fr);gap:7px;font-size:8px;letter-spacing:.4px}
  .game-status .hud-label{font-size:8px}.game-status .hud b{font-size:18px;margin-top:3px}.game-status .hud .hearts{font-size:15px;letter-spacing:2px!important}
@@ -171,6 +177,7 @@ css.textContent+=`
  .game-details{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px;padding:4px 7px}
  #gameDetails .synergy-hud span,#gameDetails .synergy-hud small{font-size:6px}#gameDetails .synergy-hud b{font-size:8px}
  #gameDetails .combat-hud,#gameDetails .adventure-status{font-size:7px;line-height:1.15}
+ #arenaTop .toast{font-size:8px;padding:3px 7px}
 }
 `;
 document.head.appendChild(css);

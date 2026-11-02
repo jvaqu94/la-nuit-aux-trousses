@@ -56,7 +56,7 @@ GEOMETRY = """()=>{
   status:rect('.game-status'),hud:rect('.hud'),hudOutside:!!document.querySelector('.game-status>.hud'),
   arenaHud:document.querySelectorAll('.arena .hud').length,secondTitle:document.querySelectorAll('main .heading h1').length,
   arenaFlightPanels:document.querySelectorAll('.arena #synergyHUD,.arena #combatHUD,.arena #adventureStatus').length,
-  details:rect('#gameDetails'),detailsInArena:!!document.querySelector('.arena>#gameDetails'),
+  details:rect('#gameDetails'),detailsInArena:!!document.querySelector('.arena #gameDetails'),
   buildParent:document.querySelector('#synergyHUD').parentElement.id,
   equipmentParents:['combatHUD','adventureStatus'].map(id=>document.getElementById(id).parentElement.id),
   header:getComputedStyle(document.querySelector('header')).display,
@@ -112,6 +112,8 @@ def assert_game(page):
     assert data['equipmentParents'] == ['gameEquipmentSlot', 'gameEquipmentSlot'], data
     assert abs(data['details']['top'] - arena['top']) <= 2 and data['details']['bottom'] <= arena['top'] + 90, data
     assert data['hud']['bottom'] <= arena['top'] + 1 and data['status']['bottom'] <= arena['top'] + 1, data
+    if data['innerWidth'] <= 850 and data['innerHeight'] > data['innerWidth']:
+        assert -1 <= arena['top'] - data['status']['bottom'] <= 8, data
 
 
 with sync_playwright() as p:
