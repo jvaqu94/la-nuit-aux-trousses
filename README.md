@@ -113,7 +113,23 @@ La campagne comprend notamment :
 - **le Veilleur**, un chasseur récurrent qui intervient pendant les quatrièmes vagues ; sa prime de points tombe à sa position et doit être ramassée, sans crédit automatique ;
 - une scène de victoire à l’aube après le dernier gardien.
 
-Les transitions utilisent des fondus sans interrompre le combat : les ennemis, projectiles et objets déjà présents ne sont pas supprimés arbitrairement.
+Les transitions utilisent des fondus sans interrompre le combat : les ennemis, projectiles et objets déjà présents ne sont pas supprimés arbitrairement.
+
+### Les Cinq Heures Perdues
+
+La victoire sur le cinquième gardien enregistre **immédiatement** l’accomplissement du premier monde, avant toute cinématique. Le Veilleur apparaît ensuite sans combat, arme baissée : la sorcière peut s’approcher, choisir **« Viens voir l’aube. »** ou **« Veille sur ceux qui restent. »**, ou passer la rencontre. Cette scène ne change ni les vies, ni le score, ni le classement.
+
+Le nouveau monde **Les Cinq Heures Perdues** et la carte de Grimoire **Le Serment de l’Aube** restent définitivement débloqués, même si le jeu est fermé pendant la rencontre. Au lancement suivant, **Continuer** propose la nouvelle campagne. Le premier monde reste rejouable par le sélecteur de campagne, sans déplacer le point de reprise par défaut vers l’ancien monde.
+
+| Nouvel univers | Gardien |
+|---|---|
+| La Ville sans ombres | Le Lanternier blanc |
+| Le Désert de midi | La Reine de verre |
+| La Forêt du cadran | Le Cerf des heures |
+| L’Express du soleil | Le Contrôleur céleste |
+| Le Palais de l’aube | L’Horloger de l’Aube |
+
+Cette deuxième campagne conserve les 25 vagues et les combats de shoot’em up, avec trois **fragments d’heure à libérer par monde** pour ajouter un objectif d’exploration. Le joueur peut rester la sorcière ou choisir le **Veilleur**, dont le vol est plus lourd, les carreaux en éventail et la lanterne protectrice au départ. Les records du monde 2 sont séparés de ceux du premier. La carte de campagne est unique, persistante et ne donne aucun bonus de puissance.
 
 ### Arsenal et reliques
 
@@ -182,6 +198,7 @@ Par défaut, la progression est enregistrée dans le **`localStorage` du navigat
 - Un point de reprise est enregistré au début des vagues.
 - Les records sont séparés par difficulté et par date pour les défis.
 - La reprise d’un défi existant ne consomme pas un nouvel essai.
+- La clé `minuit-campaign-v1` conserve les mondes accomplis, le choix de la rencontre, le personnage et la campagne à proposer ; le checkpoint conserve aussi le monde et les fragments du vol en cours.
 - Le Laboratoire préserve la progression et le point de reprise du vol en cours.
 - Effacer les données du site ou du navigateur peut effacer définitivement la progression locale.
 
@@ -219,6 +236,7 @@ Le menu **Compte & team** permet, après connexion, de créer une team ou de rej
 - Seul l’administrateur peut modifier ces règles, réinitialiser la campagne ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
 - Le créateur dispose aussi d’une page **Statistiques de la team** sur 7, 30, 90 ou 365 jours : synthèse de tous les vols classiques et classés transmis, répartition des parties et des points par mode, activité par jour et par membre, derniers vols et 50 vols récents avec monde, vague et mode. Cette répartition permet de voir qui joue régulièrement et qui oublie de lancer une classée. Les **points gagnés** de cette page mesurent l’activité classique + classée ; ils ne sont pas le score de la team. Les highscores actuels restent affichés séparément. Cette page et son RPC sont réservés à l’administrateur et ne renvoient aucun e-mail ni identifiant de connexion.
 - Dans **Compte & team**, la section **Administration · Campagne** reste directement visible pour l’administrateur, hors du volet repliable des règles. **Remettre les scores et les parties à zéro** demande une confirmation puis supprime toutes les tentatives et tous les highscores de la team pour tous les membres. La team, ses membres, son code et ses règles sont conservés ; les autres appareils voient la remise à zéro après actualisation.
+- L’espace **Test du créateur**, visible uniquement par l’administrateur de la team, contient un champ **Code**. La valeur **`Monde2`** ouvre directement la rencontre de fin et le nouveau monde pour les tester ; ce parcours n’enregistre aucun faux score.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team. Après une jointure réussie, le jeu revient automatiquement à l’accueil avec une confirmation ; en cas d’échec, l’erreur et l’invitation restent affichées. Le visiteur peut aussi ignorer l’invitation.
 - Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record. Une partie classique transmet uniquement son activité au suivi privé du créateur : elle ne change ni le highscore, ni le total, ni le quota de la team. Un identifiant unique évite le double comptage en cas de renvoi.
 - La limite quotidienne suit le fuseau **Europe/Paris**. Hors période ou au-delà de la limite, le vol classé reste jouable localement mais ne compte pas pour la team. Les parties classiques et les défis quotidiens ne sont jamais comptés dans le classement de campagne.
@@ -276,6 +294,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `level-rewards.js` | Choix de compétences après les quatre premiers gardiens, effets durables et reprise. |
 | `weekly.js` | Sprint hebdomadaire, records séparés, partage amical et classement de team dédié. |
 | `replay.js` | Bilan personnalisé, prochain objectif et relance avec le même équipement. |
+| `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
@@ -358,6 +377,7 @@ python tests/test_flow.py
 python tests/test_surprise_ui.py
 python tests/test_vertical_drift.py
 python tests/test_coven_dawn.py
+python tests/test_sequel.py
 python tests/test_rival_replay.py
 python tests/test_sealed_chest.py
 python tests/test_bonus_art.py
@@ -373,7 +393,7 @@ La campagne technique complète se vérifie avec :
 python tests/test_journey_campaign.py
 ```
 
-Cette campagne automatique utilise l’invulnérabilité pour contrôler les 25 vagues, les cinq gardiens et les événements. Elle valide l’intégration technique, **pas l’équilibrage ressenti par un joueur**.
+Cette campagne automatique utilise l’invulnérabilité pour contrôler les 25 vagues, les cinq gardiens, la rencontre et les événements. `test_sequel.py` vérifie aussi la deuxième campagne complète, la sauvegarde avant cinématique, la reprise, les fragments et le mobile. Ces tests valident l’intégration technique, **pas l’équilibrage ressenti par un joueur**.
 
 Les tests `tests/test_league_server.py` et `tests/test_league_browser.py` concernent l’ancienne ligue avec comptes et utilisent des données temporaires. Ils sont distincts du parcours local actuel.
 

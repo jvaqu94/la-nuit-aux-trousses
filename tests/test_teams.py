@@ -395,6 +395,8 @@ with sync_playwright() as p:
     assert not alice.locator('.team-admin-panel').evaluate('node=>node.open')
     assert alice.locator('.team-campaign-reset').is_visible()
     assert alice.locator('#teamResetCampaign').is_visible()
+    assert alice.locator('#creatorWorldCode').is_visible()
+    assert alice.locator('#creatorWorldCodeSubmit').is_visible()
     assert alice.evaluate("document.querySelector('.team-campaign-reset').compareDocumentPosition(document.querySelector('.team-email-share')) & Node.DOCUMENT_POSITION_FOLLOWING")
     assert '0/2 parties' in alice.locator('.team-rules-summary').inner_text()
     assert 'alice@example.com' not in alice.locator('#teamCard').inner_text()
@@ -488,6 +490,8 @@ with sync_playwright() as p:
     assert bob.locator('#teamStatsOpen').count() == 0
     assert bob.locator('#teamResetCampaign').count() == 0
     assert bob.locator('.team-campaign-reset').count() == 0
+    assert bob.locator('#creatorWorldCode').count() == 0
+    assert not bob.evaluate("Campaign.redeemCreatorCode('Monde2')")
     assert bob.locator('#teamDelete').count() == 0
     assert bob.locator('#teamWhatsApp').is_visible() and bob.locator('#teamMessenger').is_visible()
     assert bob.locator('#teamEmailInvite').is_visible() and bob.locator('#teamInviteEmail').is_visible()
@@ -649,6 +653,26 @@ with sync_playwright() as p:
     alice.wait_for_selector('#teamResetCampaign')
     reset_calls = [call for call in calls if call['path'].endswith('/minuit_reset_team_campaign')]
     assert [(call['user_id'], call['status']) for call in reset_calls] == [(BOB, 400), (ALICE, 200)]
+
+    # Le raccourci réservé au créateur ouvre la vraie scène, sans fabriquer de résultat.
+    local_before = alice.evaluate("JSON.stringify({records:JSON.parse(localStorage.getItem('minuit-v2-scores')||'[]'),recent:Journey.state.recent})")
+    alice.fill('#creatorWorldCode', 'incorrect')
+    alice.click('#creatorWorldCodeSubmit')
+    assert 'Code incorrect' in alice.locator('#creatorWorldCodeStatus').inner_text()
+    assert alice.evaluate('state') == 'journey-archives'
+    alice.fill('#creatorWorldCode', 'Monde2')
+    alice.click('#creatorWorldCodeSubmit')
+    alice.wait_for_selector('#skipFinale')
+    assert alice.evaluate("state==='sequel-finale' && Campaign.progress.world2Unlocked && Campaign.progress.cardOath")
+    assert alice.evaluate("JSON.stringify({records:JSON.parse(localStorage.getItem('minuit-v2-scores')||'[]'),recent:Journey.state.recent})") == local_before
+    alice.click('#skipFinale')
+    alice.wait_for_selector('#testWorld2')
+    assert 'aucun score' in alice.locator('.sequel-unlocked').inner_text()
+    assert alice.evaluate("JSON.stringify({records:JSON.parse(localStorage.getItem('minuit-v2-scores')||'[]'),recent:Journey.state.recent})") == local_before
+    alice.click('#unlockMenu')
+    alice.wait_for_selector('#playAdventure')
+    alice.click('#archives')
+    alice.wait_for_selector('#creatorWorldCode')
 
     # Le départ retire ensuite le membre, sans faire réapparaître les scores effacés.
     bob.click('#return')
