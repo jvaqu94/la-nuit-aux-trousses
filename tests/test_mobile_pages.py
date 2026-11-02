@@ -112,7 +112,7 @@ def assert_game(page):
     assert data['hudOutside'] and data['arenaHud'] == 0 and data['secondTitle'] == 0, data
     assert data['arenaFlightPanels'] == 3 and data['detailsInArena'], data
     assert data['buildParent'] == 'gameBuildSlot' and data['adventureParent'] == 'gameEquipmentSlot', data
-    assert data['toastParent'] == 'gameEquipmentSlot' and data['combatDirect'], data
+    assert data['toastParent'] == 'gameDetails' and data['combatDirect'], data
     assert data['combatOpacity'] < .7 and arena['bottom'] - 60 <= data['combat']['bottom'] <= arena['bottom'] + 1, data
     assert abs(data['details']['top'] - arena['top']) <= 2 and data['details']['bottom'] <= arena['top'] + 90, data
     assert data['hud']['bottom'] <= arena['top'] + 1 and data['status']['bottom'] <= arena['top'] + 1, data

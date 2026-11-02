@@ -26,6 +26,9 @@ def assert_flight_hud(page):
         detailsInArena:!!document.querySelector('.arena #gameDetails'),
         toast:box('#toast'),toastText:document.querySelector('#toast').textContent,
         toastParent:document.querySelector('#toast').parentElement.id,
+        toastAlign:getComputedStyle(document.querySelector('#toast')).textAlign,
+        toastFont:parseFloat(getComputedStyle(document.querySelector('#toast')).fontSize),
+        detailsBackground:getComputedStyle(document.querySelector('#gameDetails')).backgroundImage,
         overlayParent:document.querySelector('#overlay').parentElement.className,
         secondTitle:document.querySelectorAll('main .heading h1').length,
         modeInHud:!!document.querySelector('.hud #modeLabel'),
@@ -34,7 +37,8 @@ def assert_flight_hud(page):
       };
     }''')
     assert data['parent'] == 'gameStatus' and data['modeInHud'], data
-    assert data['toastParent'] == 'gameEquipmentSlot' and data['overlayParent'] == 'arena', data
+    assert data['toastParent'] == 'gameDetails' and data['overlayParent'] == 'arena', data
+    assert data['detailsBackground'] == 'none', data
     assert data['arenaHud'] == 0 and data['arenaFlightPanels'] == 3 and data['detailsInArena'], data
     assert data['secondTitle'] == 0 and data['position'] == 'static', data
     assert data['hud']['bottom'] <= data['arena']['top'] + 1, data
@@ -48,6 +52,11 @@ def assert_flight_hud(page):
         assert data['toast']['top'] >= data['details']['top'] - 1, data
         assert data['toast']['bottom'] <= data['details']['bottom'] + 1, data
         assert data['toast']['bottom'] <= data['arena']['top'] + data['arena']['height'] * .25, data
+        toast_center = (data['toast']['left'] + data['toast']['right']) / 2
+        details_center = (data['details']['left'] + data['details']['right']) / 2
+        assert data['toastAlign'] == 'center' and abs(toast_center - details_center) <= 1, data
+        expected_font = 11 if data['innerHeight'] <= 500 else 13 if data['innerWidth'] <= 850 else 14
+        assert data['toastFont'] >= expected_font - .01, data
     for block in data['blocks']:
         assert block['height'] > 0 and block['top'] >= data['status']['top'] - 1, data
         assert block['bottom'] <= data['status']['bottom'] + 1, data
