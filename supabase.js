@@ -353,8 +353,8 @@ const TEAM_ERRORS={
  PERIOD_INVALID:'La fin de la période doit être postérieure au début.',
  TEAM_ADMIN_REQUIRED:'Seul l’administrateur de la team peut modifier ces règles.',
  TEAM_RULES_REQUIRED:'L’administrateur doit configurer les règles avant que les scores comptent.',
- TEAM_PERIOD_NOT_STARTED:'La période de la team n’a pas encore commencé. Ce vol ne compte pas pour la team.',
- TEAM_PERIOD_ENDED:'La période de la team est terminée. Ce vol ne compte pas pour la team.',
+ TEAM_PERIOD_NOT_STARTED:'La période de la team n’a pas encore commencé. Ce vol reste local : highscore et décompte de team inchangés.',
+ TEAM_PERIOD_ENDED:'La période de la team est terminée. Ce vol reste local : highscore et décompte de team inchangés.',
  TEAM_DAILY_LIMIT:'Ta limite de parties comptabilisées est atteinte pour aujourd’hui. Tu peux continuer à jouer localement, mais ce vol ne compte pas pour la team.',
  RUN_ID_INVALID:'Identifiant de vol invalide.',
  STATS_PERIOD_INVALID:'La période de statistiques demandée n’est pas valide.'
@@ -474,11 +474,27 @@ function teamDate(value){
  const date=new Date(value);
  return Number.isFinite(date.getTime())?date.toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'}):'';
 }
+function teamPeriodStatus(info,now=Date.now()){
+ if(!info)return 'no-team';
+ if(info.rulesConfigured===false)return 'unconfigured';
+ const start=Date.parse(info.startsAt||''),end=Date.parse(info.endsAt||'');
+ if(Number.isFinite(start)&&now<start)return 'not-started';
+ if(Number.isFinite(end)&&now>=end)return 'ended';
+ return 'active';
+}
+function teamPeriodNotice(info){
+ const status=teamPeriodStatus(info);
+ if(status==='not-started')return 'Période classée pas encore commencée : les nouvelles classées ne modifient ni le highscore ni le décompte de la team.';
+ if(status==='ended')return 'Période classée terminée : les nouvelles classées ne modifient ni le highscore ni le décompte de la team.';
+ if(status==='unconfigured')return 'Règles de team non configurées : les nouvelles classées ne modifient ni le highscore ni le décompte de la team.';
+ return '';
+}
 function teamRulesSummary(info){
  if(!info.rulesConfigured)return '<b>Règles à configurer par l’administrateur avant de compter les scores.</b>';
- const today=Math.max(0,Number(info.gamesToday)||0);
+ const today=Math.max(0,Number(info.gamesToday)||0),period=teamPeriodStatus(info),notice=teamPeriodNotice(info);
  const lines=[];
- if(info.dailyGameLimit==null)lines.push(today+' partie'+(today>1?'s':'')+' aujourd’hui · limite illimitée');
+ if(period!=='active')lines.push(today+' partie'+(today>1?'s':'')+' comptabilisée'+(today>1?'s':'')+' aujourd’hui · décompte team suspendu');
+ else if(info.dailyGameLimit==null)lines.push(today+' partie'+(today>1?'s':'')+' aujourd’hui · limite illimitée');
  else{
   const remaining=Math.max(0,Number(info.gamesRemaining)||0);
   lines.push(today+'/'+Number(info.dailyGameLimit)+' parties aujourd’hui · '+remaining+' restante'+(remaining>1?'s':''));
@@ -488,6 +504,7 @@ function teamRulesSummary(info){
  else if(start)lines.push('Période : à partir du '+start);
  else if(end)lines.push('Période : jusqu’au '+end);
  else lines.push('Période libre, sans date limite');
+ if(notice)lines.push(notice);
  return lines.map(safeText).join('<br>');
 }
 async function updateTeamRules(){
@@ -654,14 +671,14 @@ function renderTeam(){
   return;
  }
  if(teamData.team){
-  const info=teamData.team;
+  const info=teamData.team,periodNotice=teamPeriodNotice(info);
   const rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isAdmin?'<small class="team-role">ADMIN</small>':''}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
   const campaignReset=info.isAdmin?`<section class="team-campaign-reset" aria-label="Administration de la campagne"><b>ADMINISTRATION · CAMPAGNE</b><p>Efface tous les scores, highscores et parties comptabilisées des membres. La team, son code et ses règles sont conservés.</p><div class="cloud-actions"><button class="secondary team-danger" id="teamResetCampaign">Remettre les scores et les parties à zéro</button></div><div class="cloud-status" id="teamResetStatus" role="status"></div></section>`:'';
   const statsAccess=info.isAdmin?'<div class="cloud-actions team-stats-access"><button class="secondary" id="teamStatsOpen">Statistiques de la team</button></div>':'';
   const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.':'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
   document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
@@ -706,7 +723,7 @@ function renderTeam(){
 function openTeamBoard(){
  if(!teamData.team)return;
  const info=teamData.team,rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
- overlay(`<section class="account-team-board"><div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div></section>`);
+ overlay(`<section class="account-team-board"><div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div></section>`);
  $('teamBoardBack').onclick=()=>window.Journey?.archives?.();$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
 }
 function validTeamStats(value){
@@ -1041,6 +1058,7 @@ window.MinuitCloud={
  get connected(){return!!session},
  get teamLoaded(){return teamLoaded},
  get inTeam(){return!!session&&!!teamData.team},
+ get rankedNotice(){return teamPeriodNotice(teamData.team)},
  get user(){return session?.user||null}
 };
 if(enabled&&session)window.useAccountPseudo?.();
