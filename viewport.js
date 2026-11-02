@@ -132,28 +132,25 @@ css.textContent+=`
 .game-status #dailyBonusHUD:empty{display:none}.game-status #dailyBonusHUD{margin-top:4px;font-size:7px;line-height:1.1;white-space:nowrap}
 .game-status .hud-mode{display:block;margin-top:5px;color:#c7a6dc;font-size:7px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .game-status #graze{display:block;margin-top:5px;color:#b6a4c6;font-size:7px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Build à gauche, équipement et effets à droite : la ligne appartient au
-   cadre de jeu et reste alignée sur son bord supérieur. */
-.arena-top{display:contents}
+/* Build à gauche, message et effets à droite ; l’équipement reste en bas,
+   discret et transparent. */
 .game-details{position:absolute;top:0;left:0;right:0;z-index:4;display:none;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:10px;width:100%;min-width:0;padding:6px 10px;border-bottom:1px solid #765d8544;background:linear-gradient(180deg,#171220f5,#171220d9);pointer-events:none;text-shadow:0 1px 3px #000}
-.game-details:has(#synergyHUD:not(.hidden),#combatHUD:not(.hidden),#adventureStatus:not(.hidden)){display:grid}
+.game-details:has(#synergyHUD:not(.hidden),#adventureStatus:not(.hidden),#toast:not(:empty)){display:grid}
 .game-build-slot,.game-equipment-slot{min-width:0}
 .game-equipment-slot{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;gap:3px;text-align:right}
-#gameDetails .synergy-hud,#gameDetails .combat-hud,#gameDetails .adventure-status{position:static;inset:auto;width:100%;max-width:100%;margin:0;padding:0;border:0;background:none;box-shadow:none;backdrop-filter:none;pointer-events:none;line-height:1.25;overflow-wrap:break-word}
+#gameDetails .synergy-hud,#gameDetails .adventure-status{position:static;inset:auto;width:100%;max-width:100%;margin:0;padding:0;border:0;background:none;box-shadow:none;backdrop-filter:none;pointer-events:none;line-height:1.25;overflow-wrap:break-word}
 #gameDetails .synergy-hud{text-align:left}
 #gameDetails .synergy-hud span{display:block;margin:0 0 2px;color:#c9a8dd;font-size:7px;letter-spacing:1px}
 #gameDetails .synergy-hud b{display:block;color:#f3d9ff;font-size:9px;line-height:1.2;letter-spacing:.2px}
 #gameDetails .synergy-hud small{display:block;margin-top:2px;color:#b8a3c8;font-size:7px;line-height:1.2}
-#gameDetails .combat-hud{color:#c4b0d2;font-size:8px;text-align:right}
 #gameDetails .adventure-status{color:#f0ce94;font-size:8px;text-align:right}
-.guided-training #gameDetails,.replay-mode #gameDetails,.dawn-flight #gameDetails,.arena:has(.overlay:not(.hidden)) #gameDetails{display:none!important}
+#gameDetails .toast{position:static;inset:auto;width:100%;max-width:100%;margin:0;padding:0;border:0;background:none;color:#f5d2a2;font-size:9px;line-height:1.25;text-align:right;text-shadow:0 1px 3px #000;overflow-wrap:break-word;pointer-events:none}
+#gameDetails .toast:empty{display:none}
+.arena>#combatHUD{position:absolute;top:auto;left:15px;right:15px;bottom:12px;z-index:2;max-width:none;margin:0;padding:0;border:0;background:none;box-shadow:none;backdrop-filter:none;color:#c4b0d2;font-size:8px;line-height:1.25;text-align:right;opacity:.45;pointer-events:none}
+.guided-training #gameDetails,.guided-training #combatHUD,.replay-mode #gameDetails,.replay-mode #combatHUD,.dawn-flight #gameDetails,.dawn-flight #combatHUD,.arena:has(.overlay:not(.hidden)) #gameDetails,.arena:has(.overlay:not(.hidden)) #combatHUD{display:none!important}
 .replay-mode main .game-status,.dawn-flight main .game-status{display:none!important}
 @media(max-width:850px){
  .layout>div:first-child{justify-content:flex-start}
- .arena-top{position:absolute;top:0;left:0;right:0;z-index:4;display:block;pointer-events:none}
- #arenaTop #gameDetails{position:static;inset:auto}
- #arenaTop .toast{position:static;inset:auto;margin:0;padding:5px 9px 6px;border-bottom:1px solid #765d8544;background:#171220d9;font-size:13px;line-height:1.3;text-align:center;text-shadow:0 1px 3px #000}
- #arenaTop .toast:empty{display:none}
  .heading.game-status{width:100%;min-height:62px;margin-bottom:5px;padding:6px 8px;border-radius:9px}
  .game-status .hud{grid-template-columns:minmax(0,1.1fr) minmax(82px,.85fr) minmax(0,1fr);gap:7px;font-size:8px;letter-spacing:.4px}
  .game-status .hud-label{font-size:8px}.game-status .hud b{font-size:18px;margin-top:3px}.game-status .hud .hearts{font-size:15px;letter-spacing:2px!important}
@@ -162,7 +159,8 @@ css.textContent+=`
  .game-details{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:7px;padding:5px 7px}
  .game-equipment-slot{gap:2px}
  #gameDetails .synergy-hud span{font-size:6px;letter-spacing:.8px}#gameDetails .synergy-hud b{font-size:8px}
- #gameDetails .synergy-hud small{font-size:7px}#gameDetails .combat-hud,#gameDetails .adventure-status{font-size:8px;line-height:1.2}
+ #gameDetails .synergy-hud small{font-size:7px}#gameDetails .adventure-status,#gameDetails .toast{font-size:8px;line-height:1.2}
+ .arena>#combatHUD{font-size:8px;bottom:10px;left:12px;right:12px;opacity:.45}
 }
 @media(max-width:370px) and (min-height:501px){
  .heading.game-status{padding-left:7px;padding-right:7px}
@@ -176,8 +174,8 @@ css.textContent+=`
  .game-status .hud-subline,.game-status .hud-mode,.game-status #graze,.game-status #dailyBonusHUD{display:none}
  .game-details{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px;padding:4px 7px}
  #gameDetails .synergy-hud span,#gameDetails .synergy-hud small{font-size:6px}#gameDetails .synergy-hud b{font-size:8px}
- #gameDetails .combat-hud,#gameDetails .adventure-status{font-size:7px;line-height:1.15}
- #arenaTop .toast{font-size:8px;padding:3px 7px}
+ #gameDetails .adventure-status,#gameDetails .toast{font-size:7px;line-height:1.15}
+ .arena>#combatHUD{font-size:7px;bottom:7px;opacity:.42}
 }
 `;
 document.head.appendChild(css);

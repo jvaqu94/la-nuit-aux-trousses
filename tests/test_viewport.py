@@ -20,7 +20,7 @@ def assert_flight_hud(page):
         arenaFlightPanels:document.querySelectorAll('.arena #synergyHUD,.arena #combatHUD,.arena #adventureStatus').length,
         flightPanels:['synergyHUD','combatHUD','adventureStatus'].map(id=>{
           const el=document.getElementById(id),r=el.getBoundingClientRect();
-          return {id,parent:el.parentElement.id,hidden:el.classList.contains('hidden'),top:r.top,bottom:r.bottom,height:r.height};
+          return {id,parent:el.parentElement.id,parentClass:el.parentElement.className,hidden:el.classList.contains('hidden'),opacity:Number(getComputedStyle(el).opacity),top:r.top,bottom:r.bottom,height:r.height};
         }),
         build:box('#gameBuildSlot'),equipment:box('#gameEquipmentSlot'),details:box('#gameDetails'),
         detailsInArena:!!document.querySelector('.arena #gameDetails'),
@@ -34,7 +34,7 @@ def assert_flight_hud(page):
       };
     }''')
     assert data['parent'] == 'gameStatus' and data['modeInHud'], data
-    assert data['toastParent'] == 'arenaTop' and data['overlayParent'] == 'arena', data
+    assert data['toastParent'] == 'gameEquipmentSlot' and data['overlayParent'] == 'arena', data
     assert data['arenaHud'] == 0 and data['arenaFlightPanels'] == 3 and data['detailsInArena'], data
     assert data['secondTitle'] == 0 and data['position'] == 'static', data
     assert data['hud']['bottom'] <= data['arena']['top'] + 1, data
@@ -42,16 +42,22 @@ def assert_flight_hud(page):
     assert data['hud']['top'] >= data['status']['top'] - 1, data
     assert data['details']['height'] > 0 and abs(data['details']['top'] - data['arena']['top']) <= 2, data
     assert data['details']['bottom'] <= data['arena']['top'] + 90, data
-    if data['innerWidth'] <= 850:
-        if data['innerHeight'] > data['innerWidth']:
-            assert -1 <= data['arena']['top'] - data['status']['bottom'] <= 8, data
-        if data['toastText']:
-            assert data['toast']['top'] >= data['details']['bottom'] - 1, data
-            assert data['toast']['bottom'] <= data['arena']['top'] + data['arena']['height'] * .25, data
+    if data['innerWidth'] <= 850 and data['innerHeight'] > data['innerWidth']:
+        assert -1 <= data['arena']['top'] - data['status']['bottom'] <= 8, data
+    if data['toastText']:
+        assert data['toast']['top'] >= data['details']['top'] - 1, data
+        assert data['toast']['bottom'] <= data['details']['bottom'] + 1, data
+        assert data['toast']['bottom'] <= data['arena']['top'] + data['arena']['height'] * .25, data
     for block in data['blocks']:
         assert block['height'] > 0 and block['top'] >= data['status']['top'] - 1, data
         assert block['bottom'] <= data['status']['bottom'] + 1, data
     for panel in data['flightPanels']:
+        if panel['id'] == 'combatHUD':
+            assert panel['parentClass'] == 'arena', data
+            if not panel['hidden']:
+                assert panel['height'] > 0 and panel['opacity'] < .7, data
+                assert data['arena']['bottom'] - 60 <= panel['bottom'] <= data['arena']['bottom'] + 1, data
+            continue
         expected_parent = 'gameBuildSlot' if panel['id'] == 'synergyHUD' else 'gameEquipmentSlot'
         assert panel['parent'] == expected_parent, data
         if not panel['hidden']:

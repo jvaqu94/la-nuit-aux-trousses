@@ -167,10 +167,10 @@ with sync_playwright() as p:
     normal.wait_for_function("document.querySelector('#adventureStatus').innerText.includes('MISSILES')")
     assert 'SORT PRÊT' in normal.locator('#adventureStatus').inner_text()
     flight_panels = normal.evaluate("""()=>['synergyHUD','combatHUD','adventureStatus'].map(id=>{
-      const el=document.getElementById(id),strip=el.closest('#gameDetails').getBoundingClientRect(),arena=document.querySelector('.arena').getBoundingClientRect();
-      return {id,inGameStatus:!!el.closest('#gameStatus'),inArena:!!el.closest('.arena'),atTop:strip.top>=arena.top-1&&strip.bottom<=arena.top+90};
+      const el=document.getElementById(id),details=el.closest('#gameDetails'),strip=details?.getBoundingClientRect(),arena=document.querySelector('.arena').getBoundingClientRect(),r=el.getBoundingClientRect();
+      return {id,inGameStatus:!!el.closest('#gameStatus'),inArena:!!el.closest('.arena'),atTop:!!strip&&strip.top>=arena.top-1&&strip.bottom<=arena.top+90,atBottom:!details&&r.bottom>=arena.bottom-60&&r.bottom<=arena.bottom+1,transparent:Number(getComputedStyle(el).opacity)<.7};
     })""")
-    assert all(panel['inArena'] and not panel['inGameStatus'] and panel['atTop'] for panel in flight_panels), flight_panels
+    assert all(panel['inArena'] and not panel['inGameStatus'] and ((panel['atBottom'] and panel['transparent']) if panel['id'] == 'combatHUD' else panel['atTop']) for panel in flight_panels), flight_panels
     normal.evaluate("Journey.state.combat.selected.spell='pulse';lives=1;player.inv=0;player.dash=0;hurt(25,'test bilan')")
     normal.wait_for_selector('.journey-result-screen:not(.weekly-result)', timeout=15000)
     assert normal.evaluate("document.querySelector('#adventureStatus').classList.contains('hidden')")
