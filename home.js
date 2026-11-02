@@ -18,7 +18,7 @@ function updateHomeAudio(){
  const write=(node,value)=>{if(node&&node.textContent!==value)node.textContent=value};
  write(icon,running?'♫':'♪');
  write(label,!enabled?'Activer la musique':running?'Thème de minuit':'Lancer la musique');
- write(note,!enabled?'Son coupé':running?(mp3Music?.current==='menu'?'Lecture en cours':'Chargement du thème…'):'Un geste pour démarrer');
+ write(note,!enabled?'Son coupé':running?(['menu','menu-sequel'].includes(mp3Music?.current)?'Lecture en cours':'Chargement du thème…'):'Un geste pour démarrer');
  if(running||!enabled)removeAudioUnlock();else if(audio)installAudioUnlock();
 }
 function unlockHomeAudio(event){
