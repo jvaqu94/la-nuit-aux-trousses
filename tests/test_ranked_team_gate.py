@@ -60,7 +60,7 @@ with sync_playwright() as p:
     assert with_team.locator('#localRanked').is_visible()
     assert with_team.evaluate('MinuitCloud.inTeam && MinuitCloud.teamLoaded')
     assert with_team.evaluate('MinuitCloud.rankedNotice') == ''
-    assert 'Team fermée' not in with_team.locator('#overlay').inner_text()
+    assert 'Période terminée' not in with_team.locator('#overlay').inner_text()
 
     # La période reste volontairement fermée : ne pas promettre trois essais team
     # disponibles ni laisser le joueur découvrir le refus seulement après son vol.
@@ -71,7 +71,8 @@ with sync_playwright() as p:
     ended.wait_for_selector('#localRanked')
     ended.wait_for_function('MinuitCloud.teamLoaded')
     assert 'Période classée terminée' in ended.evaluate('MinuitCloud.rankedNotice')
-    assert 'Team fermée' in ended.locator('#overlay').inner_text()
+    assert 'Période terminée' in ended.locator('#overlay').inner_text()
+    assert 'Team fermée' not in ended.locator('#overlay').inner_text()
 
     ended.click('#localRanked')
     ended.wait_for_selector('#launchLocal')

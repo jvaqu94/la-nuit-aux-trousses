@@ -36,6 +36,7 @@ let teamBusy=false;
 let teamEpoch=0;
 let teamStatsDays=30;
 let teamStatsEpoch=0;
+let teamHistoryEpoch=0;
 let pendingTeamCode='';
 let teamInviteRecipient='';
 try{
@@ -355,6 +356,7 @@ const TEAM_ERRORS={
  TEAM_RULES_REQUIRED:'L’administrateur doit configurer les règles avant que les scores comptent.',
  TEAM_PERIOD_NOT_STARTED:'La période de la team n’a pas encore commencé. Ce vol reste local : highscore et décompte de team inchangés.',
  TEAM_PERIOD_ENDED:'La période de la team est terminée. Ce vol reste local : highscore et décompte de team inchangés.',
+ TEAM_PERIOD_END_FUTURE:'Choisis une date de fin future pour la nouvelle période, ou laisse la fin vide.',
  TEAM_DAILY_LIMIT:'Ta limite de parties comptabilisées est atteinte pour aujourd’hui. Tu peux continuer à jouer localement, mais ce vol ne compte pas pour la team.',
  RUN_ID_INVALID:'Identifiant de vol invalide.',
  STATS_PERIOD_INVALID:'La période de statistiques demandée n’est pas valide.'
@@ -403,7 +405,7 @@ function validTeamState(value){
 }
 function setTeamBusy(value){
  teamBusy=value;
- for(const id of ['teamCreate','teamJoin','teamRefresh','teamLeave','teamSaveRules','teamResetCampaign','teamDelete','teamStatsOpen']){
+ for(const id of ['teamCreate','teamJoin','teamRefresh','teamLeave','teamSaveRules','teamNewPeriod','teamResetCampaign','teamDelete','teamStatsOpen']){
   const button=document.getElementById(id);
   if(button)button.disabled=value;
  }
@@ -505,7 +507,23 @@ function teamRulesSummary(info){
  else if(end)lines.push('Période : jusqu’au '+end);
  else lines.push('Période libre, sans date limite');
  if(notice)lines.push(notice);
+ if(period==='ended')lines.push('La team reste ouverte aux inscriptions ; seule la période classée est terminée.');
  return lines.map(safeText).join('<br>');
+}
+function teamScoreRows(scores){
+ return (Array.isArray(scores)?scores:[]).map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isAdmin?'<small class="team-role">ADMIN</small>':''}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode||Number(row.score)>0?'V'+Number(row.wave||1)+' · M'+Number(row.stage||1):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
+}
+function teamPodiumHTML(scores){
+ const top=(Array.isArray(scores)?scores:[]).slice().sort((a,b)=>(Number(a.rank)||0)-(Number(b.rank)||0)).slice(0,3);
+ if(!top.length)return '';
+ const medals=['🥇','🥈','🥉'];
+ return `<div class="team-podium" aria-label="Podium des trois premiers">${top.map((row,index)=>`<div class="team-podium-card rank-${index+1}"><span class="team-podium-medal">${medals[index]}</span><small>#${Number(row.rank)||index+1}</small><b>${safeText(row.displayName||'Sorcière')}</b><strong>${teamNumber(row.score)}</strong><span>points</span></div>`).join('')}</div>`;
+}
+function teamPeriodCard(period,scores,current=false){
+ const status=current?teamPeriodStatus(period):'ended',number=Math.max(1,Number(period.periodNumber)||1);
+ const label=current?({active:'Période en cours',ended:'Période terminée','not-started':'Période à venir',unconfigured:'Période à configurer'}[status]||'Période actuelle'):'Période archivée';
+ const start=teamDate(period.startsAt),end=teamDate(period.endsAt),dates=start&&end?'Du '+start+' au '+end:start?'À partir du '+start:end?'Jusqu’au '+end:'Sans date limite';
+ return `<article class="team-period-card${current?' is-current':''}"><header><div><small>${safeText(label)}</small><h3>Période ${number}</h3></div><b>${teamNumber(period.totalScore)} pts</b></header><p>${safeText(dates)} · ${teamNumber(period.memberCount||scores.length)} membre${Number(period.memberCount||scores.length)>1?'s':''}</p>${teamPodiumHTML(scores)}<details class="team-period-full"><summary>Voir le tableau highscore complet</summary><div class="team-leaderboard">${teamScoreRows(scores)||'<p>Aucun score sur cette période.</p>'}</div></details></article>`;
 }
 async function updateTeamRules(){
  if(teamBusy||!session)return;
@@ -519,7 +537,32 @@ async function updateTeamRules(){
   teamLoadError='';
   setTeamBusy(false);
   renderTeam();
-  teamStatus('Règles de la team enregistrées.');
+  teamStatus('Règles de la team enregistrées. La période et son classement sont conservés.');
+ }catch(error){
+  setTeamBusy(false);
+  teamStatus(teamErrorMessage(error),true);
+ }
+}
+async function startTeamPeriod(){
+ if(teamBusy||!session)return;
+ let body;
+ try{
+  body=readTeamRules('teamEdit');
+  const startInput=document.getElementById('teamEditStartsAt');
+  if(startInput?.value&&startInput.value===toDateTimeInput(teamData.team?.startsAt))body.p_starts_at=new Date().toISOString();
+  if(body.p_ends_at&&new Date(body.p_ends_at)<=new Date())throw Error(TEAM_ERRORS.TEAM_PERIOD_END_FUTURE);
+ }catch(error){teamStatus(teamErrorMessage(error),true);return}
+ if(!confirm('Archiver le classement actuel et lancer une nouvelle période ? Les highscores actuels seront conservés dans l’historique, puis remis à zéro. Les membres, les inscriptions et les statistiques d’activité sont conservés.'))return;
+ try{
+  setTeamBusy(true);
+  teamStatus('Archivage du classement et ouverture de la nouvelle période…');
+  const data=await request('/rest/v1/rpc/minuit_start_team_period',{method:'POST',body});
+  teamData=validTeamState(data);
+  teamLoaded=true;
+  teamLoadError='';
+  setTeamBusy(false);
+  renderTeam();
+  teamStatus('Nouvelle période lancée. L’ancien podium et le tableau complet sont disponibles dans l’historique.');
  }catch(error){
   setTeamBusy(false);
   teamStatus(teamErrorMessage(error),true);
@@ -612,7 +655,7 @@ async function leaveTeam(){
 }
 async function resetTeamCampaign(){
  if(teamBusy||!session||!teamData.team?.isAdmin)return;
- if(!confirm('Réinitialiser la campagne pour TOUS les membres ? Tous les scores, highscores et parties comptabilisées seront définitivement effacés. Les membres et les règles seront conservés.'))return;
+ if(!confirm('Réinitialiser la campagne pour TOUS les membres ? Tous les scores, highscores, parties comptabilisées et l’historique des périodes seront définitivement effacés. Les membres et les règles seront conservés.'))return;
  const showResetStatus=(message,error=false)=>{const node=document.getElementById('teamResetStatus');if(node){node.textContent=message;node.classList.toggle('cloud-error',error)}};
  setTeamBusy(true);
  teamStatus('Réinitialisation de la campagne…');
@@ -624,8 +667,8 @@ async function resetTeamCampaign(){
   teamLoadError='';
   setTeamBusy(false);
   renderTeam();
-  teamStatus('Campagne réinitialisée : scores, highscores et parties sont à zéro.');
-  showResetStatus('✓ Campagne réinitialisée : tous les scores et toutes les parties sont à zéro.');
+  teamStatus('Campagne réinitialisée : scores, highscores, parties et historique sont à zéro.');
+  showResetStatus('✓ Campagne réinitialisée : tous les scores et toutes les parties sont à zéro ; l’historique des périodes est effacé.');
  }catch(error){
   setTeamBusy(false);
   const message=teamErrorMessage(error);
@@ -672,14 +715,15 @@ function renderTeam(){
  }
  if(teamData.team){
   const info=teamData.team,periodNotice=teamPeriodNotice(info);
-  const rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isAdmin?'<small class="team-role">ADMIN</small>':''}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
-  const campaignReset=info.isAdmin?`<section class="team-campaign-reset" aria-label="Administration de la campagne"><b>ADMINISTRATION · CAMPAGNE</b><p>Efface tous les scores, highscores et parties comptabilisées des membres. La team, son code et ses règles sont conservés.</p><div class="cloud-actions"><button class="secondary team-danger" id="teamResetCampaign">Remettre les scores et les parties à zéro</button></div><div class="cloud-status" id="teamResetStatus" role="status"></div></section>`:'';
+  const rows=teamScoreRows(teamData.scores);
+  const campaignReset=info.isAdmin?`<section class="team-campaign-reset" aria-label="Administration de la campagne"><b>ADMINISTRATION · CAMPAGNE</b><p>Efface tous les scores, highscores, parties comptabilisées et l’historique des périodes. La team, son code et ses règles sont conservés.</p><div class="cloud-actions"><button class="secondary team-danger" id="teamResetCampaign">Remettre les scores et les parties à zéro</button></div><div class="cloud-status" id="teamResetStatus" role="status"></div></section>`:'';
   const statsAccess=info.isAdmin?'<div class="cloud-actions team-stats-access"><button class="secondary" id="teamStatsOpen">Statistiques de la team</button></div>':'';
-  const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="cloud-actions"><button class="secondary" id="teamSaveRules">Enregistrer les règles</button></div></details>`:'';
+  const historyAccess='<div class="cloud-actions team-history-access"><button class="secondary" id="teamHistoryOpen">Historique des périodes classées</button></div>';
+  const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles et périodes administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="team-rule-note"><b>Prolonger</b> conserve la période et tous ses highscores. <b>Lancer une nouvelle période</b> archive le podium et le tableau complet, puis remet les highscores à zéro. Les membres, les inscriptions et les statistiques d’activité sont conservés. Si tu ne changes pas l’ancienne date de début, la nouvelle période commence maintenant.</div><div class="cloud-actions"><button class="secondary" id="teamSaveRules">Prolonger / enregistrer cette période</button><button class="secondary" id="teamNewPeriod">Archiver et lancer une nouvelle période</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
-  document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${historyAccess}${campaignReset}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Période classée <b>${Math.max(1,Number(info.periodNumber)||1)}</b></span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div>${teamPodiumHTML(teamData.scores)}<div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;document.getElementById('teamHistoryOpen').onclick=openTeamHistory;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
   const inviteInput=document.getElementById('teamInviteEmail'),inviteLink=document.getElementById('teamEmailInvite');
@@ -702,6 +746,7 @@ function renderTeam(){
   if(info.isAdmin){
    document.getElementById('teamStatsOpen').onclick=openTeamStats;
    document.getElementById('teamSaveRules').onclick=updateTeamRules;
+   document.getElementById('teamNewPeriod').onclick=startTeamPeriod;
    document.getElementById('teamResetCampaign').onclick=resetTeamCampaign;
    document.getElementById('teamDelete').onclick=deleteTeam;
   }
@@ -710,7 +755,7 @@ function renderTeam(){
  const accountPseudo=String(session.user.displayName||'');
  const displayField=`<label>${accountPseudo?'Pseudo du compte utilisé dans la team':'Pseudo dans la team'}<input id="teamDisplayName" type="text" autocomplete="nickname" minlength="2" maxlength="24" placeholder="Ex. : Sorcière agile" value="${safeText(accountPseudo)}"${accountPseudo?' readonly':''}></label>`;
  const createFields=`<label>Nom de la team<input id="teamName" type="text" maxlength="40" placeholder="Ex. : Les Balais de minuit"></label><div class="team-separator"><span>TES RÈGLES D’ADMINISTRATEUR</span></div>${teamRuleFields('teamRules')}<div class="cloud-actions"><button class="secondary" id="teamCreate">Créer et configurer la team</button></div>`;
- const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div>`;
+ const joinFields=`<label>Code de la team<input id="teamCode" type="text" maxlength="11" autocapitalize="characters" spellcheck="false" placeholder="ABCDE-FGHIJ"></label><div class="cloud-actions"><button class="${pendingTeamCode?'primary':'secondary'}" id="teamJoin">Rejoindre la team</button></div><div class="team-rule-note">Les inscriptions restent ouvertes à tout moment, même lorsqu’une période classée est terminée.</div>`;
  if(pendingTeamCode){
   card.innerHTML=`<h3>🏆 INVITATION À UNE TEAM</h3><div class="team-invite-callout"><span>CODE DE L’INVITATION</span><b>${safeText(formatTeamCode(pendingTeamCode))}</b></div><p>Choisis ton pseudo dans la team, puis rejoins les autres joueurs. Aucune adresse e-mail n’est demandée.</p>${displayField}${joinFields}<details class="team-create-alternative"><summary>Créer plutôt une nouvelle team</summary>${createFields}</details><div class="cloud-status" id="teamStatus" role="status">L’invitation est prête : le code est déjà rempli.</div>`;
  }else{
@@ -722,9 +767,32 @@ function renderTeam(){
 }
 function openTeamBoard(){
  if(!teamData.team)return;
- const info=teamData.team,rows=teamData.scores.map(row=>`<div class="team-row${row.isYou?' team-you':''}"><b class="team-rank">#${Number(row.rank)||0}</b><span class="team-player">${safeText(row.displayName||'Sorcière')}${row.isYou?'<small>TOI</small>':''}</span><span class="team-run">${row.mode?'V'+Number(row.wave)+' · M'+Number(row.stage):'Aucun vol'}</span><b class="team-score">${teamNumber(row.score)}</b></div>`).join('');
- overlay(`<section class="account-team-board"><div class="eyebrow">TABLEAU DE BORD · TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-rules-summary">${teamRulesSummary(info)}</div><div class="team-leaderboard" aria-label="Classement de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Ton meilleur score est comparé à celui de chaque membre. La ligne surlignée indique ta position.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div></section>`);
- $('teamBoardBack').onclick=()=>window.Journey?.archives?.();$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
+ const info=teamData.team,rows=teamScoreRows(teamData.scores);
+ overlay(`<section class="account-team-board"><div class="eyebrow">PÉRIODE ${Math.max(1,Number(info.periodNumber)||1)} · HIGHSCORES DE TEAM</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><div class="cumulative-badge">${teamNumber(info.memberCount)} membre${Number(info.memberCount)>1?'s':''} · ${teamNumber(info.totalScore)} points cumulés</div><div class="team-rules-summary">${teamRulesSummary(info)}</div>${teamPodiumHTML(teamData.scores)}<div class="team-leaderboard" aria-label="Classement complet de la team">${rows||'<p>Aucun score de team pour le moment.</p>'}</div><div class="tiny">Le podium et le tableau restent consultables après la période. La team reste ouverte aux inscriptions.</div><div class="menu-actions"><button class="primary" id="teamBoardBack">Retour au tableau de bord</button><button class="secondary" id="teamBoardHistory">Historique des périodes</button><button class="secondary" id="teamBoardRefresh">Actualiser</button></div></section>`);
+ $('teamBoardBack').onclick=()=>window.Journey?.archives?.();$('teamBoardHistory').onclick=openTeamHistory;$('teamBoardRefresh').onclick=async()=>{await loadTeam(true);openTeamBoard()};
+}
+function validTeamHistory(value){
+ if(!value||typeof value!=='object'||!Array.isArray(value.periods))throw Error('Réponse d’historique invalide.');
+ for(const period of value.periods)if(!period||typeof period!=='object'||!Array.isArray(period.scores))throw Error('Réponse d’historique invalide.');
+ return value;
+}
+function renderTeamHistory(periods=null,error=''){
+ const info=teamData.team;
+ if(!info)return;
+ const archives=periods===null?'<div class="team-history-loading" role="status">Chargement des périodes archivées…</div>':error?`<div class="cloud-status cloud-error" role="alert">${safeText(error)}</div>`:periods.length?periods.map(period=>teamPeriodCard(period,period.scores)).join(''):'<p class="team-history-empty">Aucune période archivée pour le moment. La période affichée ci-dessus reste consultable ; l’administrateur peut la prolonger ou l’archiver en lançant la suivante.</p>';
+ overlay(`<section class="account-team-history" aria-label="Historique des périodes classées"><div class="eyebrow">PODIUMS & HIGHSCORES · HISTORIQUE</div><h2 class="league-overlay-title">${safeText(info.name||'Ma team')}</h2><p class="team-history-intro">Chaque période conserve son top 3 et son tableau complet. La team et les inscriptions restent ouvertes, même après une échéance.</p><section class="team-history-current"><h3>PÉRIODE AFFICHÉE</h3>${teamPeriodCard(info,teamData.scores,true)}</section><section class="team-history-archives"><h3>PÉRIODES ARCHIVÉES</h3>${archives}</section><div class="menu-actions"><button class="primary" id="teamHistoryBack">Retour au tableau de bord</button><button class="secondary" id="teamHistoryRefresh">Actualiser</button></div></section>`);
+ $('teamHistoryBack').onclick=()=>{teamHistoryEpoch++;window.Journey?.archives?.()};$('teamHistoryRefresh').onclick=async()=>{await loadTeam(false);openTeamHistory()};
+}
+async function openTeamHistory(){
+ if(!teamData.team)return;
+ const epoch=++teamHistoryEpoch;
+ renderTeamHistory();
+ try{
+  const data=validTeamHistory(await request('/rest/v1/rpc/minuit_team_period_history',{method:'POST',body:{}}));
+  if(epoch===teamHistoryEpoch)renderTeamHistory(data.periods);
+ }catch(error){
+  if(epoch===teamHistoryEpoch)renderTeamHistory([],'Historique archivé indisponible pour le moment. Le classement de la période affichée reste consultable.');
+ }
 }
 function validTeamStats(value){
  if(!value||typeof value!=='object'||!value.summary||typeof value.summary!=='object'||!Array.isArray(value.daily)||!Array.isArray(value.members)||!Array.isArray(value.runs))throw Error('Réponse de statistiques invalide.');
@@ -938,7 +1006,10 @@ css.textContent=`
 .team-campaign-reset{margin:12px 0;padding:12px;border:1px solid #a65e5e66;border-radius:8px;background:#351d2a88}.team-campaign-reset>b{display:block;color:#f0afa8;font-size:10px;letter-spacing:.8px}.team-campaign-reset>p{margin:7px 0;color:#d5c3d5;font-size:10px;line-height:1.6}.team-campaign-reset .cloud-actions button{flex:1 1 100%;min-height:44px;line-height:1.4}.team-campaign-reset .cloud-status:empty{display:none}
 .team-role{margin-left:7px;color:#ffd08e!important;font-size:7px!important;letter-spacing:1px}
 .account-team-board{width:min(720px,100%);margin:0 auto;text-align:center}.account-team-board .team-leaderboard{width:100%;margin:14px 0;max-height:min(420px,50vh)}.account-team-board .tiny{display:block;margin:8px 0}.account-team-board .menu-actions{margin-top:auto;padding-top:12px}
-@media(max-width:850px){.account-team-board{display:flex;flex-direction:column}.account-team-board .menu-actions button{min-height:42px}}
+.team-podium{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%;margin:12px 0}.team-podium-card{display:flex;min-width:0;flex-direction:column;align-items:center;padding:12px 7px;border:1px solid #80658755;border-radius:10px;background:linear-gradient(145deg,#30223ddd,#191425dd)}.team-podium-card.rank-1{border-color:#d6ac5e99;background:linear-gradient(145deg,#49332bdd,#211727dd)}.team-podium-medal{font-size:24px;line-height:1.1}.team-podium-card small{margin:3px 0;color:#baa5c7;font-size:8px}.team-podium-card b{max-width:100%;color:#f0dfed;font-size:12px;overflow-wrap:anywhere}.team-podium-card strong{margin-top:7px;color:#ffd08e;font-size:20px;line-height:1.1;overflow-wrap:anywhere}.team-podium-card>span:last-child{color:#a99ab7;font-size:8px}
+.account-team-history{width:min(860px,100%);min-width:0;margin:0 auto;text-align:left}.overlay:has(.account-team-history){justify-content:flex-start}.account-team-history>h2{text-align:center}.team-history-intro{max-width:700px;margin:8px auto 14px;color:#bcaac8;font-size:11px;line-height:1.65;text-align:center}.team-history-current>h3,.team-history-archives>h3{margin:16px 0 8px;color:#d9bb92;font-size:10px;letter-spacing:1px}.team-period-card{min-width:0;margin:10px 0;padding:13px;border:1px solid #6e587755;border-radius:11px;background:#171220bb}.team-period-card.is-current{border-color:#b8996688;background:linear-gradient(145deg,#2b2039cc,#171220cc)}.team-period-card>header{display:flex;align-items:center;justify-content:space-between;gap:12px;height:auto;min-height:0;padding:0;border:0;background:none;box-shadow:none}.team-period-card>header small{display:block;color:#bba8c8;font-size:8px;letter-spacing:1px;text-transform:uppercase}.team-period-card>header h3{margin:3px 0 0;color:#f0d5ad;font-size:18px}.team-period-card>header>b{color:#ffd08e;font-size:18px;white-space:nowrap}.team-period-card>p{margin:7px 0;color:#ab99b9;font-size:10px;line-height:1.55}.team-period-full summary{cursor:pointer;padding:9px 10px;border:1px solid #6c577a66;border-radius:7px;color:#e2c89f;font-size:10px;text-align:center}.team-period-full[open] summary{margin-bottom:8px}.team-period-full .team-leaderboard{max-height:340px}.team-history-empty,.team-history-loading{padding:20px 13px;border:1px dashed #79638466;border-radius:8px;color:#b9a8c5;font-size:11px;line-height:1.65;text-align:center}.account-team-history .menu-actions{padding-top:14px}.team-history-access button{flex:1 1 100%;border-color:#8f78ad88;color:#decff1}
+@media(max-width:850px){.account-team-board{display:flex;flex-direction:column}.account-team-board .menu-actions button{min-height:42px}.account-team-history{width:100%;min-height:100%}.account-team-history .menu-actions button{min-height:42px}}
+@media(max-width:600px){.team-podium{gap:5px}.team-podium-card{padding:9px 4px}.team-podium-medal{font-size:20px}.team-podium-card b{font-size:10px}.team-podium-card strong{font-size:16px}.team-period-card{padding:10px}.team-period-card>header h3{font-size:16px}.team-period-card>header>b{font-size:15px}}
 .team-stats-access button{flex:1 1 100%;border-color:#b8996688;color:#ffe0ae}
 .overlay:has(.account-team-stats){justify-content:flex-start}
 .account-team-stats{width:min(1080px,100%);min-width:0;margin:0 auto;text-align:left}
@@ -1059,6 +1130,7 @@ window.MinuitCloud={
  get teamLoaded(){return teamLoaded},
  get inTeam(){return!!session&&!!teamData.team},
  get rankedNotice(){return teamPeriodNotice(teamData.team)},
+ get rankedStatus(){return teamPeriodStatus(teamData.team)},
  get user(){return session?.user||null}
 };
 if(enabled&&session)window.useAccountPseudo?.();

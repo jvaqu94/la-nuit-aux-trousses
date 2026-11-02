@@ -116,7 +116,14 @@ def handle(route):
             payload, status = {'message': 'NOT_IN_TEAM'}, 400
         else:
             member = team['members'][user_id]
-            if len(member['attempts']) >= 3:
+            if body['p_mode'] == 'free':
+                payload = {
+                    'bestScore': member.get('score', 0), 'improved': False,
+                    'duplicate': False, 'mode': 'free', 'activityOnly': True,
+                    'gamesToday': len(member['attempts']),
+                    'gamesRemaining': max(0, 3 - len(member['attempts'])),
+                }
+            elif len(member['attempts']) >= 3:
                 payload, status = {'message': 'TEAM_DAILY_LIMIT'}, 400
             else:
                 previous = member.get('score', 0)
@@ -312,7 +319,7 @@ with sync_playwright() as p:
     stored = bob.evaluate("Object.keys(localStorage).map(key => localStorage.getItem(key)).join('\\n')")
     assert 'mot-de-passe-bob' not in stored
 
-    # Un score classique reste local : aucun appel de classement team n’est émis.
+    # Une classique transmet son activité sans essai ni changement de highscore.
     bob.click('#archivesBack')
     bob.wait_for_selector('#playAdventure')
     submission_count = len([call for call in calls if call['path'].endswith('/minuit_submit_team_score')])
@@ -321,9 +328,12 @@ with sync_playwright() as p:
     bob.evaluate('gameTime=35;score=9999;end(false)')
     bob.wait_for_selector('.journey-result-screen')
     bob.wait_for_timeout(250)
-    assert len([call for call in calls if call['path'].endswith('/minuit_submit_team_score')]) == submission_count
+    activity_calls = [call for call in calls if call['path'].endswith('/minuit_submit_team_score')]
+    assert len(activity_calls) == submission_count + 1
+    assert activity_calls[-1]['body']['p_mode'] == 'free'
     assert team['members']['user-bob']['score'] == 2345
-    assert 'Partie classique' in bob.locator('#teamResultStatus').inner_text()
+    assert team['members']['user-bob']['attempts'] == [2345]
+    assert 'Activité classique transmise' in bob.locator('#teamResultStatus').inner_text()
     bob.click('#return')
     bob.wait_for_selector('#playAdventure')
     bob.click('#archives')
