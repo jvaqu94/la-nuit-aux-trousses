@@ -23,7 +23,7 @@ const value = input => typeof input === 'string' ? JSON.parse(input) : input;
       $$;
       insert into auth.users(id) values ('${ALICE}'), ('${BOB}');
     `);
-    for (const name of ['teams.sql', 'team_rules.sql', 'team_stats.sql']) {
+    for (const name of ['teams.sql', 'team_rules.sql', 'team_stats.sql', 'team_periods.sql']) {
       await db.exec(fs.readFileSync(path.join(ROOT, 'supabase', name), 'utf8'));
     }
     await db.exec(`
