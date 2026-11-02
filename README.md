@@ -61,10 +61,10 @@ Le tir principal est **automatique**.
 | Pause | P ou Échap | Bouton **Pause** | Start |
 
 - La précision ralentit le déplacement et affiche la zone de collision de la sorcière.
-- L’esquive et le sort spécial possèdent chacun un temps de recharge. Avec le balai initial, l’esquive protège pendant **0,45 s** et se recharge en **4 s** : il faut l’utiliser au contact du danger, pas trop tôt.
+- L’esquive et le sort spécial possèdent chacun un temps de recharge. Avec le balai initial, l’esquive protège pendant **0,45 s** et se recharge en **4 s**. La protection commence dès l’appui : déclenche juste avant l’arrivée du tir, sans attendre le contact. Un contact **ou un frôlement** pendant la protection valide l’esquive réussie, une seule fois par activation ; les hitboxes de dégâts et les projectiles ne sont pas modifiés.
 - Un nouveau profil termine d’abord **dix exercices réels et obligatoires** : pilotage, esquive sur projectile, évolutions d’esquive avec Comète et Aurore, sort spécial, comparaison des trois évolutions d’attaque, attaque surprise, destruction d’une caisse, relique, catalogue des bonus et bouclier. Il n’y a ni bouton **Passer** ou **Quitter**, ni score ou récompense persistante pendant ce premier parcours. Les profils déjà actifs sont migrés sans ce blocage.
-- Après validation, **S’entraîner** permet de rejouer librement les dix exercices dans le laboratoire isolé. Comète laisse automatiquement la place à Aurore après son esquive. Dans l’exercice de comparaison, Espace déclenche successivement Onde, Marée et Lance ; en vol normal, Espace reste l’esquive et F le sort spécial. Le catalogue illustré présente **10 reliques et 7 bonus immédiats ou bonbons** avec leurs effets réels. Le projectile d’apprentissage est entouré et le bouton s’illumine au bon moment. Les consignes restent affichées jusqu’à validation ; elles ne réapparaissent pas automatiquement pendant les vols normaux.
-- Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage. Le bouton **Esquive** rappelle sa double utilité : **bond + protection**. Une traînée lumineuse, des silhouettes résiduelles et un anneau rendent le déplacement et la courte protection visibles, sans changer leurs durées ni les collisions.
+- Après validation, **S’entraîner** permet de rejouer librement les dix exercices dans le laboratoire isolé. Comète laisse automatiquement la place à Aurore après son esquive. Dans l’exercice de comparaison, Espace déclenche successivement Onde, Marée et Lance ; en vol normal, Espace reste l’esquive et F le sort spécial. Le catalogue illustré présente **10 reliques et 7 bonus immédiats ou bonbons** avec leurs effets réels. Le projectile d’apprentissage est entouré et le bouton s’illumine au bon moment, sans exiger un contact pour valider l’exercice. Les consignes restent affichées jusqu’à validation ; elles ne réapparaissent pas automatiquement pendant les vols normaux.
+- Sur tactile, le glisser est relatif : poser le doigt ne téléporte pas la sorcière. Une pastille indique le point de départ et le mouvement. Un second doigt peut déclencher **Sort spécial** ou **Esquive** sans interrompre le pilotage. Le bouton **Esquive** rappelle sa double utilité : **bond + protection**, puis distingue clairement **protection active** et **recharge**. Une traînée lumineuse, des silhouettes résiduelles et un anneau rendent le déplacement et la courte protection visibles, sans changer leurs durées ni les collisions.
 - Les touches principales peuvent être reconfigurées dans **Réglages**.
 - Le thème de l’accueil est préparé et lancé dès l’ouverture lorsque le navigateur l’autorise. Si l’autoplay est bloqué, le premier geste sur la page démarre la musique déjà préchargée. Le bouton **Thème de minuit** de l’accueil permet de couper ou de réactiver le son ; ce choix reste enregistré.
 - Sur smartphone, l’accueil occupe toute la zone disponible. **Compte & team** et la section **Ton vol** sont visibles sans défilement, y compris à 360×640 ; le reste du menu défile dans la même fenêtre.
@@ -350,6 +350,8 @@ python tests/test_arsenal_browser.py
 python tests/test_adventure.py
 python tests/test_encounters.py
 python tests/test_combat_feel.py
+python tests/test_dodge_near_miss.py
+python tests/test_dodge_controls.py
 python tests/test_onboarding.py
 python tests/test_flow.py
 python tests/test_surprise_ui.py
