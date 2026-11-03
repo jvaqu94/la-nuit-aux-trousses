@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const KEY='minuit-journey-v1',fmt=n=>Math.floor(n||0).toLocaleString('fr-FR');
-const blank=()=>({version:1,xp:0,selected:{outfit:'night',spell:'violet',broom:'classic',pet:'none',title:'novice'},lifetime:{},days:{},seen:{},achievements:[],activeDates:[],streak:0,lastActive:'',weeks:[],tutorialDone:false,trainingDone:false,dodgeGuideDone:false,mastery:{selected:'base',done:[],unlocked:[],best:{}},recent:[]});
+const blank=()=>({version:1,xp:0,selected:{outfit:'night',spell:'violet',broom:'classic',pet:'none',title:'novice'},lifetime:{},days:{},seen:{},achievements:[],activeDates:[],streak:0,lastActive:'',weeks:[],tutorialDone:false,trainingDone:false,dodgeGuideDone:false,giftedCosmetics:[],dailyRewards:{},mastery:{selected:'base',done:[],unlocked:[],best:{}},recent:[]});
 let wardrobePaused=false,goalsOpen=true,teamSubmission=null;
 let j=blank(),run=null,timer=0,tutorialStep=-1,pendingRecord=0,writeOK=true,lastResult=null;
 try{const v=JSON.parse(localStorage.getItem(KEY)||'null');if(v?.version===1){j={...blank(),...v,selected:{...blank().selected,...v.selected}};j.mastery={...blank().mastery,...(v.mastery||{}),done:Array.isArray(v.mastery?.done)?v.mastery.done:[],unlocked:Array.isArray(v.mastery?.unlocked)?v.mastery.unlocked:[],best:{...(v.mastery?.best||{})}};if(v.trainingDone===undefined)j.trainingDone=Boolean(v.tutorialDone||v.xp>0||v.recent?.length||v.activeDates?.length||Object.keys(v.seen||{}).length||localStorage.getItem('minuit-checkpoint'))}}catch{}
@@ -33,6 +33,10 @@ const items=[
  {id:'precision-title',kind:'title',name:'Œil de la nuit',mastery:'precision'},
  {id:'mastery-broom-title',kind:'title',name:'Maîtresse des trois balais',mastery:'broomMastery'}
 ];
+function giftEligible(item){return Number.isFinite(item.xp)&&item.xp>0&&!item.mastery&&!item.achievement}
+if(!Array.isArray(j.giftedCosmetics))j.giftedCosmetics=[];
+j.giftedCosmetics=j.giftedCosmetics.filter(id=>items.some(item=>item.id===id&&giftEligible(item)));
+if(!j.dailyRewards||typeof j.dailyRewards!=='object'||Array.isArray(j.dailyRewards))j.dailyRewards={};
 const achievementRules={hunter:{label:'Vaincre 100 créatures',metric:'kills',target:100},breaker:{label:'Vaincre un gardien',metric:'bosses',target:1},silk:{label:'Terminer 5 vagues sans dégâts',metric:'cleanWaves',target:5},regular:{label:'Jouer lors de 3 journées différentes',metric:'days',target:3},dawn:{label:'Traverser les cinq univers en une partie',metric:'wins',target:1}};
  const masteryRules={
   flawless:{label:'Gagner une partie sans perdre de vie',run:(stats,win)=>win&&(stats.lifeLoss||0)===0},
@@ -48,11 +52,19 @@ const achievementRules={hunter:{label:'Vaincre 100 créatures',metric:'kills',ta
 const contracts=[{id:'kills',metric:'kills',target:30,title:'Éclaircir les ombres',reward:60},{id:'waves',metric:'waves',target:2,title:'Deux pas dans la nuit',reward:80},{id:'graze',metric:'graze',target:6,title:'Danser entre les sorts',reward:90}];
 function write(){if(window.MinuitImporting||window.SandboxMode)return;try{localStorage.setItem(KEY,JSON.stringify(j));writeOK=true}catch{writeOK=false}window.MinuitCloud?.schedule?.()}
 function level(){return Math.floor(Math.sqrt(j.xp/120))+1}
-function nextItem(){return items.filter(i=>i.xp>j.xp).sort((a,b)=>a.xp-b.xp)[0]}
-function earned(i){return i.mastery?masteryEarned(i.mastery):i.achievement?j.achievements.includes(i.achievement):j.xp>=i.xp}
+function nextItem(){return items.filter(i=>i.xp>j.xp&&!earned(i)).sort((a,b)=>a.xp-b.xp)[0]}
+function earned(i){return j.giftedCosmetics.includes(i.id)||(i.mastery?masteryEarned(i.mastery):i.achievement?j.achievements.includes(i.achievement):j.xp>=i.xp)}
 function get(kind){return items.find(i=>i.kind===kind&&i.id===j.selected[kind]&&earned(i))||items.find(i=>i.kind===kind)}
 function diary(day=dateKey()){return j.days[day]||(j.days[day]={stats:{},claimed:[],complete:false,returnReward:false})}
 function xp(n,label){const before=j.xp;j.xp+=n;const unlocked=items.filter(i=>i.xp>before&&i.xp<=j.xp);if(unlocked.length)say('Nouvelle récompense · '+unlocked.map(i=>i.name).join(' · '),4);else if(label)say(label+' · +'+n+' XP',3);write()}
+function grantDailyReward(userId){
+ const account=j.dailyRewards?.[userId],pending=account?.pending;if(!pending)return null;
+ const ids=Array.isArray(pending.cosmetics)?pending.cosmetics:[],cosmetics=[];
+ for(const id of ids){const item=items.find(entry=>entry.id===id);if(item&&giftEligible(item)&&!j.giftedCosmetics.includes(id)){j.giftedCosmetics.push(id);cosmetics.push(id)}}
+ const totalXP=Math.max(0,Math.floor((Number(pending.xp)||0)+(Number(pending.conversionXP)||0)));j.xp+=totalXP;
+ account.lastResult={...pending,cosmetics,totalXP,revealedAt:new Date().toISOString()};account.pending=null;
+ write();renderPanel();return account.lastResult;
+}
 function unlockAchievements(){for(const [id,a]of Object.entries(achievementRules)){const value=a.metric==='days'?j.activeDates.length:(j.lifetime[a.metric]||0);if(value>=a.target&&!j.achievements.includes(id)){j.achievements.push(id);say('Nouveau titre · '+items.find(i=>i.id===id).name,4)}}}
 function weekOf(day){const d=new Date(day+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10)}
 function returnVisit(){const d=diary(run.day);if(d.returnReward)return;d.returnReward=true;const diff=(Date.parse(run.day)-Date.parse(j.lastActive))/86400000;if(!j.lastActive||diff>1)j.streak=1;else if(diff===1)j.streak++;if(!j.lastActive||run.day>j.lastActive)j.lastActive=run.day;if(!j.activeDates.includes(run.day))j.activeDates.push(run.day);xp(40,'Première vague du jour');const week=weekOf(run.day);if(j.activeDates.filter(d=>weekOf(d)===week).length>=3&&!j.weeks.includes(week)){j.weeks.push(week);xp(120,'Trois nuits cette semaine')}unlockAchievements()}
@@ -301,6 +313,6 @@ css.textContent+=`
 }
 `;
 document.head.appendChild(css);document.querySelector('.sidebar').insertAdjacentHTML('afterbegin','<section class="panel" id="journeyPanel"></section>');document.querySelector('.arena').insertAdjacentHTML('beforeend','<div id="journeyTutor" class="journey-tutor hidden"></div>');
-window.Journey={contractHTML,menu,archives,begin,event,tick,beforeEnd,finish,abandon,snapshot,restore,canResume,completeDodgeGuide,filter,spellColor,decorate,bundle,exportSave,importSave,validate,get state(){return j},get run(){return run},items,masteryRules};
+window.Journey={contractHTML,menu,archives,begin,event,tick,beforeEnd,finish,abandon,snapshot,restore,canResume,completeDodgeGuide,filter,spellColor,decorate,bundle,exportSave,importSave,validate,saveProgress:write,grantDailyReward,isEarned:earned,collectionArt:grimoireCollectionArt,dailyCosmetics:()=>items.filter(giftEligible),get state(){return j},get run(){return run},items,masteryRules};
 window.addEventListener('pagehide',write);renderPanel();menu();
 })();

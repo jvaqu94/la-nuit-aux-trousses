@@ -214,6 +214,23 @@ Les **Réglages** conservent les exports et imports locaux, tandis que le compte
 
 > **Avant de changer de navigateur ou d’appareil sans cloud, exporter sa sauvegarde.** L’import remplace les données actuelles au lieu de les fusionner. Les fichiers sont validés avant écriture, limités à 2 Mo et le dernier import peut être annulé.
 
+### Coffre de connexion quotidienne
+
+Après une connexion réussie, ou la reprise d’une session de compte alors que le navigateur est en ligne, le premier accès de la journée ouvre un **coffre magique animé pendant 2,4 secondes**. Les invités et le jeu hors ligne ne reçoivent pas de nouveau coffre. La préférence système « réduire les animations » raccourcit cette présentation sans changer le gain.
+
+| Rareté | Contenu |
+|---|---|
+| Commune | 40 XP |
+| Rare | 60 XP + 1 apparence de la Collection |
+| Épique | 120 XP + 1 apparence de la Collection |
+| Légendaire | 200 XP + 2 apparences de la Collection |
+
+- Les apparences sont tirées parmi celles qui restent verrouillées, hors titres d’exploit et sceaux de maîtrise. Chaque emplacement dont l’apparence n’est plus disponible est converti en **100 XP**, y compris lorsque toute la collection éligible est déjà débloquée.
+- Une série de connexions consécutives améliore progressivement les raretés possibles sur **sept paliers**, puis conserve ce palier maximal. Un jour manqué remet la série à 1. Les probabilités ne sont pas affichées dans le jeu ; seule la rareté obtenue est révélée.
+- Le tirage et la série sont enregistrés **avant l’animation**. Fermer ou recharger la page pendant l’ouverture reprend le même coffre, sans nouveau tirage ; la révélation crédite les gains en une seule écriture et ne peut pas les appliquer deux fois.
+- Cette série par compte est distincte de la série de premières vagues jouées. Elle est comprise dans les exports et la sauvegarde cloud avec les apparences offertes. Comme le reste de la progression locale, elle ne constitue pas un mécanisme anti-triche.
+- Ces gains ne donnent aucun point, équipement de combat ou avantage classé : l’XP sert à la Collection et les compagnons concernés restent décoratifs.
+
 ### Highscores arcade
 
 Le bouton **Highscores** du menu ouvre un véritable tableau de borne d’arcade : rangs, pseudos, mondes atteints et scores sur six chiffres. Le **Top 10** est également intégré au bilan de fin de vol, avec le dernier résultat surligné en doré.
@@ -286,6 +303,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `audio/` | Thème d’accueil, cinq adaptations, six signaux d’arrivée et crédits audio. |
 | `characters.js` | Illustrations SVG des personnages et ressources visuelles intégrées. |
 | `journey.js` | Grimoire, XP, contrats, collection, bilans, avis et export/import. |
+| `daily-rewards.js` | Coffre de connexion, série sur sept paliers, tirage persistant et révélation des gains cosmétiques. |
 | `online.js` | Défis et cumul locaux, sans compte dans l’interface actuelle. |
 | `arsenal.js` | Sorts, balais, compagnons et équipement. |
 | `arsenal-art.js` | Illustrations vectorielles locales et pastilles courtes des neuf choix d’équipement. |
@@ -372,6 +390,7 @@ python tests/test_teams.py
 python tests/test_team_stats_activity.py
 python tests/test_mode_selection_browser.py
 python tests/test_pseudo_invite.py
+python tests/test_daily_rewards.py
 python tests/test_journey_browser.py
 python tests/test_no_account_browser.py
 python tests/test_home.py
