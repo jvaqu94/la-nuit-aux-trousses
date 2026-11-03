@@ -133,6 +133,8 @@ Les escouades arrivent désormais en duos complémentaires. Les Facteurs utilise
 
 Les phases avancées changent les règles des gardiens : halo mobile puis éclipse resserrée, rayons à ricochet puis cage de verre, sillage du passé du Cerf, croisements horizontaux et verticaux de l’Express, rembobinage des projectiles et doubles aiguilles rotatives de l’Horloger. Ces attaques utilisent les mêmes avertissements visuels sur desktop et téléphone.
 
+La direction artistique du monde 2 comprend **19 illustrations vectorielles locales et animées** pour les créatures, renforts, objectifs et gardiens. Le verre, le cuir, les racines, le laiton et les étoffes possèdent des rendus distincts ; les ailes, courriers, cadrans, flammes et attributs s’animent sans images distantes. Les gardiens changent d’aura et portent des marques de dégâts selon leur phase, tandis que la Valise solaire montre réellement son couvercle ouvert. Les silhouettes sont agrandies pour rester lisibles sur téléphone, **sans modifier les hitboxes**, et les animations deviennent statiques lorsque le système demande une réduction des mouvements.
+
 Cette deuxième campagne conserve le pilotage, l’esquive et le tir du shoot’em up, mais **pas les déplacements, formations, salves ou charges du premier bestiaire**. La deuxième vague demande de libérer deux heures captives, la troisième impose une survie et la quatrième deux ancres à saboter. Les anciens événements de territoire, apparitions surprises et formations coopératives sont désactivés dans cette campagne. Tous les dangers spéciaux sont télégraphiés, y compris sur téléphone, sans aide automatique permanente.
 
 Les 25 vagues comportent aussi trois **fragments d’heure à libérer par monde** pour l’exploration. Le joueur peut rester la sorcière ou choisir le **Veilleur**, dont le vol est plus lourd, les carreaux en éventail et la lanterne protectrice au départ. Les records du monde 2 sont séparés de ceux du premier. La carte de campagne est unique, persistante et ne donne aucun bonus de puissance.
@@ -302,6 +304,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `replay.js` | Bilan personnalisé, prochain objectif et relance avec le même équipement. |
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
+| `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |

@@ -76,7 +76,7 @@ makeSchedule=function(){
 function setupMission(force=false){
  if(!active())return;const key=stage+':'+wave;if(!force&&mission.key===key)return;
  mission={key,rescued:0,needed:wave===2?2:0};captives=[];reinforcementTimer=3.5;
- if(wave===2)captives=[{x:205,y:390,age:0,rescued:false},{x:595,y:510,age:0,rescued:false}];
+ if(wave===2)captives=[{kind:'captiveSoul',x:205,y:390,age:0,rescued:false},{kind:'captiveSoul',x:595,y:510,age:0,rescued:false}];
  if(wave===4&&!enemies.some(e=>e.kind==='riftAnchor'&&!e.dead)){spawnFoe('riftAnchor',205,300,0);spawnFoe('riftAnchor',595,355,1)}
  if(wave===1)say(['RELAIS · les lueurs alimentent les facteurs','PRISMES · les miroirs concentrent les mites','RACINES · elles guident les larves','ESCORTES · ouvre les valises','CADRANS · les chiffres guident les spectres'][stage],3.2);
 }
@@ -380,7 +380,7 @@ function drawEffect(g,f){
 function draw(g){
  if(!active())return;g.save();
  for(const f of effects)drawEffect(g,f);
- for(const c of captives)if(!c.rescued){ring(c.x,c.y,46+Math.sin(ambient*4)*4,'#fff0b0',true);sprite(g,'captiveSoul',c.x,c.y,.85,ambient);g.fillStyle='#fff1c2';g.font='bold '+(compactView()?16:11)+'px Arial';g.textAlign='center';g.fillText('LIBÉRER',c.x,c.y-52)}
+ for(const c of captives)if(!c.rescued){ring(c.x,c.y,46+Math.sin(ambient*4)*4,'#fff0b0',true);if(!window.SequelArt?.drawActor?.(g,c,c.x,c.y,.85,c.age,0))sprite(g,'captiveSoul',c.x,c.y,.85,ambient);g.fillStyle='#fff1c2';g.font='bold '+(compactView()?16:11)+'px Arial';g.textAlign='center';g.fillText('LIBÉRER',c.x,c.y-52)}
  for(const e of enemies){
   if(e.dead||!customKinds.has(e.kind))continue;const linked=e.seqLink;
   if(linked&&!linked.dead&&e.y>0&&linked.y>0){
