@@ -22,121 +22,11 @@ with sync_playwright() as p:
     page.wait_for_selector('#weeklySprint')
     assert page.locator('.main-menu button').count() == 13
 
-    # Graine commune, trois vagues allégées et équipement de défi normalisé.
+    # La course remplace l’ancien Sprint : sa mécanique est testée dans
+    # test_ring_sprint.py ; les bilans de campagne restent indépendants.
     page.click('#weeklySprint')
-    page.wait_for_selector('.weekly-preflight')
-    assert 'score attack' in page.locator('.weekly-preflight').inner_text()
-    assert 'combos' in page.locator('.weekly-preflight').inner_text()
-    assert 'tirs automatiques ×2' in page.locator('.weekly-preflight').inner_text()
-
-    # Le gardien de la semaine est accessible au laboratoire, puis le retour
-    # restaurera le prévol sans toucher aux records ni à la campagne.
-    training_before = page.evaluate("({kind:worlds[WeeklySprint.weekInfo().stage].kind,stage:WeeklySprint.weekInfo().stage,saved:localStorage.getItem('minuit-weekly-sprints-v1')})")
-    page.click('#weeklyTrainGuardian')
-    page.wait_for_function("Adventure.training&&enemies.some(enemy=>enemy.boss)")
-    training = page.evaluate("({kind:enemies.find(enemy=>enemy.boss).kind,stage,lives,sandbox:SandboxMode,weekly:WeeklySprint.active,xp:Journey.state.xp})")
-    assert training['kind'] == training_before['kind'] and training['stage'] == training_before['stage']
-    assert training['lives'] == 5 and training['sandbox'] and not training['weekly'] and training['xp'] == 0
-    assert page.locator('#exitLab').inner_text() == 'Retour au Sprint'
-    page.click('#exitLab')
-    page.wait_for_selector('.weekly-preflight')
-    assert not page.evaluate('Adventure.training||SandboxMode')
-    assert page.evaluate("localStorage.getItem('minuit-weekly-sprints-v1')") == training_before['saved']
-
-    page.click('#weeklyLaunch')
-    page.wait_for_function('WeeklySprint.active')
-    first = page.evaluate("""()=>({
-      week:WeeklySprint.config.week,seed:WeeklySprint.config.seed,stage,wave,diff,lives,
-      schedule:JSON.stringify(schedule),transient:Journey.run.transient,
-      standard:Journey.run.combat.standard,hud:document.querySelector('#wave').textContent,
-      checkpoint:localStorage.getItem('minuit-checkpoint'),xp:Journey.state.xp,
-      recent:Journey.state.recent.length,records:records.length,
-      ranked:LocalLeague.dayState().rankedUsed,daily:LocalLeague.dayState().dailyUsed
-    })""")
-    assert first['wave'] == 3 and first['diff'] == 1 and first['lives'] == 3
-    assert first['stage'] <= 2
-    assert page.evaluate('WeeklySprint.hostileCadenceMultiplier()') == 1.3
-    assert first['transient'] and first['standard'] and first['hud'] == '01 / 03'
-    assert first['checkpoint'] is None and first['xp'] == 0
-    assert first['recent'] == first['records'] == 0
-    assert first['ranked'] == first['daily'] == 0
-    expected_spawns = 19 if first['stage'] == 2 else 16
-    assert len(json.loads(first['schedule'])) == expected_spawns
-    assert page.evaluate("""()=>{const before=prefs.touchLayout;prefs.touchLayout='left';savePrefs();const saved=JSON.parse(localStorage.getItem('minuit-settings')).touchLayout==='left';prefs.touchLayout=before;savePrefs();return saved}""")
-    # Le tir principal est deux fois plus efficace, sans amplifier le familier
-    # ni modifier les dégâts et le périmètre du sort spécial.
-    combat = page.evaluate("""()=>{
-      const sample=()=>{shots=[];player.fire=0;update(.001);return shots.map(shot=>({damage:shot.damage,familiar:!!shot.familiar}))};
-      upgrades.fire=0;upgrades.familiar=0;const base=sample();
-      upgrades.fire=3;const powered=sample();
-      upgrades.fire=0;upgrades.familiar=1;const withFamiliar=sample();
-      upgrades.familiar=0;shots=[];
-      player.inv=999;enemies=[{x:player.x,y:player.y-80,hp:100,max:100,r:19}];hostile=[];
-      Arsenal.active.cooldown=0;transition=0;const cast=Arsenal.cast(),spellDamage=100-enemies[0].hp;
-      enemies=[];hostile=[];return {base,powered,withFamiliar,cast,spellDamage};
-    }""")
-    assert [shot['damage'] for shot in combat['base']] == [2], combat
-    assert len(combat['powered']) == 2 and all(shot['damage'] == 4 for shot in combat['powered']), combat
-    assert any(shot['familiar'] and shot['damage'] == 1 for shot in combat['withFamiliar']), combat
-    assert combat['cast'] and combat['spellDamage'] == 10, combat
-    page.evaluate('WeeklySprint.start()')
-    page.wait_for_function('WeeklySprint.active')
-    second = page.evaluate("({seed:WeeklySprint.config.seed,stage,schedule:JSON.stringify(schedule)})")
-    assert second['seed'] == first['seed'] and second['stage'] == first['stage']
-    assert second['schedule'] == first['schedule']
-
-    # Le gardien emprunte le vrai reward(), mais termine le Sprint avant la
-    # transition ou tout record normal de campagne.
-    page.evaluate("""()=>{
-      enemies=[];spawnEnemy({x:400,kind:'ghost',pattern:0,group:0,index:0});reward(enemies[0]);
-      gameTime=12;beginTransition(false);score+=60;transition=0;advanceStage();
-      combo=2;graze++;League.event('graze',1);score+=50;
-      gameTime=28;beginTransition(false);transition=0;advanceStage();
-      combo=1;gameTime=47;wave=5;enemies=[];spawnBoss();
-      const guardian=enemies.find(enemy=>enemy.boss);window.__sprintGuardianHP=guardian.hp;
-      gameTime=65;reward(guardian);
-    }""")
-    page.wait_for_selector('.weekly-result')
-    assert '3 vagues + gardien' in page.locator('.weekly-result').inner_text()
-    assert page.evaluate('window.__sprintGuardianHP') == (300 + first['stage'] * 150) * .65
-    analysis = page.evaluate("({stats:WeeklySprint.result.stats,segments:WeeklySprint.result.segments,score:WeeklySprint.result.score})")
-    assert analysis['stats'] == {'eliminationScore': 100, 'grazeScore': 50, 'bossScore': 5000, 'otherScore': 60, 'bestCombo': 2, 'kills': 1, 'grazes': 1}, analysis
-    assert [segment['id'] for segment in analysis['segments']] == ['wave-1', 'wave-2', 'wave-3', 'guardian']
-    assert sum(segment['score'] for segment in analysis['segments']) == analysis['score'] == 5210
-    assert all(segment['time'] > 0 for segment in analysis['segments'])
-    result_text = page.locator('.weekly-analysis').inner_text()
-    assert 'DÉTAIL DU SCORE' in result_text and 'MEILLEUR COMBO' in result_text and 'Parcours & trésors' in result_text
-    assert page.locator('.weekly-split').count() == 4
-    assert page.locator('#weeklyTrainGuardian').is_visible()
-    isolated = page.evaluate("""()=>({
-      active:WeeklySprint.active,sandbox:SandboxMode,run:Journey.run,
-      recent:Journey.state.recent.length,records:records.length,xp:Journey.state.xp,
-      ranked:LocalLeague.dayState().rankedUsed,daily:LocalLeague.dayState().dailyUsed,
-      saved:JSON.parse(localStorage.getItem('minuit-weekly-sprints-v1')).weeks[WeeklySprint.result.week].best.won,
-      campaignSaved:localStorage.getItem('minuit-v2-scores')
-    })""")
-    assert not isolated['active'] and not isolated['sandbox'] and isolated['run'] is None
-    assert isolated['recent'] == isolated['records'] == isolated['xp'] == 0
-    assert isolated['ranked'] == isolated['daily'] == 0
-    assert isolated['saved'] and isolated['campaignSaved'] is None
-
-    # Le record précédent sert de repère section par section, sans être remplacé
-    # par un score total plus faible.
-    page.click('#weeklyRetry')
-    page.wait_for_function('WeeklySprint.active')
-    page.evaluate('score=210;gameTime=10;end(true)')
-    page.wait_for_selector('.weekly-result')
-    assert '+50 au record' in page.locator('.weekly-split small').first.inner_text()
-    assert page.evaluate('WeeklySprint.data.weeks[WeeklySprint.result.week].best.score') == 5210
-
-    # Une défaite a le même décompte explicite, puis un high score Sprint plein écran.
-    page.click('#weeklyRetry')
-    page.wait_for_function('WeeklySprint.active')
-    page.evaluate("lives=1;player.inv=0;player.dash=0;hurt(25,'test Sprint')")
-    page.wait_for_selector('.death-transition')
-    assert page.locator('#deathCountdown').is_visible()
-    page.wait_for_selector('.weekly-result .death-note', timeout=15000)
-    assert 'HI-SCORES · SPRINT HEBDO' in page.locator('.weekly-result').inner_text()
+    assert '90 secondes' in page.locator('.weekly-preflight').inner_text()
+    page.click('#weeklyBack')
     assert not errors, errors
 
     # Les synergies ne changent aucune statistique et sont reprises au bilan normal.
@@ -209,81 +99,10 @@ with sync_playwright() as p:
       player.inv=999;enemies=[{x:player.x,y:player.y-80,hp:100,max:100,r:19}];hostile=[];
       Arsenal.active.cooldown=0;transition=0;const cast=Arsenal.cast(),spellDamage=100-enemies[0].hp;
       enemies=[];hostile=[];stage=4;world=worlds[4];wave=5;spawnBoss();
-      return {shotDamage,cast,spellDamage,bossHP:enemies.find(enemy=>enemy.boss).hp,sprint:WeeklySprint.active,cadence:WeeklySprint.hostileCadenceMultiplier()};
+      return {shotDamage,cast,spellDamage,bossHP:enemies.find(enemy=>enemy.boss).hp,sprint:WeeklySprint.active};
     }""")
-    assert normal_balance == {'shotDamage': 1, 'cast': True, 'spellDamage': 10, 'bossHP': 900, 'sprint': False, 'cadence': 1}, normal_balance
+    assert normal_balance == {'shotDamage': 1, 'cast': True, 'spellDamage': 10, 'bossHP': 900, 'sprint': False}, normal_balance
     balance.close()
 
-    # Le partage ami ouvre directement le bon Sprint avec une cible chiffrée.
-    week = page.evaluate('WeeklySprint.weekInfo().week')
-    friend = browser.new_page(viewport={'width': 1100, 'height': 800})
-    friend.add_init_script(TRAINED)
-    friend.goto(URL + '/?sprint=' + week + '&target=1234')
-    friend.wait_for_selector('.weekly-friend-target')
-    assert '1 234' in friend.locator('.weekly-friend-target').inner_text() or '1234' in friend.locator('.weekly-friend-target').inner_text().replace(' ', '')
-    assert 'sprint=' not in friend.url and 'target=' not in friend.url
-
-    # RPC dédié : aucune conversion en mode free et aucun appel au score de campagne.
-    team = browser.new_page(viewport={'width': 1200, 'height': 850})
-    team_errors, submissions, campaign_calls = [], [], []
-    team.on('pageerror', lambda error: team_errors.append(str(error)))
-    team.add_init_script(SESSION)
-
-    def weekly_rpc(route):
-        request = route.request
-        if 'minuit_submit_team_score' in request.url:
-            campaign_calls.append(request.url)
-            route.fulfill(status=500, body='{}')
-            return
-        if 'minuit_submit_weekly_sprint' in request.url:
-            body = request.post_data_json
-            submissions.append(body)
-            payload = {'team': {'name': 'Balais Test', 'memberCount': 2}, 'scores': [
-                {'rank': 1, 'displayName': 'Sorcière Test', 'score': body['p_score'], 'time': body['p_time_seconds'], 'wave': body['p_wave'], 'won': body['p_won'], 'played': True, 'isYou': True},
-                {'rank': 2, 'displayName': 'Amie Test', 'score': 4000, 'time': 190, 'wave': 3, 'won': True, 'played': True, 'isYou': False},
-            ], 'result': {'bestScore': body['p_score'], 'improved': True}}
-        else:
-            payload = {'team': {'name': 'Balais Test', 'memberCount': 2}, 'scores': [
-                {'rank': 1, 'displayName': 'Amie Test', 'score': 4000, 'time': 190, 'wave': 3, 'won': True, 'played': True, 'isYou': False},
-                {'rank': 2, 'displayName': 'Sorcière Test', 'score': None, 'played': False, 'isYou': True},
-            ]}
-        route.fulfill(status=200, content_type='application/json', body=json.dumps(payload))
-
-    team.route('**/rest/v1/rpc/*', weekly_rpc)
-    team.goto(URL)
-    team.wait_for_selector('#weeklySprint')
-    team.click('#weeklySprint')
-    team.wait_for_function("document.querySelector('#weeklyPreflightTeam')?.textContent.includes('Balais Test')")
-    team.click('#weeklyLaunch')
-    team.wait_for_function('WeeklySprint.active')
-    team.evaluate('score=4321;gameTime=195;wave=5;end(true)')
-    team.wait_for_function("document.querySelector('#weeklyTeamBoard')?.textContent.includes('TA POSITION : #1')")
-    assert len(submissions) == 1
-    assert submissions[0]['p_score'] == 4321 and submissions[0]['p_wave'] == 3 and submissions[0]['p_won']
-    assert 'p_mode' not in submissions[0] and not campaign_calls
-    assert not team_errors, team_errors
-
-    # Mobile : préflight et high score utilisent toute la fenêtre sans déborde­ment horizontal.
-    mobile = browser.new_page(viewport={'width': 390, 'height': 844}, is_mobile=True, has_touch=True)
-    mobile_errors = []
-    mobile.on('pageerror', lambda error: mobile_errors.append(str(error)))
-    mobile.add_init_script(TRAINED)
-    mobile.goto(URL)
-    mobile.wait_for_selector('#weeklySprint')
-    mobile.click('#weeklySprint')
-    mobile.wait_for_selector('.weekly-preflight')
-    assert mobile.evaluate('document.documentElement.scrollWidth<=innerWidth')
-    mobile.click('#weeklyLaunch')
-    mobile.wait_for_function('WeeklySprint.active')
-    mobile.evaluate('end(true)')
-    mobile.wait_for_selector('.weekly-result')
-    geometry = mobile.evaluate("""()=>{
-      const overlay=document.querySelector('#overlay').getBoundingClientRect();
-      const holder=document.querySelector('.layout>div:first-child').getBoundingClientRect();
-      return {width:document.documentElement.scrollWidth,inner:innerWidth,fullHeight:overlay.height+2>=holder.height,scrollTop:document.querySelector('#overlay').scrollTop};
-    }""")
-    assert geometry['width'] <= geometry['inner'] and geometry['fullHeight'] and geometry['scrollTop'] == 0, geometry
-    assert not mobile_errors, mobile_errors
-
     browser.close()
-    print('OK : Sprint allégé, bilan détaillé et comparaisons, entraînement du gardien avec retour, campagne inchangée, décompte, partage, team dédiée et mobile.')
+    print('OK : synergies et bilans de campagne préservés avec la chevauchée de minuit.')

@@ -933,6 +933,63 @@ async function submitWeeklySprint(value){
  catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
 }
 
+async function ringSprintBoard(week){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_ring_sprint_board',{method:'POST',body:{p_week:String(week)}}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+async function submitRingSprint(value){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ const body={
+  p_week:String(value.week||''),
+  p_run_id:String(value.runId||'').trim().slice(0,80),
+  p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
+  p_time_seconds:Math.max(0,Math.min(7200,Math.floor(value.time)||0)),
+  p_wave:Math.max(1,Math.min(3,Math.floor(value.wave)||1)),
+  p_won:!!value.won
+ };
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_submit_ring_sprint',{method:'POST',body}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+
+async function broomSprintBoard(week){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_broom_sprint_board',{method:'POST',body:{p_week:String(week)}}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+async function submitBroomSprint(value){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ const body={
+  p_week:String(value.week||''),
+  p_run_id:String(value.runId||'').trim().slice(0,80),
+  p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
+  p_time_seconds:Math.max(0,Math.min(7200,Math.floor(value.time)||0)),
+  p_wave:Math.max(1,Math.min(3,Math.floor(value.wave)||1)),
+  p_won:!!value.won
+ };
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_submit_broom_sprint',{method:'POST',body}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+
+async function candySprintBoard(week){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_candy_sprint_v5_board',{method:'POST',body:{p_week:String(week)}}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+async function submitCandySprint(value){
+ if(!enabled||!session)return{skipped:true,team:null,scores:[]};
+ const body={
+  p_week:String(value.week||''),
+  p_run_id:String(value.runId||'').trim().slice(0,80),
+  p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
+  p_time_seconds:Math.max(0,Math.min(7200,Math.floor(value.time)||0)),
+  p_wave:Math.max(1,Math.min(3,Math.floor(value.wave)||1)),
+  p_won:!!value.won
+ };
+ try{return validWeeklySprintState(await request('/rest/v1/rpc/minuit_submit_candy_sprint_v5',{method:'POST',body}))}
+ catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
+}
+
 function renderPanel(target=mount){
  if(target)mount=target;
  if(!mount||!mount.isConnected)return;
@@ -1128,6 +1185,12 @@ window.MinuitCloud={
  finishTeamScore,
  weeklySprintBoard,
  submitWeeklySprint,
+ ringSprintBoard,
+ submitRingSprint,
+ broomSprintBoard,
+ submitBroomSprint,
+ candySprintBoard,
+ submitCandySprint,
  openTeamBoard,
  openTeamStats,
  renderPanel,
