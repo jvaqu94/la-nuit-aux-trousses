@@ -129,6 +129,10 @@ Le nouveau monde **Les Cinq Heures Perdues** et la carte de Grimoire **Le Sermen
 | L’Express du soleil | Lutins contrôleurs et Valises qui libèrent des renforts | Le Contrôleur céleste envoie des convois en laissant une voie libre. |
 | Le Palais de l’aube | Spectres-aiguilles et Chiffres creux | L’Horloger de l’Aube suspend les projectiles et anime les aiguilles du cadran. |
 
+Les escouades arrivent désormais en duos complémentaires. Les Facteurs utilisent les Lueurs comme relais, les Mites concentrent leurs tirs dans les Miroirs, les Larves font pousser les racines sur les positions passées, les Lutins escortent les Valises et les Spectres orbitent autour des Chiffres creux. Le lien est visible et **la destruction du support annule l’attaque liée**. Les Valises s’ouvrent aussi à moitié de vie puis libèrent leur dernier contrôleur à leur destruction.
+
+Les phases avancées changent les règles des gardiens : halo mobile puis éclipse resserrée, rayons à ricochet puis cage de verre, sillage du passé du Cerf, croisements horizontaux et verticaux de l’Express, rembobinage des projectiles et doubles aiguilles rotatives de l’Horloger. Ces attaques utilisent les mêmes avertissements visuels sur desktop et téléphone.
+
 Cette deuxième campagne conserve le pilotage, l’esquive et le tir du shoot’em up, mais **pas les déplacements, formations, salves ou charges du premier bestiaire**. La deuxième vague demande de libérer deux heures captives, la troisième impose une survie et la quatrième deux ancres à saboter. Les anciens événements de territoire, apparitions surprises et formations coopératives sont désactivés dans cette campagne. Tous les dangers spéciaux sont télégraphiés, y compris sur téléphone, sans aide automatique permanente.
 
 Les 25 vagues comportent aussi trois **fragments d’heure à libérer par monde** pour l’exploration. Le joueur peut rester la sorcière ou choisir le **Veilleur**, dont le vol est plus lourd, les carreaux en éventail et la lanterne protectrice au départ. Les records du monde 2 sont séparés de ceux du premier. La carte de campagne est unique, persistante et ne donne aucun bonus de puissance.
@@ -397,7 +401,7 @@ La campagne technique complète se vérifie avec :
 python tests/test_journey_campaign.py
 ```
 
-Cette campagne automatique utilise l’invulnérabilité pour contrôler les 25 vagues, les cinq gardiens, la rencontre et les événements. `test_sequel.py` vérifie aussi la deuxième campagne complète, la sauvegarde avant cinématique, la reprise, les fragments et le mobile. `test_sequel_bestiary.py` contrôle les nouvelles créatures, les objectifs, les télégraphes, les dégâts du blackout, les miroirs et le gel du temps, ainsi que la non-régression du premier monde. Ces tests valident l’intégration technique, **pas l’équilibrage ressenti par un joueur**.
+Cette campagne automatique utilise l’invulnérabilité pour contrôler les 25 vagues, les cinq gardiens, la rencontre et les événements. `test_sequel.py` vérifie aussi la deuxième campagne complète, la sauvegarde avant cinématique, la reprise, les fragments et le mobile. `test_sequel_bestiary.py` contrôle les nouvelles créatures, les duos destructibles, les objectifs, les télégraphes, les phases avancées, les dégâts du blackout et des trains, les miroirs, le gel et le rembobinage du temps, ainsi que la non-régression du premier monde. Ces tests valident l’intégration technique, **pas l’équilibrage ressenti par un joueur**.
 
 Les tests `tests/test_league_server.py` et `tests/test_league_browser.py` concernent l’ancienne ligue avec comptes et utilisent des données temporaires. Ils sont distincts du parcours local actuel.
 
