@@ -133,19 +133,66 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     transform_2 = page.evaluate("getComputedStyle(document.querySelector('.daily-chest-3d')).transform")
     assert transform_1 != transform_2, 'Le coffre doit réellement tourner.'
+    # Une rotation seule ne suffit pas : les faces doivent rester dans le même
+    # contexte 3D (un filter ou une opacité sur le parent les aplatirait).
+    volume = page.evaluate("""() => {
+      const chest=document.querySelector('.daily-chest-3d');
+      const saved=chest.style.cssText;
+      chest.style.animation='none'; chest.style.transform='rotateY(90deg)';
+      const face=document.querySelector('.daily-face-left');
+      const r=face.getBoundingClientRect();
+      const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+      const style=getComputedStyle(chest);
+      const result={filter:style.filter,opacity:style.opacity,style:style.transformStyle,
+        visibleSide:!!hit?.closest('.daily-face-left')};
+      chest.style.cssText=saved; return result;
+    }""")
+    assert volume == {'filter': 'none', 'opacity': '1', 'style': 'preserve-3d', 'visibleSide': True}, volume
     page.reload()
     page.wait_for_selector('#dailyRewardScreen')
     second = page.evaluate('(uid)=>Journey.state.dailyRewards[uid].pending', uid)
     assert second == first['pending'], 'Le rechargement ne doit jamais retirer le coffre.'
     page.wait_for_selector('#dailyRewardContinue:not(.hidden)', timeout=5000)
+    assert page.locator('.daily-chest-open-art').count() == 0
+    assert page.evaluate("getComputedStyle(document.querySelector('.daily-chest-3d')).opacity") == '1'
+    assert page.evaluate("getComputedStyle(document.querySelector('.daily-chest-lid')).transform") != 'none'
     credited = page.evaluate('''uid=>({xp:Journey.state.xp,result:Journey.state.dailyRewards[uid].lastResult,
       again:Journey.grantDailyReward(uid)})''', uid)
     assert credited['xp'] == credited['result']['totalXP'] and credited['again'] is None
+    # Après ouverture, une session restaurée rejoue le même coffre sans créditer.
     page.reload()
-    page.wait_for_selector('#playAdventure')
-    page.wait_for_timeout(500)
-    assert page.locator('#dailyRewardScreen').count() == 0
+    page.wait_for_selector('#dailyRewardScreen')
+    assert 'se souvient' in page.locator('#dailyRewardStatus').inner_text().lower()
+    page.wait_for_selector('#dailyRewardContinue:not(.hidden)', timeout=5000)
+    assert 'déjà obtenue' in page.locator('#dailyRewardIntro').inner_text()
+    assert 'aucun gain supplémentaire' in page.locator('#dailyRewardNote').inner_text()
+    assert page.evaluate('(uid)=>Journey.state.dailyRewards[uid].lastResult', uid) == credited['result']
     assert page.evaluate('Journey.state.xp') == credited['xp']
+    assert page.locator('.daily-loot-card').count() == 1 + len(credited['result']['cosmetics'])
+    assert page.locator('.daily-loot-xp strong').inner_text() == f"+{credited['result']['totalXP']} XP"
+    finish(page)
+    page.evaluate("window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
+    page.wait_for_timeout(500)
+    assert page.locator('#dailyRewardScreen').count() == 0, 'Pas de boucle après Continuer ou retour au premier plan.'
+    assert page.evaluate('Journey.state.xp') == credited['xp']
+
+    # Une vraie déconnexion/reconnexion rejoue aussi le coffre, sans gain répété.
+    page.evaluate("window.dispatchEvent(new Event('minuit:account-disconnected'))")
+    page.evaluate('''uid=>window.dispatchEvent(new CustomEvent('minuit:account-connected',
+      {detail:{user:{id:uid}}}))''', uid)
+    page.wait_for_selector('#dailyRewardContinue:not(.hidden)', timeout=5000)
+    assert page.evaluate('Journey.state.xp') == credited['xp']
+    assert page.evaluate('(uid)=>Journey.state.dailyRewards[uid].lastResult', uid) == credited['result']
+    finish(page)
+
+    # Une nouvelle journée donne bien un nouveau tirage et une nouvelle récompense.
+    page.evaluate('''uid=>{Journey.state.dailyRewards[uid].lastClaim='2000-01-01';
+      Journey.state.dailyRewards[uid].lastResult.day='2000-01-01';DailyRewards.check({id:uid})}''', uid)
+    page.wait_for_selector('#dailyRewardScreen')
+    assert page.evaluate('(uid)=>!!Journey.state.dailyRewards[uid].pending', uid)
+    page.wait_for_selector('#dailyRewardContinue:not(.hidden)', timeout=5000)
+    assert page.evaluate('Journey.state.xp') > credited['xp']
+    finish(page)
     context.close()
 
     # Hors ligne, même une session conservée ne déclenche pas de nouveau coffre.

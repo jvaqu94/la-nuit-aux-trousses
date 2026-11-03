@@ -216,7 +216,7 @@ Les **Réglages** conservent les exports et imports locaux, tandis que le compte
 
 ### Coffre de connexion quotidienne
 
-Après une connexion réussie, ou la reprise d’une session de compte alors que le navigateur est en ligne, le premier accès de la journée ouvre un **coffre magique animé pendant 2,4 secondes**. Les invités et le jeu hors ligne ne reçoivent pas de nouveau coffre. La préférence système « réduire les animations » raccourcit cette présentation sans changer le gain.
+Après une connexion réussie, ou la reprise d’une session de compte alors que le navigateur est en ligne, le premier accès de la journée ouvre un **coffre magique en relief animé pendant 2,4 secondes**. Ses faces tournent en perspective et son couvercle s’ouvre avant la révélation. Les invités et le jeu hors ligne ne reçoivent pas de nouveau coffre. La préférence système « réduire les animations » raccourcit cette présentation sans changer le gain.
 
 | Rareté | Contenu |
 |---|---|
@@ -227,7 +227,7 @@ Après une connexion réussie, ou la reprise d’une session de compte alors que
 
 - Les apparences sont tirées parmi celles qui restent verrouillées, hors titres d’exploit et sceaux de maîtrise. Chaque emplacement dont l’apparence n’est plus disponible est converti en **100 XP**, y compris lorsque toute la collection éligible est déjà débloquée.
 - Une série de connexions consécutives améliore progressivement les raretés possibles sur **sept paliers**, puis conserve ce palier maximal. Un jour manqué remet la série à 1. Les probabilités ne sont pas affichées dans le jeu ; seule la rareté obtenue est révélée.
-- Le tirage et la série sont enregistrés **avant l’animation**. Fermer ou recharger la page pendant l’ouverture reprend le même coffre, sans nouveau tirage ; la révélation crédite les gains en une seule écriture et ne peut pas les appliquer deux fois.
+- Le tirage et la série sont enregistrés **avant l’animation**. Fermer ou recharger la page pendant l’ouverture reprend le même coffre, sans nouveau tirage ; la révélation crédite les gains en une seule écriture et ne peut pas les appliquer deux fois. Lors des connexions suivantes le même jour, le coffre et sa récompense sont rejoués à titre de souvenir, sans gain supplémentaire.
 - Cette série par compte est distincte de la série de premières vagues jouées. Elle est comprise dans les exports et la sauvegarde cloud avec les apparences offertes. Comme le reste de la progression locale, elle ne constitue pas un mécanisme anti-triche.
 - Ces gains ne donnent aucun point, équipement de combat ou avantage classé : l’XP sert à la Collection et les compagnons concernés restent décoratifs.
 

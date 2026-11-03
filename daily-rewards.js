@@ -7,7 +7,7 @@ const RARITIES={
  epic:{label:'Épique',xp:120,cosmetics:1,color:'#c598f2'},
  legendary:{label:'Légendaire',xp:200,cosmetics:2,color:'#f2c879'}
 };
-let activeUser='',opening=false,sequence=0,timers=[];
+let activeUser='',opening=false,presented=false,sequence=0,timers=[];
 const reducedMotion=()=>window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const userId=user=>typeof user==='string'?user:String(user?.id||'');
 const clampRandom=value=>Math.max(0,Math.min(1-Number.EPSILON,Number.isFinite(value)?value:0));
@@ -64,57 +64,58 @@ function chestHTML(){
    <div class="daily-chest-base daily-face-front"><i></i><i></i><span class="daily-chest-lock">✦</span></div>
    <div class="daily-chest-base daily-face-back"><i></i><i></i></div>
    <div class="daily-chest-base daily-face-left"><i></i></div><div class="daily-chest-base daily-face-right"><i></i></div>
-   <div class="daily-chest-base daily-face-bottom"></div>
+   <div class="daily-chest-base daily-face-bottom"></div><div class="daily-chest-interior"></div>
    <div class="daily-chest-lid">
     <div class="daily-lid-face daily-lid-front"><i></i><i></i></div><div class="daily-lid-face daily-lid-back"><i></i><i></i></div>
     <div class="daily-lid-face daily-lid-left"><i></i></div><div class="daily-lid-face daily-lid-right"><i></i></div>
-    <div class="daily-lid-face daily-lid-top"><i></i><i></i></div>
+    <div class="daily-lid-face daily-lid-top"><i></i><i></i></div><div class="daily-lid-inner"></div>
    </div>
-  </div><img class="daily-chest-open-art" src="${window.CollectibleArt?.art?.['chest-open']?.src||''}" alt="" draggable="false"><div class="daily-chest-shadow"></div>
+  </div><div class="daily-chest-shadow"></div>
  </div>`;
 }
-function show(pending,saved){
- clearTimers();opening=true;const id=++sequence,legendary=pending.rarity==='legendary';
+function show(pending,saved,replay=false){
+ clearTimers();opening=true;presented=true;const id=++sequence,legendary=pending.rarity==='legendary';
  state='daily-reward';
  overlay(`<section class="daily-reward-screen" id="dailyRewardScreen" aria-label="Coffre de connexion quotidienne">
   <div class="daily-reward-heading"><div class="eyebrow">CONNEXION QUOTIDIENNE · ${pending.day===dateKey()?'COFFRE DU JOUR':'COFFRE RETROUVÉ'}</div><h2 id="dailyRewardTitle">Le coffre des nuits</h2><p id="dailyRewardIntro">Ta série de <b>${saved.streak} jour${saved.streak>1?'s':''}</b> fait briller la magie.</p>${streakSteps(saved.streak)}</div>
   ${chestHTML()}
-  <div class="daily-reward-status" id="dailyRewardStatus" role="status" aria-live="polite"><span class="daily-waiting-dot"></span>La magie choisit ta récompense…</div>
+  <div class="daily-reward-status" id="dailyRewardStatus" role="status" aria-live="polite"><span class="daily-waiting-dot"></span>${replay?'Le coffre se souvient de ta récompense…':'La magie choisit ta récompense…'}</div>
   <section class="daily-reward-loot hidden" id="dailyRewardLoot" aria-label="Récompense obtenue"></section>
   <div class="daily-reward-footer"><small id="dailyRewardNote">XP et apparences uniquement · aucun avantage en partie</small><button class="primary hidden" id="dailyRewardContinue">Continuer →</button></div>
  </section>`);
  const duration=reducedMotion()?650:2400,openingAt=reducedMotion()?180:1940;
  later(()=>{document.getElementById('dailyRewardScreen')?.classList.add('is-opening');playSfx('chestOpen',legendary ? .9 : .68,.11)},openingAt,id);
- later(()=>reveal(userId(activeUser)),duration,id);
+ later(()=>reveal(userId(activeUser),replay?pending:null),duration,id);
 }
 function cosmeticCard(item){
  return `<article class="daily-loot-card daily-loot-cosmetic" style="--loot-color:${item.color||'#d9b5ff'}"><span class="daily-loot-kind">APPARENCE DÉBLOQUÉE</span><div class="daily-loot-art">${Journey.collectionArt(item)}</div><strong>${safeText(item.name)}</strong><small>${({outfit:'Tenue',spell:'Couleur de sorts',broom:'Balai',pet:'Compagnon décoratif'})[item.kind]||'Collection'}</small></article>`;
 }
-function reveal(uid){
+function reveal(uid,replayedResult=null){
  if(state!=='daily-reward'||!opening)return;
  const screen=document.getElementById('dailyRewardScreen');if(!screen){opening=false;return}
- const result=Journey.grantDailyReward(uid);opening=false;
+ const result=replayedResult||Journey.grantDailyReward(uid);opening=false;
  if(!result){LocalLeague.menu();return}
  const definition=RARITIES[result.rarity]||RARITIES.common;
  screen.classList.remove('is-opening');screen.classList.add('is-revealed','daily-rarity-'+result.rarity);screen.style.setProperty('--rarity',definition.color);
  const items=result.cosmetics.map(id=>Journey.items.find(item=>item.id===id)).filter(Boolean),totalXP=result.totalXP;
  document.getElementById('dailyRewardTitle').textContent=result.rarity==='legendary'?'Trésor légendaire !':result.rarity==='epic'?'Magie éclatante !':result.rarity==='rare'?'Belle surprise !':'Douceur de minuit !';
- document.getElementById('dailyRewardIntro').innerHTML=`RÉCOMPENSE <b>${definition.label.toUpperCase()}</b> · elle est déjà sauvegardée`;
+ document.getElementById('dailyRewardIntro').innerHTML=`RÉCOMPENSE <b>${definition.label.toUpperCase()}</b> · ${replayedResult?'déjà obtenue aujourd’hui':'elle est déjà sauvegardée'}`;
  const status=document.getElementById('dailyRewardStatus');status.innerHTML='<span aria-hidden="true">✦</span> Le coffre a parlé !';
  const loot=document.getElementById('dailyRewardLoot');loot.classList.remove('hidden');
  loot.innerHTML=`<article class="daily-loot-card daily-loot-xp"><span class="daily-loot-kind">EXPÉRIENCE</span><div class="daily-loot-art"><img src="${window.CollectibleArt?.art?.xp?.src||''}" alt="" draggable="false"></div><strong>+${totalXP} XP</strong><small>Progression du Grimoire</small></article>${items.map(cosmeticCard).join('')}`;
- document.getElementById('dailyRewardNote').textContent=result.conversionXP?`${result.conversionXP} XP remplacent les apparences déjà débloquées. La suite de ta série est enregistrée.`:'La suite de ta série est enregistrée. Reviens demain pour un nouveau coffre.';
+ document.getElementById('dailyRewardNote').textContent=replayedResult?'Coffre déjà ouvert : aucun gain supplémentaire. Reviens demain pour une nouvelle récompense.':result.conversionXP?`${result.conversionXP} XP remplacent les apparences déjà débloquées. La suite de ta série est enregistrée.`:'La suite de ta série est enregistrée. Reviens demain pour un nouveau coffre.';
  const button=document.getElementById('dailyRewardContinue');button.classList.remove('hidden');button.onclick=()=>{clearTimers();sequence++;LocalLeague.menu();setTimeout(()=>onAccount(window.MinuitCloud?.user),0)};button.focus({preventScroll:true});
  tone(result.rarity==='legendary'?660:520,.34,'sine',.075,1.5);
 }
 function onAccount(user){
  const uid=userId(user);
- if(!uid){if(state==='daily-reward'){clearTimers();sequence++;opening=false;LocalLeague.menu()}activeUser='';return}
+ if(!uid){if(state==='daily-reward'){clearTimers();sequence++;opening=false;LocalLeague.menu()}activeUser='';presented=false;return}
  if(navigator.onLine===false)return;
  if(uid===activeUser&&state==='daily-reward')return;
- if(uid!==activeUser){clearTimers();sequence++;opening=false;activeUser=uid}
+ if(uid!==activeUser){clearTimers();sequence++;opening=false;presented=false;activeUser=uid}
  const saved=account(uid,false),pending=saved?.pending||claim(uid);
  if(pending)show(pending,account(uid));
+ else if(!presented&&saved?.lastClaim===dateKey()&&isReplayable(saved.lastResult,saved.lastClaim))show(saved.lastResult,saved,true);
 }
 function validDay(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T00:00:00Z'))}
 function validatePending(pending){
@@ -122,6 +123,10 @@ function validatePending(pending){
  if(!Number.isInteger(pending.xp)||pending.xp<0||pending.xp>1000||!Number.isInteger(pending.conversionXP)||pending.conversionXP<0||pending.conversionXP>200)throw new Error('Gains quotidiens invalides');
  if(!Array.isArray(pending.cosmetics)||pending.cosmetics.length>2||new Set(pending.cosmetics).size!==pending.cosmetics.length)throw new Error('Apparences quotidiennes invalides');
  const eligible=new Set(Journey.dailyCosmetics().map(item=>item.id));if(pending.cosmetics.some(id=>!eligible.has(id)))throw new Error('Apparence quotidienne inconnue');
+}
+// Une sauvegarde ancienne ou endommagée ne doit pas empêcher la connexion.
+function isReplayable(result,day){
+ try{validatePending(result);return result.day===day&&Number.isInteger(result.totalXP)&&result.totalXP===result.xp+result.conversionXP}catch{return false}
 }
 function validateSave(save){
  const gifted=save.giftedCosmetics??[];if(!Array.isArray(gifted)||gifted.length>Journey.dailyCosmetics().length||new Set(gifted).size!==gifted.length)throw new Error('Apparences offertes invalides');
