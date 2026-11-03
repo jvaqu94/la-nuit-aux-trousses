@@ -164,6 +164,7 @@ function setSession(data){
  try{auto=localStorage.getItem(AUTO_KEY)===session.user.id}catch{}
  return true;
 }
+function notifyAccount(type){window.dispatchEvent(new CustomEvent('minuit:'+type,{detail:{user:session?.user||null}}))}
 function credentials(){
  const email=String(document.getElementById('cloudEmail')?.value||'').trim();
  const password=String(document.getElementById('cloudPassword')?.value||'');
@@ -219,6 +220,7 @@ async function authenticatePseudo(signup){
    const joined=await joinPendingTeam(body.username);
    if(joined)returnHomeAfterInvite(signup);
   }
+  notifyAccount('account-connected');
  }catch(error){status(pseudoErrorMessage(error),true)}
  finally{busy=false}
 }
@@ -233,6 +235,7 @@ async function authenticate(signup){
   if(setSession(data)){
    renderPanel();
    status('Compte connecté. La première synchronisation se fait manuellement.');
+   notifyAccount('account-connected');
   }else status('Compte créé. Ouvre le lien reçu, puis reviens ici te connecter.');
  }catch(error){
   const message=/email.*not.*confirmed/i.test(error.message)?'Adresse pas encore confirmée. Ouvre le lien reçu ou choisis « Renvoyer la confirmation ».':error.message;
@@ -262,6 +265,7 @@ async function logout(){
   resetTeam();
   busy=false;
   renderPanel();
+  notifyAccount('account-disconnected');
  }
 }
 

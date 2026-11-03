@@ -75,7 +75,7 @@ with sync_playwright() as p:
         content_type='application/javascript',
         body=f"window.MINUIT_SUPABASE_CONFIG={{url:'{BASE}',publishableKey:'sb_publishable_test'}};"))
     page.route(BASE + '/**', handle)
-    page.add_init_script("(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}');localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true}))})()");page.goto('http://localhost:3000')
+    page.add_init_script("""(()=>{const profile=JSON.parse(localStorage.getItem('minuit-journey-v1')||'{}'),today=new Intl.DateTimeFormat('fr-CA',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),dailyRewards={...(profile.dailyRewards||{})};dailyRewards[%s]={lastClaim:today,streak:1,pending:null,lastResult:null};localStorage.setItem('minuit-journey-v1',JSON.stringify({...profile,version:1,trainingDone:true,dailyRewards}))})()""" % json.dumps(USER_ID));page.goto('http://localhost:3000')
     page.wait_for_selector('#playAdventure')
     assert page.evaluate('MinuitCloud.configured && !MinuitCloud.connected')
 
