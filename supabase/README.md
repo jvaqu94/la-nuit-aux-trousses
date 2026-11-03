@@ -129,3 +129,7 @@ Le commentaire est facultatif et limité à 1 000 caractères. Les votes et comm
 ## Exploitation publique
 
 L’insertion d’avis sans compte est pratique pour un petit jeu, mais ne remplace pas une protection anti-spam. En cas de forte fréquentation, faire passer les avis par une **Edge Function avec CAPTCHA et limitation de débit**, puis retirer l’accès direct en insertion à `anon`.
+
+Pour le parcours renforcé de la **Course aux bonbons**, exécuter [`candy_sprint_v5.sql`](candy_sprint_v5.sql). Son classement compte les bonbons récoltés et reste séparé des parcours précédents ([`candy_sprint.sql`](candy_sprint.sql), [`candy_sprint_v2.sql`](candy_sprint_v2.sql), [`candy_sprint_v3.sql`](candy_sprint_v3.sql), [`candy_sprint_v4.sql`](candy_sprint_v4.sql)) et des anciennes courses. Sans déploiement, les records locaux restent utilisables mais le classement de team est indisponible.
+
+Les schémas [`ring_sprint.sql`](ring_sprint.sql) et [`broom_sprint.sql`](broom_sprint.sql) conservent les anciens records des courses aux anneaux et de la Chevauchée ; ils ne sont pas nécessaires à la nouvelle course.
