@@ -551,4 +551,15 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.ok(Math.sin(snap.self.aimAngle) > 0.99, 'Le snapshot expose l’angle de visée pour orienter le balai');
 }
 
+// ---------------------------------------------------------------------------
+// 11. Allure de déplacement : plus douce pour rester visable au doigt.
+// ---------------------------------------------------------------------------
+{
+  const stats = Core.computeStats([]);
+  assert.equal(stats.moveSpeed, 275, 'vitesse de course réduite');
+  assert.equal(stats.focusSpeed, 150, 'vitesse de précision réduite');
+  assert.ok(stats.focusSpeed < stats.moveSpeed, 'la précision reste plus lente');
+  console.log('  ✓ vitesse du duel adoucie pour la visée');
+}
+
 console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, brouillard de guerre, ronde/sommeil des sentinelles, décor/pièges/bombes/caisses, tir manuel, visée curseur, orientation, visibilité, snapshots, mort subite et cotes : OK');

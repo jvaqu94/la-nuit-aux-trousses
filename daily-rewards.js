@@ -114,8 +114,10 @@ function onAccount(user){
  if(uid===activeUser&&state==='daily-reward')return;
  if(uid!==activeUser){clearTimers();sequence++;opening=false;presented=false;activeUser=uid}
  const saved=account(uid,false),pending=saved?.pending||claim(uid);
- if(pending)show(pending,account(uid));
- else if(!presented&&saved?.lastClaim===dateKey()&&isReplayable(saved.lastResult,saved.lastClaim))show(saved.lastResult,saved,true);
+ if(pending){show(pending,account(uid));return}
+ // Coffre déjà ouvert aujourd'hui : on ne rejoue plus la scène d'ouverture à
+ // chaque connexion / rechargement / retour au premier plan.
+ presented=true;
 }
 function validDay(value){return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T00:00:00Z'))}
 function validatePending(pending){

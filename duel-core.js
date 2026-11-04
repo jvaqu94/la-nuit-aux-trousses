@@ -445,8 +445,8 @@
     const speedFactor = has('comet-boots') ? 1.22 : 1;
     return {
       perks: list,
-      moveSpeed: 330 * speedFactor,
-      focusSpeed: 175 * speedFactor,
+      moveSpeed: 275 * speedFactor,
+      focusSpeed: 150 * speedFactor,
       burstCount: BURST_COUNT + (has('twin-burst') ? 1 : 0),
       burstInterval: has('swift-powder') ? 0.50 : BURST_INTERVAL,
       burstStep: has('swift-powder') ? 0.095 : BURST_STEP,
