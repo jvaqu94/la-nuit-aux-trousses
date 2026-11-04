@@ -536,4 +536,19 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.ok(snap.world.crates.some(cr => cr.id === farCrate.id), 'La lumière d’explosion révèle les objets');
 }
 
-console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, brouillard de guerre, ronde/sommeil des sentinelles, décor/pièges/bombes/caisses, tir manuel, orientation, visibilité, snapshots, mort subite et cotes : OK');
+// 10. Visée curseur : l'angle de la sorcière (et donc l'avant du balai) suit la direction visée.
+{
+  const m = Core.createMatch({ id: 'aim-test' });
+  emptyWorld(m);
+  const c = m.witches.creator;
+  Core.applyCommand(m, 'creator', { hasAim: true, aimX: c.x + 120, aimY: c.y });
+  Core.stepMatch(m, 1 / 60);
+  assert.ok(Math.cos(c.aimAngle) > 0.999 && Math.abs(Math.sin(c.aimAngle)) < 0.02, 'La sorcière vise à droite du curseur');
+  Core.applyCommand(m, 'creator', { hasAim: true, aimX: c.x, aimY: c.y + 120 });
+  Core.stepMatch(m, 1 / 60);
+  assert.ok(Math.sin(c.aimAngle) > 0.999 && Math.abs(Math.cos(c.aimAngle)) < 0.02, 'La sorcière vise vers le bas du curseur');
+  const snap = Core.createSnapshotFor(m, 'creator');
+  assert.ok(Math.sin(snap.self.aimAngle) > 0.99, 'Le snapshot expose l’angle de visée pour orienter le balai');
+}
+
+console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, brouillard de guerre, ronde/sommeil des sentinelles, décor/pièges/bombes/caisses, tir manuel, visée curseur, orientation, visibilité, snapshots, mort subite et cotes : OK');
