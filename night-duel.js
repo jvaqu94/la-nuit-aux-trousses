@@ -2140,10 +2140,13 @@
     }
 
     // Sorcière illustrée du jeu principal (cape, balai, chapeau).
+    // Le sprite witchFlight est peint manche/embout magique vers le nord :
+    // on le pivote pour que l'avant du balai pointe vers le curseur/la visée.
     const witchKey = window.MinuitArt?.witchFlight?.complete ? 'witchFlight' : 'witch';
+    const facing = (typeof aimAngle === 'number' ? aimAngle : -Math.PI / 2) + Math.PI / 2;
     const filter = options.ghost ? 'grayscale(0.6) brightness(0.8)' : options.isSelf ? 'none' : 'sepia(0.5) saturate(1.4) hue-rotate(-28deg)';
-    if (!drawAsset(c, 'MinuitArt', witchKey, 0, -4, 62, { filter })) {
-      c.rotate((typeof aimAngle === 'number' ? aimAngle : -Math.PI / 2) + Math.PI / 2);
+    if (!drawAsset(c, 'MinuitArt', witchKey, 0, -4, 62, { filter, rotate: facing })) {
+      c.rotate(facing);
       c.fillStyle = options.ghost ? '#9e8cb8' : options.isSelf ? '#f5e8ff' : '#ffb8c9';
       c.beginPath();
       c.moveTo(0, -17); c.lineTo(12, 13); c.lineTo(0, 7); c.lineTo(-12, 13);
@@ -2326,6 +2329,22 @@
       c.font = 'bold 13px Arial';
       c.textAlign = 'center';
       c.fillText('ESQUIVE !', self.x, self.y - 32);
+    }
+
+    // Réticule de visée : montre où l'avant du balai pointe.
+    if (pointerState.mouseAimActive || pointerState.aimTouchId !== null) {
+      const ax = pointerState.aimX, ay = pointerState.aimY;
+      c.save();
+      c.strokeStyle = 'rgba(231, 215, 255, 0.55)';
+      c.lineWidth = 1.5;
+      c.beginPath(); c.arc(ax, ay, 9, 0, Math.PI * 2); c.stroke();
+      c.beginPath();
+      c.moveTo(ax - 14, ay); c.lineTo(ax - 5, ay);
+      c.moveTo(ax + 5, ay); c.lineTo(ax + 14, ay);
+      c.moveTo(ax, ay - 14); c.lineTo(ax, ay - 5);
+      c.moveTo(ax, ay + 5); c.lineTo(ax, ay + 14);
+      c.stroke();
+      c.restore();
     }
 
     // Brume de zone.
