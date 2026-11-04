@@ -49,6 +49,14 @@
   const dismissedInviteIds = new Set();
   const INVITE_POLL_MS = 15000;
 
+  // Contrôles tactiles : course plus douce, zone morte + courbe progressive,
+  // et visée lente/précise pendant que le second doigt dirige le balai.
+  const TOUCH_MAX_DRAG = 72;
+  const TOUCH_DEADZONE = 7;
+  const TOUCH_MOVE_SCALE = 0.86;
+  const TOUCH_AIM_MOVE_SCALE = 0.8;
+  const TOUCH_AIM_PRECISION_SMOOTH = 0.3;
+
   let channel = null;
   let pollTimer = null;
   let hostMatch = null;
@@ -74,9 +82,13 @@
     fireMouse: false,
     aimX: Core.ARENA_CENTER.x,
     aimY: Core.ARENA_CENTER.y,
+    aimTargetX: Core.ARENA_CENTER.x,
+    aimTargetY: Core.ARENA_CENTER.y,
     moveTouchId: null,
     moveOriginX: 0,
     moveOriginY: 0,
+    moveCurrentX: 0,
+    moveCurrentY: 0,
     touchMoveX: 0,
     touchMoveY: 0,
     aimTouchId: null
@@ -1583,6 +1595,10 @@
     pointerState.touchMoveY = 0;
     pointerState.aimX = Core.ARENA_CENTER.x;
     pointerState.aimY = Core.ARENA_CENTER.y;
+    pointerState.aimTargetX = Core.ARENA_CENTER.x;
+    pointerState.aimTargetY = Core.ARENA_CENTER.y;
+    pointerState.moveCurrentX = 0;
+    pointerState.moveCurrentY = 0;
     if (typeof moveInput === 'object' && moveInput) {
       for (const key of Object.keys(moveInput)) delete moveInput[key];
     }
@@ -1632,6 +1648,17 @@
     let aimX = pointerState.aimX;
     let aimY = pointerState.aimY;
     let hasAim = Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null);
+
+    // Visée tactile : lissage + mode précision automatique pour pouvoir ajuster
+    // le balai sans que la sorcière ne file trop vite.
+    if (pointerState.aimTouchId !== null) {
+      focus = true;
+      const smooth = TOUCH_AIM_PRECISION_SMOOTH;
+      pointerState.aimX += (pointerState.aimTargetX - pointerState.aimX) * smooth;
+      pointerState.aimY += (pointerState.aimTargetY - pointerState.aimY) * smooth;
+      aimX = pointerState.aimX;
+      aimY = pointerState.aimY;
+    }
 
     const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
     if (gp) {
@@ -2157,6 +2184,33 @@
     c.restore();
   }
 
+  function drawTouchControls(c) {
+    if (pointerState.moveTouchId === null) return;
+    const ox = pointerState.moveOriginX, oy = pointerState.moveOriginY;
+    const dx = pointerState.moveCurrentX - ox, dy = pointerState.moveCurrentY - oy;
+    const dist = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(dist, TOUCH_MAX_DRAG);
+    const kx = ox + (dx / dist) * clamped * 0.5;
+    const ky = oy + (dy / dist) * clamped * 0.5;
+    c.save();
+    c.globalAlpha = 0.55;
+    c.strokeStyle = '#cbb9dc';
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(ox, oy, 44, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = 'rgba(231, 215, 255, 0.35)';
+    c.beginPath(); c.arc(kx, ky, 20, 0, Math.PI * 2); c.fill();
+    c.globalAlpha = 0.8;
+    c.fillStyle = '#e8c9a0';
+    c.font = '9px Arial';
+    c.textAlign = 'center';
+    c.fillText('DÉPLACEMENT', ox, oy + 58);
+    if (pointerState.aimTouchId !== null) {
+      c.fillStyle = '#9ef7e8';
+      c.fillText('VISÉE PRÉCISE · ralenti', ox, oy + 70);
+    }
+    c.restore();
+  }
+
   function drawDuelArena() {
     if (!combatActive || !renderSnap || typeof ctx === 'undefined' || !ctx) return;
     const c = ctx;
@@ -2369,6 +2423,7 @@
 
     // Minimap en haut à droite de l'espace de jeu.
     drawMinimap(c, viewSnap, cam);
+    drawTouchControls(c);
     c.restore();
   }
 
@@ -2400,6 +2455,8 @@
             pointerState.moveTouchId = evt.pointerId;
             pointerState.moveOriginX = pt.x;
             pointerState.moveOriginY = pt.y;
+            pointerState.moveCurrentX = pt.x;
+            pointerState.moveCurrentY = pt.y;
             pointerState.touchMoveX = 0;
             pointerState.touchMoveY = 0;
           } else if (pointerState.aimTouchId === null) {
@@ -2407,6 +2464,8 @@
             const wp = viewToWorld(pt);
             pointerState.aimX = wp.x;
             pointerState.aimY = wp.y;
+            pointerState.aimTargetX = wp.x;
+            pointerState.aimTargetY = wp.y;
           }
           return;
         }
@@ -2421,6 +2480,8 @@
           const wp = viewToWorld(pt);
           pointerState.aimX = wp.x;
           pointerState.aimY = wp.y;
+          pointerState.aimTargetX = wp.x;
+          pointerState.aimTargetY = wp.y;
         }
       });
 
@@ -2432,10 +2493,14 @@
           if (evt.pointerId === pointerState.moveTouchId) {
             const dx = pt.x - pointerState.moveOriginX;
             const dy = pt.y - pointerState.moveOriginY;
-            const maxDrag = 46;
+            pointerState.moveCurrentX = pt.x;
+            pointerState.moveCurrentY = pt.y;
             const dist = Math.hypot(dx, dy);
-            if (dist > 4) {
-              const scale = Math.min(1, dist / maxDrag) / dist;
+            if (dist > TOUCH_DEADZONE) {
+              const t = Math.min(1, (dist - TOUCH_DEADZONE) / (TOUCH_MAX_DRAG - TOUCH_DEADZONE));
+              const curved = t * t * (3 - 2 * t); // smoothstep : petits gestes = réglage fin
+              const precision = pointerState.aimTouchId !== null ? TOUCH_AIM_MOVE_SCALE : 1;
+              const scale = (curved / dist) * TOUCH_MOVE_SCALE * precision;
               pointerState.touchMoveX = dx * scale;
               pointerState.touchMoveY = dy * scale;
             } else {
@@ -2444,8 +2509,8 @@
             }
           } else if (evt.pointerId === pointerState.aimTouchId) {
             const wp = viewToWorld(pt);
-            pointerState.aimX = wp.x;
-            pointerState.aimY = wp.y;
+            pointerState.aimTargetX = wp.x;
+            pointerState.aimTargetY = wp.y;
           }
           return;
         }
@@ -2453,6 +2518,8 @@
         const wp = viewToWorld(pt);
         pointerState.aimX = wp.x;
         pointerState.aimY = wp.y;
+        pointerState.aimTargetX = wp.x;
+        pointerState.aimTargetY = wp.y;
       });
 
       const releasePointer = evt => {
@@ -2565,7 +2632,7 @@
       };
     }
     const hint = el('hint');
-    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt · F/clic gauche ou Tir · Espace/E esquive · Maj précision · La lumière révèle caisses, pièges, bombes et sentinelles ; quitte leur lumière pour les rendormir';
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt (tactile : ralenti précis) · F/clic gauche ou Tir · Espace/E esquive · Maj précision · La lumière révèle caisses, pièges, bombes et sentinelles';
     if (bar) bar.style.display = 'flex';
   }
 

@@ -159,31 +159,27 @@ with sync_playwright() as p:
     credited = page.evaluate('''uid=>({xp:Journey.state.xp,result:Journey.state.dailyRewards[uid].lastResult,
       again:Journey.grantDailyReward(uid)})''', uid)
     assert credited['xp'] == credited['result']['totalXP'] and credited['again'] is None
-    # Après ouverture, une session restaurée rejoue le même coffre sans créditer.
+    # Après ouverture, le coffre du jour est fait : aucun rechargement, retour
+    # au premier plan ou reconnexion ne doit rejouer la scène d'ouverture.
     page.reload()
-    page.wait_for_selector('#dailyRewardScreen')
-    assert 'se souvient' in page.locator('#dailyRewardStatus').inner_text().lower()
-    page.wait_for_selector('#dailyRewardContinue:not(.hidden)', timeout=5000)
-    assert 'déjà obtenue' in page.locator('#dailyRewardIntro').inner_text()
-    assert 'aucun gain supplémentaire' in page.locator('#dailyRewardNote').inner_text()
+    page.wait_for_selector('#playAdventure')
+    page.wait_for_timeout(400)
+    assert page.locator('#dailyRewardScreen').count() == 0, 'Coffre déjà ouvert : pas de scène au rechargement.'
     assert page.evaluate('(uid)=>Journey.state.dailyRewards[uid].lastResult', uid) == credited['result']
     assert page.evaluate('Journey.state.xp') == credited['xp']
-    assert page.locator('.daily-loot-card').count() == 1 + len(credited['result']['cosmetics'])
-    assert page.locator('.daily-loot-xp strong').inner_text() == f"+{credited['result']['totalXP']} XP"
-    finish(page)
     page.evaluate("window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'))")
     page.wait_for_timeout(500)
     assert page.locator('#dailyRewardScreen').count() == 0, 'Pas de boucle après Continuer ou retour au premier plan.'
     assert page.evaluate('Journey.state.xp') == credited['xp']
 
-    # Une vraie déconnexion/reconnexion rejoue aussi le coffre, sans gain répété.
+    # Une vraie déconnexion/reconnexion le même jour ne rejoue pas non plus.
     page.evaluate("window.dispatchEvent(new Event('minuit:account-disconnected'))")
     page.evaluate('''uid=>window.dispatchEvent(new CustomEvent('minuit:account-connected',
       {detail:{user:{id:uid}}}))''', uid)
-    page.wait_for_selector('#dailyRewardContinue:not(.hidden)', timeout=5000)
+    page.wait_for_timeout(500)
+    assert page.locator('#dailyRewardScreen').count() == 0, 'Coffre déjà ouvert : pas de scène à la reconnexion.'
     assert page.evaluate('Journey.state.xp') == credited['xp']
     assert page.evaluate('(uid)=>Journey.state.dailyRewards[uid].lastResult', uid) == credited['result']
-    finish(page)
 
     # Une nouvelle journée donne bien un nouveau tirage et une nouvelle récompense.
     page.evaluate('''uid=>{Journey.state.dailyRewards[uid].lastClaim='2000-01-01';
