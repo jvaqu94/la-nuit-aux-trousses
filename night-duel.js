@@ -29,6 +29,25 @@
   let statusError = false;
   let busy = false;
 
+  // Invitations dans l'application : file entrante (popup), invitations envoyées,
+  // et petit observateur qui interroge le serveur tant que le compte est connecté.
+  let incomingInvites = [];
+  let sentInvites = [];
+  let invitePollTimer = null;
+  let activeInvitePopup = null;
+  let inviteRespondBusy = false;
+  let inviteWatcherBound = false;
+  let createInvitePseudo = '';
+  let waitingInvitePseudo = '';
+  let teamInfo = null;
+  let teamPlayers = [];
+  let teamPlayersLoading = false;
+  let teamPlayersError = '';
+  let teamPlayersRequestId = 0;
+  const teamInviteBusyIds = new Set();
+  const dismissedInviteIds = new Set();
+  const INVITE_POLL_MS = 15000;
+
   let channel = null;
   let pollTimer = null;
   let hostMatch = null;
@@ -327,7 +346,9 @@
       combatActive = false;
       hideTopHud();
       startPolling(2200);
-      renderScreen();
+      // Ne reconstruit pas l'écran à chaque sondage : préserve la saisie du pseudo
+      // et le QR déjà affichés. Le premier rendu (après création) passe ici.
+      if (!document.querySelector('#overlay .duel-share-card')) renderScreen();
       return;
     }
 
@@ -447,8 +468,9 @@
     }
   }
 
-  async function createInvitation() {
+  async function createInvitation(inviteMemberId = '') {
     if (busy || !window.MinuitCloud?.connected) return;
+    const pseudoToInvite = inviteMemberId ? '' : String(createInvitePseudo || '').trim();
     busy = true;
     setStatus('Création de l’invitation privée…');
     try {
@@ -459,6 +481,12 @@
       ingestDuelPayload(data);
       busy = false;
       transitionForDuelStatus('');
+      if (inviteMemberId) {
+        await sendTeamDuelInvite(inviteMemberId);
+      } else if (pseudoToInvite) {
+        createInvitePseudo = '';
+        await sendDuelInvite(pseudoToInvite);
+      }
     } catch (err) {
       busy = false;
       setStatus(err?.message || 'Création du duel impossible.', true);
@@ -591,11 +619,379 @@
     if (back) back.onclick = leaveToHome;
   }
 
+  function inviteQrPanelHtml(inviteUrl) {
+    try {
+      if (!window.NightDuelQR?.available?.()) return '';
+      const qrSvg = window.NightDuelQR.svg(inviteUrl, { title: 'QR code d’invitation au Duel de la Nuit noire' });
+      if (!qrSvg) return '';
+      return `<div class="duel-qr-panel">
+        <div class="duel-qr-frame" id="duelInviteQr">${qrSvg}</div>
+        <div class="duel-qr-side">
+          <b>Scanne pour rejoindre</b>
+          <small>Ouvre l’appareil photo du téléphone de ton adversaire et vise ce code : le duel s’ouvre directement, sans rien copier.</small>
+          <button type="button" class="secondary" id="duelQrDownload">Télécharger le QR</button>
+        </div>
+      </div>`;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function downloadInviteQr(inviteUrl) {
+    try {
+      const dataUrl = window.NightDuelQR?.pngDataUrl?.(inviteUrl, { scale: 12, margin: 4 });
+      if (!dataUrl) throw new Error('QR indisponible');
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `duel-nuit-noire-${String(duel?.id || '').slice(0, 8)}.png`;
+      document.body?.appendChild(link);
+      link.click();
+      if (typeof link.remove === 'function') link.remove();
+      setStatus('QR code téléchargé : partage l’image ou fais-la scanner.');
+    } catch (_) {
+      setStatus('Téléchargement du QR indisponible : utilise le lien d’invitation.', true);
+    }
+  }
+
+  function inviteModeLabel(mode) {
+    return mode === 'ranked' ? 'Classé' : 'Amical';
+  }
+
+  function inviteWagerLabel(wager) {
+    return Number(wager) > 0 ? `Mise ${Number(wager)} ☾ chacune` : 'Sans mise';
+  }
+
+  async function refreshIncomingInvitations() {
+    if (!window.MinuitCloud?.connected) return;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invitations', {});
+      incomingInvites = (Array.isArray(data) ? data : []).filter(inv => inv && !dismissedInviteIds.has(inv.id));
+      maybeShowInvitePopup();
+    } catch (_) {
+      // Silencieux : l'observateur réessaiera au prochain cycle.
+    }
+  }
+
+  async function refreshSentInvitations() {
+    if (!window.MinuitCloud?.connected || duel?.status !== 'waiting' || !duel?.id) return;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_sent_invitations', { p_duel: duel.id });
+      sentInvites = Array.isArray(data) ? data : [];
+      renderSentInvites();
+    } catch (_) {
+      sentInvites = [];
+      renderSentInvites();
+    }
+  }
+
+  function renderSentInvites() {
+    const holder = el('duelSentInvites');
+    if (!holder) return;
+    if (!sentInvites.length) {
+      holder.innerHTML = '<small class="duel-sent-empty">Aucune invitation envoyée pour le moment.</small>';
+      return;
+    }
+    holder.innerHTML = sentInvites.map(inv => `<div class="duel-sent-row">
+      <span><b>${esc(inv.toName || 'Sorcière')}</b><small>${esc(inviteModeLabel(inv.mode))} · ${esc(inviteWagerLabel(inv.wager))} · en attente</small></span>
+      <button type="button" class="secondary" data-cancel-invite="${esc(inv.id)}">Annuler</button>
+    </div>`).join('');
+    document.querySelectorAll('[data-cancel-invite]').forEach(btn => {
+      btn.onclick = () => cancelSentInvite(btn.dataset.cancelInvite);
+    });
+  }
+
+  async function sendDuelInvite(pseudo) {
+    if (!window.MinuitCloud?.connected || !duel?.id) return;
+    const name = String(pseudo || '').trim();
+    if (name.length < 2) {
+      setStatus('Saisis le pseudo exact de la joueuse à inviter.', true);
+      return;
+    }
+    setStatus(`Envoi de l’invitation à ${name}…`);
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invite', { p_duel: duel.id, p_pseudo: name });
+      waitingInvitePseudo = '';
+      const input = el('duelInAppPseudo');
+      if (input) input.value = '';
+      setStatus(`Invitation envoyée à ${data?.invitation?.toName || name}. Elle recevra un popup dans le jeu (valable 10 minutes).`);
+      await refreshSentInvitations();
+      await refreshTeamPlayers();
+    } catch (err) {
+      setStatus(err?.message || 'Envoi de l’invitation impossible.', true);
+    }
+  }
+
+  async function cancelSentInvite(invitationId) {
+    if (!window.MinuitCloud?.connected || !invitationId) return;
+    try {
+      await window.MinuitCloud.rpc('minuit_duel_invite_cancel', { p_invitation: invitationId });
+      setStatus('Invitation annulée.');
+      await refreshSentInvitations();
+      await refreshTeamPlayers();
+    } catch (err) {
+      setStatus(err?.message || 'Annulation impossible.', true);
+    }
+  }
+
+  function teamPlayersCardHtml() {
+    return `<div class="duel-card duel-team-card">
+      <div class="duel-team-card-head">
+        <h3>DÉFIER MA TEAM</h3>
+        <button type="button" class="secondary duel-team-refresh" id="duelTeamRefresh">Actualiser</button>
+      </div>
+      <small class="duel-inapp-hint" id="duelTeamSubtitle">Choisis un membre de ta team : l’invitation part directement, sans saisir son pseudo.</small>
+      <div id="duelTeamPlayers" class="duel-team-list" aria-live="polite"></div>
+    </div>`;
+  }
+
+  function renderTeamPlayers() {
+    const subtitle = el('duelTeamSubtitle');
+    if (subtitle) {
+      subtitle.textContent = teamInfo
+        ? `Team « ${teamInfo.name || 'Sans nom'} » · ${Number(teamInfo.memberCount) || teamPlayers.length} membre${(Number(teamInfo.memberCount) || teamPlayers.length) > 1 ? 's' : ''}. L’invitation par pseudo reste aussi disponible.`
+        : 'Choisis un membre de ta team : l’invitation part directement, sans saisir son pseudo.';
+    }
+    const refreshBtn = el('duelTeamRefresh');
+    if (refreshBtn) {
+      refreshBtn.disabled = teamPlayersLoading;
+      refreshBtn.onclick = () => refreshTeamPlayers();
+    }
+    const holder = el('duelTeamPlayers');
+    if (!holder) return;
+    if (teamPlayersLoading && !teamPlayers.length) {
+      holder.innerHTML = '<small class="duel-team-empty">Chargement des membres de la team…</small>';
+      return;
+    }
+    if (teamPlayersError) {
+      holder.innerHTML = `<small class="duel-team-empty is-error">${esc(teamPlayersError)}</small>`;
+      return;
+    }
+    if (!teamInfo) {
+      holder.innerHTML = '<small class="duel-team-empty">Tu n’es pas encore dans une team. Rejoins-en une dans Compte & team pour défier ses membres, ou invite par pseudo.</small>';
+      return;
+    }
+    if (!teamPlayers.length) {
+      holder.innerHTML = '<small class="duel-team-empty">Aucun autre membre dans ta team pour le moment.</small>';
+      return;
+    }
+    holder.innerHTML = teamPlayers.map(member => {
+      const sending = teamInviteBusyIds.has(member.id);
+      const disabled = !member.canInvite || sending || busy;
+      const label = sending
+        ? 'Envoi…'
+        : member.isYou
+          ? 'Toi'
+          : member.invitationStatus === 'pending'
+            ? 'Invitée ✓'
+            : member.canInvite
+              ? 'Défier'
+              : 'Indisponible';
+      return `<div class="duel-team-row${member.isYou ? ' is-you' : ''}">
+        <span><b>${esc(member.displayName || member.duelName || 'Sorcière')}</b><small>${esc(member.availability || 'Disponible')}</small></span>
+        <button type="button" class="secondary" id="duelTeamChallenge_${esc(member.id)}" data-challenge-member="${esc(member.id)}" ${disabled ? 'disabled' : ''}>${esc(label)}</button>
+      </div>`;
+    }).join('');
+    teamPlayers.forEach(member => {
+      const btn = el(`duelTeamChallenge_${member.id}`);
+      if (btn) btn.onclick = () => challengeTeamMember(member.id);
+    });
+  }
+
+  async function refreshTeamPlayers() {
+    if (!window.MinuitCloud?.connected) return;
+    const requestId = ++teamPlayersRequestId;
+    teamPlayersLoading = true;
+    teamPlayersError = '';
+    renderTeamPlayers();
+    try {
+      const duelId = duel?.status === 'waiting' ? duel.id : null;
+      const data = await window.MinuitCloud.rpc('minuit_duel_team_players', { p_duel: duelId });
+      if (requestId !== teamPlayersRequestId) return;
+      teamInfo = data?.team || null;
+      teamPlayers = Array.isArray(data?.players) ? data.players : [];
+    } catch (err) {
+      if (requestId !== teamPlayersRequestId) return;
+      teamInfo = null;
+      teamPlayers = [];
+      teamPlayersError = err?.message || 'Impossible de charger les membres de la team.';
+    } finally {
+      if (requestId === teamPlayersRequestId) {
+        teamPlayersLoading = false;
+        renderTeamPlayers();
+      }
+    }
+  }
+
+  async function challengeTeamMember(memberId) {
+    if (!window.MinuitCloud?.connected || !memberId) return;
+    const member = teamPlayers.find(p => p.id === memberId);
+    if (!member) {
+      setStatus('Ce membre n’est plus dans la team. Actualise la liste.', true);
+      await refreshTeamPlayers();
+      return;
+    }
+    if (member.isYou) {
+      setStatus('Tu ne peux pas te défier toi-même.', true);
+      return;
+    }
+    if (!member.canInvite) {
+      setStatus(`${member.displayName || 'Ce membre'} : ${member.availability || 'indisponible'}.`, true);
+      return;
+    }
+    if (duel && duel.status !== 'waiting') {
+      setStatus('Termine ou annule le duel en cours avant d’en créer un autre.', true);
+      return;
+    }
+    if (!duel || duel.status !== 'waiting') {
+      await createInvitation(memberId);
+      return;
+    }
+    await sendTeamDuelInvite(memberId);
+  }
+
+  async function sendTeamDuelInvite(memberId) {
+    if (!window.MinuitCloud?.connected || !duel?.id || duel.status !== 'waiting' || !memberId) return;
+    if (teamInviteBusyIds.has(memberId)) return;
+    const member = teamPlayers.find(p => p.id === memberId);
+    const name = member?.displayName || member?.duelName || 'cette joueuse';
+    teamInviteBusyIds.add(memberId);
+    renderTeamPlayers();
+    setStatus(`Envoi de l’invitation à ${name}…`);
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invite_member', { p_duel: duel.id, p_member: memberId });
+      setStatus(`Invitation envoyée à ${data?.invitation?.toName || name}. Elle recevra un popup dans le jeu (valable 10 minutes).`);
+      await refreshSentInvitations();
+      await refreshTeamPlayers();
+    } catch (err) {
+      setStatus(err?.message || 'Envoi de l’invitation impossible.', true);
+      await refreshTeamPlayers();
+    } finally {
+      teamInviteBusyIds.delete(memberId);
+      renderTeamPlayers();
+    }
+  }
+
+  function maybeShowInvitePopup() {
+    if (activeInvitePopup || screenOpen || combatActive || !window.MinuitCloud?.connected) return;
+    const next = incomingInvites.find(inv => inv && !dismissedInviteIds.has(inv.id));
+    if (!next) return;
+    activeInvitePopup = next;
+    renderInvitePopup(next);
+    try {
+      window.dispatchEvent(new CustomEvent('minuit:duel-invitation', { detail: next }));
+    } catch (_) {}
+  }
+
+  function renderInvitePopup(invite) {
+    document.getElementById('duelInvitePopup')?.remove();
+    const popup = document.createElement('div');
+    popup.id = 'duelInvitePopup';
+    popup.className = 'duel-invite-popup';
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-live', 'polite');
+    popup.setAttribute('aria-label', 'Invitation à un Duel de la Nuit noire');
+    popup.innerHTML = `
+      <div class="duel-invite-popup-eyebrow">☾ INVITATION À UN DUEL</div>
+      <b>${esc(invite.fromName || 'Une sorcière')} te défie en Duel de la Nuit noire</b>
+      <small>${esc(inviteModeLabel(invite.mode))} · ${esc(inviteWagerLabel(invite.wager))} · expire dans 10 min</small>
+      <div class="duel-invite-popup-actions">
+        <button type="button" class="primary" id="duelInviteAccept">Rejoindre le duel</button>
+        <button type="button" class="secondary" id="duelInviteDecline">Refuser</button>
+      </div>
+      <div class="duel-invite-popup-status" id="duelInvitePopupStatus" role="status"></div>`;
+    document.body?.appendChild(popup);
+    const acceptBtn = el('duelInviteAccept');
+    const declineBtn = el('duelInviteDecline');
+    if (acceptBtn) acceptBtn.onclick = () => respondToIncomingInvite(invite, true);
+    if (declineBtn) declineBtn.onclick = () => respondToIncomingInvite(invite, false);
+  }
+
+  function closeInvitePopup() {
+    document.getElementById('duelInvitePopup')?.remove();
+    activeInvitePopup = null;
+    maybeShowInvitePopup();
+  }
+
+  async function respondToIncomingInvite(invite, accept) {
+    if (inviteRespondBusy || !invite || !window.MinuitCloud?.connected) return;
+    if (accept && getGameState() === 'play' && !combatActive) {
+      const ok = typeof window.confirm === 'function'
+        ? window.confirm('Rejoindre le duel mettra fin à ta partie en cours. Continuer ?')
+        : true;
+      if (!ok) return;
+    }
+    inviteRespondBusy = true;
+    const statusEl = el('duelInvitePopupStatus');
+    if (statusEl) statusEl.textContent = accept ? 'Connexion au duel…' : 'Envoi du refus…';
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invite_respond', { p_invitation: invite.id, p_accept: Boolean(accept) });
+      dismissedInviteIds.add(invite.id);
+      incomingInvites = incomingInvites.filter(inv => inv.id !== invite.id);
+      closeInvitePopup();
+      if (accept && data?.duel) {
+        enterDuelFromInvite(data.duel);
+      }
+    } catch (err) {
+      const message = err?.message || 'Réponse à l’invitation impossible.';
+      const currentStatus = el('duelInvitePopupStatus');
+      if (currentStatus) currentStatus.textContent = message;
+      if (/expirée|plus disponible|déjà traitée/i.test(message)) {
+        dismissedInviteIds.add(invite.id);
+        incomingInvites = incomingInvites.filter(inv => inv.id !== invite.id);
+        closeInvitePopup();
+      }
+    } finally {
+      inviteRespondBusy = false;
+    }
+  }
+
+  function enterDuelFromInvite(payload) {
+    clearPendingInvite();
+    ingestDuelPayload(payload);
+    screenOpen = true;
+    statusNotice = '';
+    statusError = false;
+    isolateFromCampaign();
+    ensureRealtimeChannel(duel?.id);
+    channel?.send('joined', { duelId: duel?.id });
+    transitionForDuelStatus('');
+  }
+
+  function startInviteWatcher() {
+    if (!window.MinuitCloud?.connected) return;
+    refreshIncomingInvitations();
+    if (!inviteWatcherBound) {
+      inviteWatcherBound = true;
+      window.addEventListener('focus', () => refreshIncomingInvitations());
+      window.addEventListener('online', () => refreshIncomingInvitations());
+    }
+    if (invitePollTimer) return;
+    invitePollTimer = setInterval(() => refreshIncomingInvitations(), INVITE_POLL_MS);
+  }
+
+  function stopInviteWatcher() {
+    if (invitePollTimer) {
+      clearInterval(invitePollTimer);
+      invitePollTimer = null;
+    }
+    incomingInvites = [];
+    sentInvites = [];
+    teamInfo = null;
+    teamPlayers = [];
+    teamPlayersLoading = false;
+    teamPlayersError = '';
+    teamPlayersRequestId += 1;
+    teamInviteBusyIds.clear();
+    document.getElementById('duelInvitePopup')?.remove();
+    activeInvitePopup = null;
+  }
+
   function renderWaitingScreen() {
     const creatorName = players[0]?.name || window.MinuitCloud?.user?.displayName || 'Sorcière';
     const links = Core.buildShareLinks(window.location?.href || 'https://minuit.local/', duel.id, creatorName, duel.mode);
     const modeLabel = duel.mode === 'ranked' ? 'Classé' : 'Amical';
     const wagerLabel = duel.wager > 0 ? `Mise : ${duel.wager} éclats chacune (pot de ${duel.wager * 2})` : 'Sans mise d’éclats';
+    const qrPanel = inviteQrPanelHtml(links.inviteUrl);
 
     overlay(`<section class="night-duel-screen" aria-label="Invitation Duel de la Nuit noire">
       <div class="duel-header">
@@ -609,6 +1005,7 @@
           <input id="duelInviteLink" type="text" readonly value="${esc(links.inviteUrl)}">
           <button type="button" class="primary" id="duelCopyLink">Copier le lien</button>
         </div>
+        ${qrPanel}
         <div class="duel-uuid-line">
           <span>UUID du duel : <code id="duelUuidCode">${esc(duel.id)}</code></span>
           <button type="button" class="secondary" id="duelCopyUuid">Copier l’UUID</button>
@@ -617,6 +1014,17 @@
           <a class="secondary duel-share-link" id="duelShareWhatsapp" href="${esc(links.whatsapp)}" target="_blank" rel="noopener noreferrer">Partager sur WhatsApp</a>
           <a class="secondary duel-share-link" id="duelShareMessenger" href="${esc(links.messenger)}" target="_blank" rel="noopener noreferrer">Partager sur Messenger</a>
         </div>
+      </div>
+      ${teamPlayersCardHtml()}
+      <div class="duel-card duel-inapp-card">
+        <h3>INVITER PAR PSEUDO</h3>
+        <label class="duel-field-label" for="duelInAppPseudo">Pseudo de la joueuse à inviter</label>
+        <div class="duel-copy-row">
+          <input id="duelInAppPseudo" type="text" maxlength="24" placeholder="Ex. : Nyx" value="${esc(waitingInvitePseudo)}" autocomplete="off" spellcheck="false">
+          <button type="button" class="primary" id="duelInAppSend">Envoyer l’invitation</button>
+        </div>
+        <small class="duel-inapp-hint">La joueuse recevra un popup dans le jeu pour rejoindre ou refuser. L’invitation expire après 10 minutes.</small>
+        <div id="duelSentInvites" class="duel-sent-invites"></div>
       </div>
       <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(statusNotice || 'En attente de la seconde sorcière…')}</div>
       <div class="menu-actions duel-footer-actions">
@@ -641,7 +1049,29 @@
     };
     el('duelCopyLink').onclick = () => copyText(links.inviteUrl, 'Lien d’invitation');
     el('duelCopyUuid').onclick = () => copyText(duel.id, 'UUID du duel');
-    el('duelRefreshWait').onclick = () => syncDuelStatus(true);
+    const qrDownload = el('duelQrDownload');
+    if (qrDownload) qrDownload.onclick = () => downloadInviteQr(links.inviteUrl);
+    const inAppInput = el('duelInAppPseudo');
+    const inAppSend = el('duelInAppSend');
+    if (inAppInput) {
+      inAppInput.addEventListener('input', () => { waitingInvitePseudo = inAppInput.value; });
+      inAppInput.addEventListener('keydown', evt => {
+        if (evt.key === 'Enter') {
+          evt.preventDefault();
+          sendDuelInvite(inAppInput.value);
+        }
+      });
+    }
+    if (inAppSend) inAppSend.onclick = () => sendDuelInvite(inAppInput?.value || waitingInvitePseudo);
+    renderSentInvites();
+    refreshSentInvitations();
+    renderTeamPlayers();
+    refreshTeamPlayers();
+    el('duelRefreshWait').onclick = () => {
+      syncDuelStatus(true);
+      refreshSentInvitations();
+      refreshTeamPlayers();
+    };
     el('duelCancelInvite').onclick = () => cancelOrForfeitDuel(false);
   }
 
@@ -785,6 +1215,8 @@
             <button type="button" class="secondary${createWager === 0 ? ' is-selected' : ''}" id="duelWagerZero">Sans mise</button>
             <button type="button" class="secondary${createWager === 10 ? ' is-selected' : ''}" id="duelWagerTen" ${(Number(p.shards) || 0) < 10 ? 'disabled' : ''}>Mise 10 ☾ (pot 20)</button>
           </div>
+          <label class="duel-field-label" for="duelCreateInvitePseudo">Inviter directement ce pseudo (optionnel)</label>
+          <input id="duelCreateInvitePseudo" type="text" maxlength="24" placeholder="Ex. : Nyx" value="${esc(createInvitePseudo)}" autocomplete="off" spellcheck="false">
           <button type="button" class="primary duel-full-btn" id="duelCreateBtn">Créer le duel & obtenir le lien</button>
         </div>
         <div class="duel-card">
@@ -794,6 +1226,7 @@
           <button type="button" class="primary duel-full-btn" id="duelJoinBtn">Rejoindre ce duel</button>
         </div>
       </div>
+      ${teamPlayersCardHtml()}
       <div class="duel-card duel-halos-card">
         <h3>HALOS COSMÉTIQUES (ÉCLATS DE LUNE · AUCUN AVANTAGE EN JEU)</h3>
         <div class="duel-halo-grid">
@@ -834,7 +1267,13 @@
       createWager = 10;
       renderHubScreen();
     };
-    el('duelCreateBtn').onclick = createInvitation;
+    const createPseudoInput = el('duelCreateInvitePseudo');
+    if (createPseudoInput) {
+      createPseudoInput.addEventListener('input', () => { createInvitePseudo = createPseudoInput.value; });
+    }
+    el('duelCreateBtn').onclick = () => createInvitation();
+    renderTeamPlayers();
+    refreshTeamPlayers();
     el('duelJoinBtn').onclick = () => joinInvitation(el('duelJoinInput')?.value || '');
     el('duelJoinInput').addEventListener('keydown', evt => {
       if (evt.key === 'Enter') {
@@ -1539,6 +1978,7 @@
   }
 
   window.addEventListener('minuit:account-connected', async () => {
+    startInviteWatcher();
     if (!screenOpen && !pendingInviteId) return;
     screenOpen = true;
     await refreshProfile();
@@ -1550,6 +1990,7 @@
   });
 
   window.addEventListener('minuit:account-disconnected', () => {
+    stopInviteWatcher();
     profile = null;
     if (screenOpen || combatActive) {
       teardownDuelRuntime();
@@ -1585,10 +2026,43 @@
     .duel-full-btn{width:100%;min-height:42px}
     .duel-copy-row{display:flex;gap:7px;align-items:stretch}
     .duel-copy-row input{flex:1}
+    .duel-qr-panel{display:flex;gap:14px;align-items:center;padding:12px;border:1px solid #78608b66;border-radius:10px;background:#241b35}
+    .duel-qr-frame{flex:0 0 auto;width:164px;height:164px;padding:8px;background:#fff;border-radius:10px;box-shadow:0 4px 18px #0006}
+    .duel-qr-frame svg{display:block;width:100%;height:100%}
+    .duel-qr-side{display:flex;flex-direction:column;gap:7px;min-width:0}
+    .duel-qr-side b{font-size:12px;color:#ffe6bd}
+    .duel-qr-side small{font-size:10px;line-height:1.55;color:#c7b6d8}
+    .duel-qr-side button{align-self:flex-start}
     .duel-uuid-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:10px;color:#c7b6d8}
     .duel-uuid-line code{padding:4px 7px;border-radius:5px;background:#291f3b;color:#ffe0a6;overflow-wrap:anywhere}
     .duel-share-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .duel-share-link{display:flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:1px solid #7b648f;border-radius:8px;background:#261d38;color:#f2e7ff;text-decoration:none;font-size:11px;text-align:center}
+    .duel-inapp-hint{font-size:10px;line-height:1.5;color:#c7b6d8}
+    .duel-sent-invites{display:flex;flex-direction:column;gap:6px}
+    .duel-sent-empty{font-size:10px;color:#a996ba}
+    .duel-sent-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
+    .duel-sent-row span{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-sent-row b{font-size:11px;color:#f3e7ff;overflow-wrap:anywhere}
+    .duel-sent-row small{font-size:9px;color:#bba8cd}
+    .duel-team-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .duel-team-card-head h3{margin:0}
+    .duel-team-refresh{min-height:32px;padding:5px 10px;font-size:10px}
+    .duel-team-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;padding-right:2px}
+    .duel-team-empty{font-size:10px;line-height:1.5;color:#a996ba}
+    .duel-team-empty.is-error{color:#f5aba4}
+    .duel-team-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
+    .duel-team-row.is-you{border-color:#ffd08e66;background:#2a2138}
+    .duel-team-row span{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-team-row b{font-size:11px;color:#f3e7ff;overflow-wrap:anywhere}
+    .duel-team-row small{font-size:9px;color:#bba8cd}
+    .duel-team-row button{flex:0 0 auto;min-height:34px;padding:6px 12px;font-size:10px}
+    .duel-invite-popup{position:fixed;right:16px;bottom:16px;z-index:10000;width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid #d8b574aa;border-radius:12px;background:linear-gradient(150deg,#2e233c,#171226);box-shadow:0 14px 40px #000a;color:#efe5f7;text-align:left}
+    .duel-invite-popup-eyebrow{font-size:9px;letter-spacing:1.1px;color:#ffd28e}
+    .duel-invite-popup b{font-size:13px;line-height:1.4;color:#fff2d6;overflow-wrap:anywhere}
+    .duel-invite-popup small{font-size:10px;color:#cbbad9}
+    .duel-invite-popup-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
+    .duel-invite-popup-actions button{min-height:40px}
+    .duel-invite-popup-status{min-height:14px;font-size:10px;color:#f5aba4}
     .duel-halo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .duel-halo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
     .duel-halo-item.is-equipped{border-color:#ffd08e99}
@@ -1635,6 +2109,11 @@
       .duel-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       .duel-hub-columns,.duel-draft-grid,.duel-halo-grid,.duel-share-buttons{grid-template-columns:1fr}
       .duel-copy-row{flex-direction:column}
+      .duel-qr-panel{flex-direction:column;text-align:center}
+      .duel-qr-frame{width:188px;height:188px}
+      .duel-qr-side{align-items:center}
+      .duel-qr-side button{align-self:center}
+      .duel-invite-popup{left:16px;right:16px;width:auto}
       .duel-top-hud{top:4px;left:4px;right:4px;padding:5px 7px;gap:4px}
       .duel-hud-scoreline{font-size:10px}
       .duel-hud-side b{font-size:11px}
@@ -1644,6 +2123,10 @@
 
   wireCombatInputs();
   installMenuButton();
+
+  // Si une session est déjà reprise au chargement (pas d'événement account-connected),
+  // démarre quand même l'observateur d'invitations pour afficher le popup côté invité.
+  if (window.MinuitCloud?.connected) startInviteWatcher();
 
   pendingInviteId = readInitialInvite();
   if (pendingInviteId) {
@@ -1667,6 +2150,20 @@
     },
     get currentDuel() {
       return duel;
+    },
+    refreshInvitations: refreshIncomingInvitations,
+    sendInvitation: sendDuelInvite,
+    respondToInvitation: respondToIncomingInvite,
+    refreshTeamPlayers,
+    challengeTeamMember,
+    get pendingInvitations() {
+      return incomingInvites.slice();
+    },
+    get activeInvitation() {
+      return activeInvitePopup;
+    },
+    get teamPlayers() {
+      return teamPlayers.slice();
     }
   };
 })();

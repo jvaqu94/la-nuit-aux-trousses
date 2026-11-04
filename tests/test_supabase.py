@@ -103,12 +103,16 @@ with sync_playwright() as p:
     assert page.evaluate("MinuitCloud.connected && MinuitCloud.user.email==='sorciere@example.com'")
     stored = page.evaluate("Object.keys(localStorage).map(key=>localStorage.getItem(key)).join('\\n')")
     assert 'mot-de-passe-jamais-stocke' not in stored
+    # La connexion déclenche désormais un premier envoi automatique de la
+    # sauvegarde locale (plus besoin d’un premier envoi manuel).
+    page.wait_for_function("document.querySelector('#cloudStatus')?.textContent.includes('cloud créée')")
 
     page.click('#cloudSync')
     page.wait_for_function("document.querySelector('#cloudStatus')?.textContent.includes('envoyée')")
     save_calls = [call for call in calls if call['path'] == '/rest/v1/game_saves' and call['method'] == 'POST']
-    assert len(save_calls) == 1, save_calls
-    saved = save_calls[0]
+    # Premier envoi automatique à la connexion, puis l’envoi manuel ci-dessus.
+    assert len(save_calls) == 2, save_calls
+    saved = save_calls[-1]
     assert saved['body']['user_id'] == USER_ID
     assert saved['body']['payload']['format'] == 'MinuitProgression'
     assert saved['headers']['authorization'] == 'Bearer access-test'

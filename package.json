@@ -1,0 +1,16 @@
+{
+  "name": "la-nuit-aux-trousses",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shoot’em up arcade nocturne — jeu navigateur vanilla JS, sans build. Les scripts sont servis tels quels puis emballés dans l’édition autonome par tools/package.py. Ce fichier ancre uniquement les outils de test (aucune dépendance d’exécution du jeu).",
+  "scripts": {
+    "test": "for t in tests/test_*.cjs; do node \"$t\" || exit 1; done",
+    "test:sql": "node tests/test_team_activity_sql.cjs && node tests/test_team_periods_sql.cjs && node tests/test_duel_invitations_sql.cjs",
+    "package": "python3 tools/package.py"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "jsqr": "^1.4.0",
+    "qrcode-generator": "^2.0.4"
+  }
+}

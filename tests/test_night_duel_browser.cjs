@@ -8,6 +8,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { spawn } = require('node:child_process');
 const Core = require('../duel-core.js');
+const QRHarness = require('./qr-harness.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -77,6 +78,12 @@ function startMockSupabaseServer() {
   ]);
   const profiles = new Map();
   const duels = new Map();
+  const invitations = new Map();
+  const team = {
+    id: 'team-nocturnes',
+    name: 'Les Nocturnes',
+    members: new Set(['00000000-0000-4000-8000-00000000c001', '00000000-0000-4000-8000-00000000c002'])
+  };
   const completedHistory = [];
   const topicSockets = new Map();
   const wireLog = [];
@@ -241,6 +248,128 @@ function startMockSupabaseServer() {
           d.status = 'cancelled';
           return reply(200, duelStatusJson(d));
         }
+        if (fn === 'minuit_duel_invite') {
+          const d = duels.get(payload.p_duel);
+          if (!d) throw new Error('Duel introuvable');
+          if (d.creatorId !== user.id) throw new Error('Seule la créatrice du duel peut inviter');
+          if (d.status !== 'waiting' || d.opponentId) throw new Error('Ce duel a déjà une adversaire');
+          const pseudo = String(payload.p_pseudo || '').trim().toLowerCase();
+          const target = [...users.values()].find(u => u.name.toLowerCase() === pseudo);
+          if (!target) throw new Error('Joueur introuvable. Vérifie le pseudo exact.');
+          if (target.id === user.id) throw new Error('Tu ne peux pas t’inviter toi-même');
+          const existing = [...invitations.values()].find(i => i.duelId === d.id && i.toUser === target.id && i.status === 'pending');
+          const inv = existing || {
+            id: crypto.randomUUID(),
+            duelId: d.id,
+            fromUser: user.id,
+            toUser: target.id,
+            fromName: user.name,
+            toName: target.name,
+            mode: d.mode,
+            wager: d.wager,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 600000).toISOString()
+          };
+          invitations.set(inv.id, inv);
+          return reply(200, { invitation: { ...inv }, duel: duelStatusJson(d) });
+        }
+        if (fn === 'minuit_duel_invitations') {
+          const list = [...invitations.values()].filter(i => {
+            const d = duels.get(i.duelId);
+            return i.toUser === user.id && i.status === 'pending' && d && d.status === 'waiting' && !d.opponentId && d.creatorId !== user.id;
+          });
+          return reply(200, list.map(i => ({ ...i })));
+        }
+        if (fn === 'minuit_duel_sent_invitations') {
+          const d = duels.get(payload.p_duel);
+          const list = [...invitations.values()].filter(i => i.duelId === payload.p_duel && i.fromUser === user.id && i.status === 'pending' && d && d.status === 'waiting' && !d.opponentId);
+          return reply(200, list.map(i => ({ ...i })));
+        }
+        if (fn === 'minuit_duel_invite_respond') {
+          const inv = invitations.get(payload.p_invitation);
+          if (!inv) throw new Error('Invitation introuvable');
+          if (inv.toUser !== user.id) throw new Error('Cette invitation ne t’est pas adressée');
+          if (inv.status !== 'pending') throw new Error('Invitation déjà traitée');
+          const d = duels.get(inv.duelId);
+          if (payload.p_accept) {
+            if (!d || d.status !== 'waiting' || d.opponentId || d.creatorId === user.id) {
+              inv.status = 'cancelled';
+              throw new Error('Ce duel n’est plus disponible');
+            }
+            const pCreator = ensureProfile(d.creatorId);
+            const pOpp = ensureProfile(user.id);
+            if (d.wager > 0) {
+              pCreator.shards -= d.wager;
+              pOpp.shards -= d.wager;
+            }
+            d.opponentId = user.id;
+            d.status = 'draft';
+            inv.status = 'accepted';
+            return reply(200, { invitation: { ...inv }, duel: duelStatusJson(d) });
+          }
+          inv.status = 'declined';
+          return reply(200, { invitation: { ...inv } });
+        }
+        if (fn === 'minuit_duel_invite_cancel') {
+          const inv = invitations.get(payload.p_invitation);
+          if (!inv) throw new Error('Invitation introuvable');
+          if (inv.fromUser !== user.id) throw new Error('Seule l’expéditrice peut annuler cette invitation');
+          if (inv.status === 'pending') inv.status = 'cancelled';
+          return reply(200, { invitation: { ...inv } });
+        }
+        if (fn === 'minuit_duel_team_players') {
+          if (!team.members.has(user.id)) return reply(200, { team: null, players: [] });
+          let waiting = null;
+          if (payload.p_duel) {
+            const d = duels.get(payload.p_duel);
+            if (d && d.creatorId !== user.id) throw new Error('Seule la créatrice du duel peut inviter');
+            if (d && d.status === 'waiting' && !d.opponentId) waiting = d;
+          }
+          const players = [...team.members].map(id => {
+            const u = [...users.values()].find(x => x.id === id);
+            const pending = Boolean(waiting) && [...invitations.values()].some(i => i.duelId === waiting.id && i.toUser === id && i.status === 'pending');
+            const busy = [...duels.values()].some(b => ['draft', 'active'].includes(b.status) && (b.creatorId === id || b.opponentId === id));
+            const canInvite = id !== user.id && !busy && (!waiting || (!pending && id !== waiting.opponentId));
+            const availability = id === user.id ? 'Toi' : busy ? 'En duel' : pending ? 'Invitation envoyée' : canInvite ? 'Disponible' : 'Indisponible';
+            return {
+              id,
+              displayName: u ? u.name : 'Sorcière',
+              duelName: u ? u.name : 'Sorcière',
+              isYou: id === user.id,
+              invitationStatus: pending ? 'pending' : null,
+              availability,
+              canInvite
+            };
+          }).sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
+          return reply(200, { team: { id: team.id, name: team.name, memberCount: team.members.size }, players });
+        }
+        if (fn === 'minuit_duel_invite_member') {
+          if (!team.members.has(user.id)) throw new Error('Tu n’es pas encore dans une team');
+          if (!team.members.has(payload.p_member)) throw new Error('Cette joueuse ne fait pas partie de ta team');
+          const d = duels.get(payload.p_duel);
+          if (!d) throw new Error('Duel introuvable');
+          if (d.creatorId !== user.id) throw new Error('Seule la créatrice du duel peut inviter');
+          if (d.status !== 'waiting' || d.opponentId) throw new Error('Ce duel a déjà une adversaire');
+          if (payload.p_member === user.id) throw new Error('Tu ne peux pas t’inviter toi-même');
+          const target = [...users.values()].find(u => u.id === payload.p_member);
+          const existing = [...invitations.values()].find(i => i.duelId === d.id && i.toUser === payload.p_member && i.status === 'pending');
+          const inv = existing || {
+            id: crypto.randomUUID(),
+            duelId: d.id,
+            fromUser: user.id,
+            toUser: payload.p_member,
+            fromName: user.name,
+            toName: target ? target.name : 'Sorcière',
+            mode: d.mode,
+            wager: d.wager,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 600000).toISOString()
+          };
+          invitations.set(inv.id, inv);
+          return reply(200, { invitation: { ...inv }, duel: duelStatusJson(d) });
+        }
         return reply(200, { team: null, scores: [] });
       } catch (err) {
         return reply(400, { message: err.message });
@@ -402,6 +531,18 @@ function createFakeDom(initialUrl, sessionObj) {
         else this.children.push(child);
         if (child.id) elementsById.set(child.id, child);
         return child;
+      },
+      remove() {
+        const drop = node => {
+          if (node.id) elementsById.delete(node.id);
+          (node.children || []).forEach(drop);
+        };
+        drop(el);
+        if (el.parentElement) {
+          const idx = el.parentElement.children.indexOf(el);
+          if (idx >= 0) el.parentElement.children.splice(idx, 1);
+          el.parentElement = null;
+        }
       },
       closest(sel) {
         if (sel === '.menu-grid') return menuGrid;
@@ -581,11 +722,18 @@ function createFakeDom(initialUrl, sessionObj) {
     dodge() {},
     togglePause() {},
     syncPauseIcon() {},
-    Journey: {
-      run: { combat: true },
-      menu() {},
-      grantDailyReward: () => ({ granted: true })
-    },
+    // Reproduit la sémantique réelle de journey.js : `run` est un accesseur
+    // (getter + setter) adossé à une variable interne, pas une simple propriété.
+    // Un stub « propriété inscriptible » masquerait le bug TypeError du duel.
+    Journey: (() => {
+      let run = { combat: true };
+      return {
+        get run() { return run; },
+        set run(value) { run = value; },
+        menu() {},
+        grantDailyReward: () => ({ granted: true })
+      };
+    })(),
     LocalLeague: { menu() {} }
   };
   sandbox.window = sandbox;
@@ -614,7 +762,7 @@ function bootClientVm(supabaseUrl, pageUrl, token, userId, displayName) {
     `window.MINUIT_SUPABASE_CONFIG = { url: ${JSON.stringify(supabaseUrl)}, publishableKey: 'sb_publishable_test_key' };`,
     ctx
   );
-  for (const scriptName of ['supabase.js', 'duel-core.js', 'night-duel.js']) {
+  for (const scriptName of ['supabase.js', 'duel-core.js', 'qrcode.js', 'duel-qr.js', 'night-duel.js']) {
     const code = fs.readFileSync(path.join(ROOT, scriptName), 'utf8');
     vm.runInContext(code, ctx, { filename: scriptName });
   }
@@ -689,6 +837,20 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.ok(Core.extractDuelId(inviteUrl), 'Lien d’invitation contenant un UUID valide');
   assert.ok(whatsappHref.startsWith('https://wa.me/?text='), 'Partage WhatsApp conservé');
   assert.ok(messengerHref.startsWith('https://www.facebook.com/sharer/sharer.php?u='), 'Partage Messenger conservé');
+
+  // QR code d’invitation : présent dans l’écran d’attente et scannable vers le lien exact.
+  assert.ok(host.ctx.NightDuelQR && host.ctx.NightDuelQR.available(), 'Le module QR doit être chargé dans le client');
+  const waitingHtml = host.document.getElementById('overlay').innerHTML;
+  assert.ok(host.document.getElementById('duelInviteQr'), 'Le cadre du QR d’invitation doit être affiché');
+  assert.ok(host.document.getElementById('duelQrDownload'), 'Le bouton de téléchargement du QR doit être présent');
+  const renderedSvg = (waitingHtml.match(/<svg[\s\S]*?<\/svg>/) || [])[0];
+  assert.ok(renderedSvg, 'Un QR SVG doit être rendu dans l’écran d’attente');
+  const renderedMat = QRHarness.matrixFromSvg(renderedSvg);
+  assert.ok(renderedMat, 'Le QR rendu doit être reconstructible');
+  assert.ok(QRHarness.hasFinderPatterns(renderedMat), 'Le QR rendu doit avoir ses motifs de recherche');
+  if (QRHarness.hasJsQR) {
+    assert.equal(QRHarness.decodeMatrix(renderedMat), inviteUrl, 'Le QR affiché doit scanner vers le lien d’invitation exact');
+  }
 
   // 2. Invitée ouvre directement le lien privé ?duel=<uuid> et rejoint automatiquement le draft.
   const guest = bootClientVm(
@@ -889,20 +1051,95 @@ async function tryOptionalChromiumFlow() {
   }
 }
 
+async function runInAppInviteScenario(mockSupabase) {
+  // Invitation dans l'application : l'hôte invite un pseudo, l'invité reçoit un
+  // popup « rejoindre / refuser » puis accepte -> les deux clients passent en draft.
+  const host = bootClientVm(mockSupabase.url, 'http://127.0.0.1:3000/', 'token-u1', '00000000-0000-4000-8000-00000000c001', 'Séléné');
+  const guest = bootClientVm(mockSupabase.url, 'http://127.0.0.1:3000/', 'token-u2', '00000000-0000-4000-8000-00000000c002', 'Nyx');
+
+  host.document.getElementById('nightDuelEntry').click();
+  await waitUntil(() => host.document.getElementById('duelCreateBtn'));
+  host.document.getElementById('duelModeFriendly').click();
+  host.document.getElementById('duelWagerZero').click();
+  host.document.getElementById('duelCreateBtn').click();
+  await waitUntil(() => host.document.getElementById('duelInAppSend'));
+  await waitUntil(() => host.ctx.NightDuel.teamPlayers.length === 2);
+  assert.ok(host.document.getElementById('duelTeamChallenge_00000000-0000-4000-8000-00000000c002'), 'La liste de team doit proposer de défier Nyx');
+  assert.ok(host.document.getElementById('duelInAppPseudo'), 'L’invitation par pseudo doit rester disponible');
+
+  const pseudoInput = host.document.getElementById('duelInAppPseudo');
+  assert.ok(pseudoInput, 'Le champ de pseudo pour inviter dans le jeu doit être présent');
+  pseudoInput.value = 'Nyx';
+  host.document.getElementById('duelInAppSend').click();
+  await waitUntil(() => host.document.getElementById('duelStatusMsg')?.textContent.includes('Invitation envoyée'));
+
+  // Côté invité : l'observateur remonte l'invitation et affiche le popup.
+  await guest.ctx.NightDuel.refreshInvitations();
+  await waitUntil(() => guest.document.getElementById('duelInvitePopup'));
+  const popupHtml = guest.document.getElementById('duelInvitePopup').innerHTML;
+  assert.ok(popupHtml.includes('Séléné'), 'Le popup doit nommer la joueuse qui invite');
+  assert.ok(guest.document.getElementById('duelInviteAccept'), 'Le popup doit proposer de rejoindre');
+  assert.ok(guest.document.getElementById('duelInviteDecline'), 'Le popup doit proposer de refuser');
+
+  guest.document.getElementById('duelInviteAccept').click();
+  await waitUntil(() => guest.ctx.NightDuel.currentDuel?.status === 'draft');
+  assert.equal(guest.document.getElementById('duelInvitePopup'), null, 'Le popup disparaît après acceptation');
+  await waitUntil(() => host.ctx.NightDuel.currentDuel?.status === 'draft', 8000);
+  assert.equal(host.ctx.NightDuel.currentDuel.opponentId, '00000000-0000-4000-8000-00000000c002');
+  assert.equal(guest.ctx.NightDuel.currentDuel.opponentId, '00000000-0000-4000-8000-00000000c002');
+}
+
+async function runTeamInviteScenario(mockSupabase) {
+  // Liste des membres de la team : un clic sur « Défier » crée le duel et envoie
+  // l'invitation au bon compte, sans saisir le pseudo. L'invité accepte via popup.
+  const host = bootClientVm(mockSupabase.url, 'http://127.0.0.1:3000/', 'token-u1', '00000000-0000-4000-8000-00000000c001', 'Séléné');
+  const guest = bootClientVm(mockSupabase.url, 'http://127.0.0.1:3000/', 'token-u2', '00000000-0000-4000-8000-00000000c002', 'Nyx');
+
+  host.document.getElementById('nightDuelEntry').click();
+  await waitUntil(() => host.document.getElementById('duelCreateBtn'));
+  host.document.getElementById('duelModeFriendly').click();
+  host.document.getElementById('duelWagerZero').click();
+  const challengeId = 'duelTeamChallenge_00000000-0000-4000-8000-00000000c002';
+  await waitUntil(() => {
+    const btn = host.document.getElementById(challengeId);
+    return btn && !btn.disabled;
+  });
+  const roster = host.ctx.NightDuel.teamPlayers;
+  assert.equal(roster.length, 2, 'La liste doit contenir les membres de la team');
+  assert.ok(roster.some(p => p.isYou), 'La joueuse courante doit être marquée');
+  host.document.getElementById(challengeId).click();
+  await waitUntil(() => host.ctx.NightDuel.currentDuel?.status === 'waiting');
+  await waitUntil(() => host.document.getElementById('duelStatusMsg')?.textContent.includes('Invitation envoyée'));
+
+  await guest.ctx.NightDuel.refreshInvitations();
+  await waitUntil(() => guest.document.getElementById('duelInvitePopup'));
+  guest.document.getElementById('duelInviteAccept').click();
+  await waitUntil(() => guest.ctx.NightDuel.currentDuel?.status === 'draft');
+  await waitUntil(() => host.ctx.NightDuel.currentDuel?.status === 'draft', 8000);
+  assert.equal(host.ctx.NightDuel.currentDuel.opponentId, '00000000-0000-4000-8000-00000000c002');
+}
+
 (async () => {
   await verifyPythonStaticServer();
-  const mockSupabase = await startMockSupabaseServer();
-  try {
-    await runTwoClientIntegration(mockSupabase);
-  } finally {
-    await mockSupabase.close();
+  // Un serveur mock neuf par scénario : les duels/invitations d'un scénario ne
+  // doivent pas rendre les membres « occupés » dans le suivant.
+  for (const scenario of [runTwoClientIntegration, runInAppInviteScenario, runTeamInviteScenario]) {
+    const mockSupabase = await startMockSupabaseServer();
+    try {
+      await scenario(mockSupabase);
+    } finally {
+      await mockSupabase.close();
+    }
   }
   const browserCheck = await tryOptionalChromiumFlow();
   console.log(
-    `Duel de la Nuit noire — intégration 2 clients (invitation, 2 drafts, positions masquées, projectiles, commandes, consensus & cote) : OK (${
+    `Duel de la Nuit noire — intégration 2 clients (lien/QR, liste de team, invitation par pseudo/membre + popup rejoindre, 2 drafts, positions masquées, projectiles, commandes, consensus & cote) : OK (${
       browserCheck.ran ? browserCheck.reason : 'VM 2-clients HTTP+WS exécutée ; ' + browserCheck.reason
     })`
   );
+  // supabase.js embarque désormais un setInterval(60 s) (file de scores) qui
+  // maintient la boucle Node active : on sort explicitement après le succès.
+  process.exit(0);
 })().catch(err => {
   console.error(err);
   process.exit(1);
