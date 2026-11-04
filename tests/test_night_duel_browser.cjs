@@ -912,7 +912,7 @@ async function runTwoClientIntegration(mockSupabase) {
 
   // Aucun tir automatique : l'hôte avance sans tirer et ne révèle pas sa position.
   for (let i = 0; i < 90; i += 1) tickClient(host, 1 / 60);
-  assert.equal((host.ctx.NightDuel.snapshot?.projectiles?.length || 0), 0, 'aucun projectile sans tir manuel');
+  assert.equal((host.ctx.NightDuel.snapshot?.projectiles || []).filter(p => p.ownerRole !== 'enemy').length, 0, 'aucun projectile joueur sans tir manuel');
 
   // Le bouton Esquive tactile doit déclencher l’esquive du duel, pas celle de la campagne.
   host.document.getElementById('dash').click();
@@ -959,10 +959,19 @@ async function runTwoClientIntegration(mockSupabase) {
   // projectiles deviennent visibles chez l'invitée.
   host.ctx.moveInput.f = true;
   guest.ctx.moveInput.f = true;
+  guest.ctx.moveInput.arrowright = false;
   for (let i = 0; i < 72; i += 1) {
+    tickClient(guest, 1 / 60);
     tickClient(host, 1 / 60);
   }
-  await waitUntil(() => (guest.ctx.NightDuel.snapshot?.projectiles?.length || 0) >= 3);
+  let fireGuard = 0;
+  while ((guest.ctx.NightDuel.snapshot?.projectiles?.length || 0) < 3 && fireGuard < 300) {
+    tickClient(guest, 1 / 60);
+    tickClient(host, 1 / 60);
+    fireGuard += 1;
+    if (fireGuard % 20 === 0) await new Promise(r => setTimeout(r, 5));
+  }
+  assert.ok((guest.ctx.NightDuel.snapshot?.projectiles?.length || 0) >= 3, 'Les tirs manuels produisent des projectiles visibles chez l’invitée');
   const guestWorld = guest.ctx.NightDuel.snapshot;
   const guestScreen = Core.orientSnapshotForViewer(guestWorld, 'opponent');
   assert.ok(guestWorld.self.x < guestStartX, 'La commande de l’invitée a bien déplacé sa sorcière côté hôte');

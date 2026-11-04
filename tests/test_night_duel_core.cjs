@@ -475,15 +475,16 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   const boonActive = Object.values(c.boons).some(v => v > 0) || c.hearts > 0;
   assert.ok(boonActive, 'Le kill donne un avantage');
 
-  // Orientation du monde pour l'invitée.
-  const guestSnap = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'opponent'), 'opponent');
-  const hostSnap = Core.createSnapshotFor(match, 'creator');
-  if (hostSnap.world.crates.length && guestSnap.world.crates.length) {
-    const hc = hostSnap.world.crates[0];
-    const gc = guestSnap.world.crates.find(g => g.id === hc.id);
-    assert.ok(gc, 'Même caisse dans les deux vues');
-    assert.ok(Math.abs(gc.x - (Core.WORLD_WIDTH - hc.x)) < 1.5, 'Le monde est pivoté pour l’invitée');
-  }
+  // Orientation du monde pour l'invitée (snapshot synthétique, indépendant du brouillard).
+  const fake = {
+    self: { role: 'opponent', x: 100, y: 200, aimAngle: 0 },
+    opponent: { visible: false, x: null, y: null },
+    world: { obstacles: [], crates: [{ id: 9, x: 300, y: 400 }], bombs: [], traps: [], enemies: [], pickups: [], alarms: [] },
+    projectiles: [], footsteps: [], dodgeTrails: [], effects: []
+  };
+  const oriented = Core.orientSnapshotForViewer(fake, 'opponent');
+  assert.equal(oriented.world.crates[0].x, Core.WORLD_WIDTH - 300, 'Le monde est pivoté pour l’invitée');
+  assert.equal(oriented.world.crates[0].y, Core.WORLD_HEIGHT - 400);
   // Aucune coordonnée adverse cachée ne fuite.
   const hidden = Core.createSnapshotFor(match, 'opponent');
   if (!hidden.opponent.visible) {
@@ -492,4 +493,47 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   }
 }
 
-console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, décor/pièges/bombes/caisses/sentinelles, tir manuel, orientation, visibilité, snapshots, mort subite et cotes : OK');
+// 9. Brouillard de guerre : objets/monstres visibles seulement dans la lumière ;
+//    les sentinelles perdent l'aggro, font leur ronde puis se rendorment.
+{
+  const m = Core.createMatch({ id: 'fog-test' });
+  const c = m.witches.creator;
+  m.world.obstacles = []; m.world.crates = []; m.world.bombs = []; m.world.traps = [];
+  m.world.enemies = []; m.world.pickups = []; m.world.alarms = []; m.effects = [];
+
+  const nearCrate = { id: 1, type: 'crate', shape: 'circle', x: c.x + 80, y: c.y, r: 22, hp: 2, alive: true };
+  const farCrate = { id: 2, type: 'crate', shape: 'circle', x: 100, y: 100, r: 22, hp: 2, alive: true };
+  m.world.crates = [nearCrate, farCrate];
+  let snap = Core.createSnapshotFor(m, 'creator');
+  assert.equal(snap.world.crates.length, 1, 'Seule la caisse dans le halo est visible');
+  assert.equal(snap.world.crates[0].id, nearCrate.id);
+
+  const e = {
+    id: 3, type: 'enemy', shape: 'circle', kind: 'ghost', x: c.x + 120, y: c.y, r: 20, hp: 3,
+    state: 'sleep', targetRole: null, attackCd: 0, shootCd: 0, sleepTimer: 0, loseTimer: 0,
+    patrolAngle: 0, perimeter: 170, discovered: false, homeX: c.x + 120, homeY: c.y
+  };
+  m.world.enemies = [e];
+  snap = Core.createSnapshotFor(m, 'creator');
+  assert.equal(snap.world.enemies.length, 1, 'La sentinelle proche est visible dans le halo');
+  assert.equal(snap.world.enemies[0].state, 'sleep');
+
+  Core.stepMatch(m, 0.1);
+  assert.equal(e.state, 'awake', 'Le halo réveille la sentinelle');
+
+  // La joueuse part au loin : la sentinelle doit perdre l'aggro et revenir en ronde/sommeil.
+  c.x = 100; c.y = 100;
+  for (let i = 0; i < 400 && e.state === 'awake'; i += 1) Core.stepMatch(m, 0.05);
+  assert.ok(e.state === 'patrol' || e.state === 'sleep', 'La sentinelle se calme quand la joueuse quitte la lumière');
+  const distHome = Math.hypot(e.x - e.homeX, e.y - e.homeY);
+  assert.ok(distHome <= e.perimeter + 40, 'La sentinelle reste dans son périmètre de ronde');
+  snap = Core.createSnapshotFor(m, 'creator');
+  assert.equal(snap.world.enemies.length, 0, 'Loin du halo, la sentinelle redevient invisible');
+
+  // Une explosion éclaire temporairement les objets.
+  m.effects.push({ id: 99, type: 'explosion', x: farCrate.x, y: farCrate.y, age: 0, maxAge: 0.7, r: 150 });
+  snap = Core.createSnapshotFor(m, 'creator');
+  assert.ok(snap.world.crates.some(cr => cr.id === farCrate.id), 'La lumière d’explosion révèle les objets');
+}
+
+console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, brouillard de guerre, ronde/sommeil des sentinelles, décor/pièges/bombes/caisses, tir manuel, orientation, visibilité, snapshots, mort subite et cotes : OK');
