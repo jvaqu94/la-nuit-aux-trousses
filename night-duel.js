@@ -1,0 +1,1672 @@
+/* La Nuit aux Trousses — Duel de la Nuit noire (1 contre 1 en temps réel).
+   Simulation arbitrée par le client créateur, commandes seules côté invitée,
+   snapshots filtrés sans coordonnées cachées, draft 3/10 indépendant de la campagne. */
+(() => {
+  'use strict';
+
+  const Core = window.NightDuelCore;
+  if (!Core) return;
+
+  const PENDING_INVITE_KEY = 'minuit-night-duel-invite-v1';
+  const SNAPSHOT_INTERVAL = 0.05;
+  const CMD_INTERVAL = 0.033;
+
+  const el = id => document.getElementById(id);
+  const esc = value =>
+    String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  let screenOpen = false;
+  let combatActive = false;
+  let combatPaused = false;
+  let pendingInviteId = '';
+  let profile = null;
+  let duel = null;
+  let players = [null, null];
+  let createMode = 'ranked';
+  let createWager = 0;
+  let selectedPerks = ['comet-boots', 'dawn-halo', 'fleeting-dash'];
+  let statusNotice = '';
+  let statusError = false;
+  let busy = false;
+
+  let channel = null;
+  let pollTimer = null;
+  let hostMatch = null;
+  let renderSnap = null;
+  let snapshotAccum = 0;
+  let cmdAccum = 0;
+  let dashSeq = 0;
+  let finishSubmitting = false;
+  let lastReportedDuelId = '';
+
+  const pointerState = {
+    mouseAimActive: false,
+    mouseDown: false,
+    aimX: Core.ARENA_CENTER.x,
+    aimY: Core.ARENA_CENTER.y,
+    moveTouchId: null,
+    moveOriginX: 0,
+    moveOriginY: 0,
+    touchMoveX: 0,
+    touchMoveY: 0,
+    aimTouchId: null
+  };
+
+  const baseOverlay = typeof overlay === 'function' ? overlay : null;
+  const baseGrantDailyReward = window.Journey?.grantDailyReward
+    ? window.Journey.grantDailyReward.bind(window.Journey)
+    : null;
+
+  function readInitialInvite() {
+    let found = Core.extractDuelId(window.location?.href || '');
+    if (found) {
+      try {
+        sessionStorage.setItem(PENDING_INVITE_KEY, found);
+      } catch (_) {}
+      cleanDuelParamFromUrl();
+      return found;
+    }
+    try {
+      found = Core.extractDuelId(sessionStorage.getItem(PENDING_INVITE_KEY) || '');
+    } catch (_) {}
+    return found;
+  }
+
+  function clearPendingInvite() {
+    pendingInviteId = '';
+    try {
+      sessionStorage.removeItem(PENDING_INVITE_KEY);
+    } catch (_) {}
+    cleanDuelParamFromUrl();
+  }
+
+  function cleanDuelParamFromUrl() {
+    try {
+      const current = new URL(window.location.href);
+      if (!current.searchParams.has('duel')) return;
+      current.searchParams.delete('duel');
+      const next = current.pathname + (current.searchParams.toString() ? '?' + current.searchParams.toString() : '') + current.hash;
+      window.history?.replaceState?.(null, '', next);
+    } catch (_) {}
+  }
+
+  function isNightDuelBlockingOverlay() {
+    return Boolean(screenOpen || combatActive || pendingInviteId);
+  }
+
+  if (baseOverlay) {
+    overlay = function(html) {
+      if (isNightDuelBlockingOverlay() && typeof html === 'string' && html.includes('daily-reward-screen')) {
+        return;
+      }
+      return baseOverlay(html);
+    };
+  }
+
+  if (window.Journey && baseGrantDailyReward) {
+    window.Journey.grantDailyReward = function(...args) {
+      if (isNightDuelBlockingOverlay()) return null;
+      return baseGrantDailyReward(...args);
+    };
+  }
+
+  function setGameState(next) {
+    try {
+      state = next;
+    } catch (_) {}
+  }
+
+  function getGameState() {
+    try {
+      return state;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function myUserId() {
+    return window.MinuitCloud?.user?.id || profile?.id || '';
+  }
+
+  function myRole() {
+    if (!duel) return 'creator';
+    return duel.creatorId === myUserId() ? 'creator' : 'opponent';
+  }
+
+  function setStatus(message, isError = false) {
+    statusNotice = String(message || '');
+    statusError = Boolean(isError);
+    const node = el('duelStatusMsg');
+    if (node) {
+      node.textContent = statusNotice;
+      node.classList.toggle('is-error', statusError);
+    }
+  }
+
+  function applyTouchLayoutPreference() {
+    const layout = (typeof prefs === 'object' && prefs?.touchLayout === 'right') ? 'right' : 'left';
+    if (document.body) document.body.dataset.touchLayout = layout;
+    const stick = el('touchStick');
+    if (stick) stick.dataset.touchLayout = layout;
+    const bar = document.querySelector('.touchbar');
+    if (bar) bar.dataset.touchLayout = layout;
+  }
+
+  function isolateFromCampaign() {
+    window.SandboxMode = true;
+    if (window.Journey) {
+      window.Journey.run = null;
+    }
+    const special = el('specialCast');
+    if (special) special.style.display = 'none';
+    const runner = el('runnerControls');
+    if (runner) runner.style.display = 'none';
+    const mission = el('runnerMission');
+    if (mission) mission.style.display = 'none';
+    applyTouchLayoutPreference();
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function closeChannel() {
+    if (channel) {
+      try {
+        channel.close();
+      } catch (_) {}
+      channel = null;
+    }
+  }
+
+  function hideTopHud() {
+    const hud = el('duelTopHud');
+    if (hud) hud.style.display = 'none';
+    document.body?.classList.remove('night-duel-combat');
+  }
+
+  function teardownDuelRuntime() {
+    stopPolling();
+    closeChannel();
+    combatActive = false;
+    combatPaused = false;
+    hostMatch = null;
+    renderSnap = null;
+    finishSubmitting = false;
+    pointerState.moveTouchId = null;
+    pointerState.aimTouchId = null;
+    pointerState.touchMoveX = 0;
+    pointerState.touchMoveY = 0;
+    hideTopHud();
+  }
+
+  function leaveToHome() {
+    teardownDuelRuntime();
+    screenOpen = false;
+    duel = null;
+    players = [null, null];
+    clearPendingInvite();
+    window.SandboxMode = false;
+    if (window.LocalLeague?.menu) window.LocalLeague.menu();
+    else if (window.Journey?.menu) window.Journey.menu();
+    else if (typeof menu === 'function') menu();
+  }
+
+  async function refreshProfile() {
+    if (!window.MinuitCloud?.connected) return null;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_profile', {});
+      if (data && typeof data === 'object') profile = data;
+      return profile;
+    } catch (err) {
+      setStatus(err?.message || 'Profil de duel indisponible.', true);
+      return null;
+    }
+  }
+
+  function ingestDuelPayload(payload) {
+    if (!payload || !payload.duel) return;
+    duel = payload.duel;
+    players = Array.isArray(payload.players) ? payload.players : [null, null];
+    const uid = myUserId();
+    if (players[0]?.id === uid) profile = players[0];
+    else if (players[1]?.id === uid) profile = players[1];
+  }
+
+  function ensureRealtimeChannel(duelId) {
+    if (!window.MinuitCloud?.connected || !duelId) return;
+    const expectedTopic = 'realtime:duel:' + duelId;
+    if (channel && channel.topic === expectedTopic) return;
+    closeChannel();
+    try {
+      channel = window.MinuitCloud.openDuelChannel(duelId, {
+        onStatus(st) {
+          if (st === 'SUBSCRIBED' && combatActive && myRole() === 'creator' && hostMatch) {
+            sendGuestSnapshotNow();
+          }
+        },
+        onBroadcast(eventName, data) {
+          handleRealtimeEvent(eventName, data || {});
+        }
+      });
+    } catch (err) {
+      setStatus(err?.message || 'Canal temps réel indisponible.', true);
+    }
+  }
+
+  function sendGuestSnapshotNow() {
+    if (!channel || !hostMatch || myRole() !== 'creator') return;
+    const guestSnap = Core.createSnapshotFor(hostMatch, 'opponent');
+    channel.send('snapshot', guestSnap);
+  }
+
+  function handleRealtimeEvent(eventName, data) {
+    if (!duel) return;
+    if (eventName === 'state-sync' || eventName === 'joined' || eventName === 'draft-ready' || eventName === 'forfeit' || eventName === 'report-submitted') {
+      syncDuelStatus(false);
+      return;
+    }
+    if (eventName === 'cmd' && combatActive && myRole() === 'creator' && hostMatch) {
+      Core.applyCommand(hostMatch, 'opponent', {
+        moveX: data.moveX,
+        moveY: data.moveY,
+        focus: data.focus,
+        hasTarget: data.hasTarget,
+        targetX: data.targetX,
+        targetY: data.targetY,
+        hasAim: data.hasAim,
+        aimX: data.aimX,
+        aimY: data.aimY,
+        dash: data.dash,
+        dashSeq: data.dashSeq
+      });
+      return;
+    }
+    if (eventName === 'snapshot' && combatActive && myRole() === 'opponent') {
+      if (!renderSnap || Number(data.seq) >= Number(renderSnap.seq || 0)) {
+        renderSnap = data;
+        updateTopHud();
+        if (renderSnap.roundPhase === 'finished' && renderSnap.winnerRole) {
+          submitMatchReport(renderSnap.winnerRole);
+        }
+      }
+      return;
+    }
+    if (eventName === 'match-finished' && data.winnerRole) {
+      submitMatchReport(data.winnerRole);
+    }
+  }
+
+  async function syncDuelStatus(showErrors = false) {
+    if (!duel?.id || !window.MinuitCloud?.connected) return;
+    try {
+      const prevStatus = duel.status;
+      const data = await window.MinuitCloud.rpc('minuit_duel_status', { p_duel: duel.id });
+      ingestDuelPayload(data);
+      transitionForDuelStatus(prevStatus);
+    } catch (err) {
+      if (showErrors) setStatus(err?.message || 'Impossible d’actualiser le duel.', true);
+    }
+  }
+
+  function startPolling(intervalMs) {
+    stopPolling();
+    pollTimer = setInterval(() => {
+      syncDuelStatus(false);
+    }, intervalMs);
+  }
+
+  function transitionForDuelStatus(prevStatus) {
+    if (!duel) return;
+    ensureRealtimeChannel(duel.id);
+
+    if (duel.status === 'waiting') {
+      combatActive = false;
+      hideTopHud();
+      startPolling(2200);
+      renderScreen();
+      return;
+    }
+
+    if (duel.status === 'draft') {
+      combatActive = false;
+      hideTopHud();
+      startPolling(1600);
+      if (prevStatus !== 'draft' || !document.querySelector('#overlay .duel-draft-grid')) {
+        renderScreen();
+      } else {
+        updateDraftIndicators();
+      }
+      return;
+    }
+
+    if (duel.status === 'active') {
+      if (!combatActive) {
+        beginActiveCombat();
+      }
+      return;
+    }
+
+    if (duel.status === 'completed' || duel.status === 'cancelled') {
+      const wasCompleted = duel.status === 'completed';
+      teardownDuelRuntime();
+      screenOpen = true;
+      setGameState('night-duel');
+      if (wasCompleted) {
+        renderResultScreen();
+      } else {
+        const cancelledMsg = 'Ce duel a été annulé.';
+        duel = null;
+        players = [null, null];
+        renderScreen();
+        setStatus(cancelledMsg, false);
+      }
+    }
+  }
+
+  function beginActiveCombat() {
+    if (!duel) return;
+    isolateFromCampaign();
+    combatActive = true;
+    combatPaused = false;
+    screenOpen = false;
+    lastReportedDuelId = '';
+    dashSeq = 0;
+    snapshotAccum = 0;
+    cmdAccum = 0;
+
+    const creatorEquip = players[0]?.equipped || 'halo-violet';
+    const opponentEquip = players[1]?.equipped || 'halo-violet';
+
+    if (myRole() === 'creator') {
+      hostMatch = Core.createMatch({
+        id: duel.id,
+        mode: duel.mode,
+        wager: duel.wager,
+        creatorPerks: duel.creatorPerks,
+        opponentPerks: duel.opponentPerks,
+        creatorCosmetic: creatorEquip,
+        opponentCosmetic: opponentEquip
+      });
+      renderSnap = Core.createSnapshotFor(hostMatch, 'creator');
+      sendGuestSnapshotNow();
+    } else {
+      hostMatch = null;
+      const preview = Core.createMatch({
+        id: duel.id,
+        mode: duel.mode,
+        wager: duel.wager,
+        creatorPerks: duel.creatorPerks,
+        opponentPerks: duel.opponentPerks,
+        creatorCosmetic: creatorEquip,
+        opponentCosmetic: opponentEquip
+      });
+      renderSnap = Core.createSnapshotFor(preview, 'opponent');
+    }
+
+    if (typeof hideOverlay === 'function') hideOverlay();
+    document.body?.classList.remove('menu-open');
+    document.body?.classList.add('night-duel-combat');
+    setGameState('playing');
+    if (typeof syncPauseIcon === 'function') syncPauseIcon();
+    ensureTopHud();
+    updateTopHud();
+    startPolling(2500);
+  }
+
+  async function submitMatchReport(winnerRole) {
+    if (!duel || duel.status === 'completed' || finishSubmitting) return;
+    const winnerId = winnerRole === 'creator' ? duel.creatorId : duel.opponentId;
+    if (!winnerId) return;
+    if (lastReportedDuelId === duel.id + ':' + winnerId && duel.status === 'completed') return;
+
+    finishSubmitting = true;
+    try {
+      if (myRole() === 'creator' && channel) {
+        channel.send('match-finished', { winnerRole });
+      }
+      const data = await window.MinuitCloud.rpc('minuit_duel_finish', {
+        p_duel: duel.id,
+        p_winner: winnerId
+      });
+      lastReportedDuelId = duel.id + ':' + winnerId;
+      if (channel) channel.send('report-submitted', { winnerRole });
+      ingestDuelPayload(data);
+      if (duel.status === 'completed') {
+        transitionForDuelStatus('active');
+      } else {
+        startPolling(900);
+      }
+    } catch (err) {
+      startPolling(1200);
+    } finally {
+      finishSubmitting = false;
+    }
+  }
+
+  async function createInvitation() {
+    if (busy || !window.MinuitCloud?.connected) return;
+    busy = true;
+    setStatus('Création de l’invitation privée…');
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_create', {
+        p_mode: createMode,
+        p_wager: createWager
+      });
+      ingestDuelPayload(data);
+      busy = false;
+      transitionForDuelStatus('');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Création du duel impossible.', true);
+    }
+  }
+
+  async function joinInvitation(rawInput) {
+    if (busy || !window.MinuitCloud?.connected) return;
+    const id = Core.extractDuelId(rawInput);
+    if (!id) {
+      setStatus('Saisis un lien d’invitation valide ou l’UUID du duel.', true);
+      return;
+    }
+    busy = true;
+    setStatus('Connexion au duel privé…');
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_join', { p_duel: id });
+      clearPendingInvite();
+      ingestDuelPayload(data);
+      ensureRealtimeChannel(id);
+      channel?.send('joined', { duelId: id });
+      busy = false;
+      transitionForDuelStatus('');
+    } catch (err) {
+      busy = false;
+      const msg = String(err?.message || 'Impossible de rejoindre ce duel.');
+      if (msg.includes('Deux duels classés')) {
+        createMode = 'friendly';
+      }
+      clearPendingInvite();
+      renderScreen();
+      setStatus(msg, true);
+    }
+  }
+
+  async function submitDraftReady() {
+    if (busy || !duel) return;
+    const check = Core.validatePerks(selectedPerks);
+    if (!check.valid) {
+      setStatus(check.error, true);
+      return;
+    }
+    busy = true;
+    setStatus('Validation de tes 3 atouts…');
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_ready', {
+        p_duel: duel.id,
+        p_perks: check.perks
+      });
+      ingestDuelPayload(data);
+      channel?.send('draft-ready', { role: myRole() });
+      busy = false;
+      transitionForDuelStatus('draft');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Validation du draft refusée.', true);
+    }
+  }
+
+  async function cancelOrForfeitDuel(forfeit = false) {
+    if (busy || !duel) return;
+    busy = true;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_cancel', {
+        p_duel: duel.id,
+        p_forfeit: Boolean(forfeit)
+      });
+      channel?.send(forfeit ? 'forfeit' : 'state-sync', {});
+      ingestDuelPayload(data);
+      busy = false;
+      transitionForDuelStatus('active');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Action impossible.', true);
+    }
+  }
+
+  async function handleCosmeticAction(haloId, unlock) {
+    if (busy || !window.MinuitCloud?.connected) return;
+    busy = true;
+    try {
+      const fn = unlock ? 'minuit_duel_unlock' : 'minuit_duel_equip';
+      const data = await window.MinuitCloud.rpc(fn, { p_item: haloId });
+      if (data && typeof data === 'object') profile = data;
+      busy = false;
+      renderScreen();
+      setStatus(unlock ? 'Halo cosmétique débloqué !' : 'Halo cosmétique équipé.');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Action sur le halo impossible.', true);
+    }
+  }
+
+  function updateDraftIndicators() {
+    const cBadge = el('duelCreatorReadyBadge');
+    const oBadge = el('duelOpponentReadyBadge');
+    if (cBadge && duel) {
+      cBadge.textContent = duel.creatorReady ? 'Prête ✓' : 'En choix…';
+      cBadge.classList.toggle('is-ready', Boolean(duel.creatorReady));
+    }
+    if (oBadge && duel) {
+      oBadge.textContent = duel.opponentReady ? 'Prête ✓' : 'En choix…';
+      oBadge.classList.toggle('is-ready', Boolean(duel.opponentReady));
+    }
+  }
+
+  function renderAuthRequiredScreen() {
+    const inviteBanner = pendingInviteId
+      ? `<div class="duel-invite-banner"><span>INVITATION REÇUE</span><b>${esc(pendingInviteId)}</b><small>Connecte-toi ou crée ton pseudo pour rejoindre immédiatement ce duel.</small></div>`
+      : '';
+    overlay(`<section class="night-duel-screen" aria-label="Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ DUEL DE SORCIÈRES · 1 CONTRE 1 EN DIRECT</div>
+        <h2>DUEL DE LA NUIT NOIRE</h2>
+        <p>Affronte une autre sorcière dans l’obscurité avec ton accès existant (pseudo ou e-mail). Aucun bonus de campagne ni highscore de team n’est utilisé.</p>
+      </div>
+      ${inviteBanner}
+      <div id="duelAuthMount" class="duel-auth-mount"></div>
+      <div class="duel-status" id="duelStatusMsg" role="status">${esc(statusNotice)}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="secondary" id="duelBackHome">Retour à l’accueil</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+    const mount = el('duelAuthMount');
+    if (mount && window.MinuitCloud?.renderPanel) {
+      window.MinuitCloud.renderPanel(mount);
+    }
+    const back = el('duelBackHome');
+    if (back) back.onclick = leaveToHome;
+  }
+
+  function renderWaitingScreen() {
+    const creatorName = players[0]?.name || window.MinuitCloud?.user?.displayName || 'Sorcière';
+    const links = Core.buildShareLinks(window.location?.href || 'https://minuit.local/', duel.id, creatorName, duel.mode);
+    const modeLabel = duel.mode === 'ranked' ? 'Classé' : 'Amical';
+    const wagerLabel = duel.wager > 0 ? `Mise : ${duel.wager} éclats chacune (pot de ${duel.wager * 2})` : 'Sans mise d’éclats';
+
+    overlay(`<section class="night-duel-screen" aria-label="Invitation Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ INVITATION PRIVÉE EN ATTENTE · ${esc(modeLabel.toUpperCase())}</div>
+        <h2>INVITE TON ADVERSAIRE</h2>
+        <p>${esc(wagerLabel)} · Le draft de 3 atouts s’ouvrira dès que l’autre sorcière rejoint.</p>
+      </div>
+      <div class="duel-card duel-share-card">
+        <label class="duel-field-label" for="duelInviteLink">Lien d’invitation privée</label>
+        <div class="duel-copy-row">
+          <input id="duelInviteLink" type="text" readonly value="${esc(links.inviteUrl)}">
+          <button type="button" class="primary" id="duelCopyLink">Copier le lien</button>
+        </div>
+        <div class="duel-uuid-line">
+          <span>UUID du duel : <code id="duelUuidCode">${esc(duel.id)}</code></span>
+          <button type="button" class="secondary" id="duelCopyUuid">Copier l’UUID</button>
+        </div>
+        <div class="duel-share-buttons">
+          <a class="secondary duel-share-link" id="duelShareWhatsapp" href="${esc(links.whatsapp)}" target="_blank" rel="noopener noreferrer">Partager sur WhatsApp</a>
+          <a class="secondary duel-share-link" id="duelShareMessenger" href="${esc(links.messenger)}" target="_blank" rel="noopener noreferrer">Partager sur Messenger</a>
+        </div>
+      </div>
+      <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(statusNotice || 'En attente de la seconde sorcière…')}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="secondary" id="duelRefreshWait">Actualiser</button>
+        <button type="button" class="secondary team-danger" id="duelCancelInvite">Annuler l’invitation</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+
+    const copyText = async (value, label) => {
+      try {
+        await navigator.clipboard.writeText(value);
+        setStatus(`${label} copié dans le presse-papiers.`);
+      } catch (_) {
+        const input = el('duelInviteLink');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+        setStatus(`Sélectionne et copie : ${value}`);
+      }
+    };
+    el('duelCopyLink').onclick = () => copyText(links.inviteUrl, 'Lien d’invitation');
+    el('duelCopyUuid').onclick = () => copyText(duel.id, 'UUID du duel');
+    el('duelRefreshWait').onclick = () => syncDuelStatus(true);
+    el('duelCancelInvite').onclick = () => cancelOrForfeitDuel(false);
+  }
+
+  function renderDraftScreen() {
+    const role = myRole();
+    const alreadyReady = role === 'creator' ? duel.creatorReady : duel.opponentReady;
+    const savedPerks = role === 'creator' ? duel.creatorPerks : duel.opponentPerks;
+    if (alreadyReady && Array.isArray(savedPerks) && savedPerks.length === 3) {
+      selectedPerks = savedPerks.slice();
+    }
+    const pCreator = players[0] || { name: 'Créatrice', rating: 1000 };
+    const pOpponent = players[1] || { name: 'Invitée', rating: 1000 };
+    const modeLabel = duel.mode === 'ranked' ? 'Duel classé' : 'Duel amical';
+    const wagerLabel = duel.wager > 0 ? ` · Pot de ${duel.wager * 2} éclats` : '';
+
+    overlay(`<section class="night-duel-screen" aria-label="Draft du Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ ${esc(modeLabel.toUpperCase())}${esc(wagerLabel.toUpperCase())} · BEST OF 3</div>
+        <h2>CHOISIS 3 ATOUTS DE NUIT</h2>
+        <p>Catalogue commun de 10 atouts · Aucun équipement de campagne, compagnon ou bonus quotidien ne s’applique.</p>
+      </div>
+      <div class="duel-versus-strip">
+        <div class="duel-fighter-pill">
+          <b>${esc(pCreator.name || 'Créatrice')}</b>
+          <small>Cote ${Number(pCreator.rating) || 1000}</small>
+          <span class="duel-ready-badge${duel.creatorReady ? ' is-ready' : ''}" id="duelCreatorReadyBadge">${duel.creatorReady ? 'Prête ✓' : 'En choix…'}</span>
+        </div>
+        <span class="duel-vs-mark">VS</span>
+        <div class="duel-fighter-pill">
+          <b>${esc(pOpponent.name || 'Invitée')}</b>
+          <small>Cote ${Number(pOpponent.rating) || 1000}</small>
+          <span class="duel-ready-badge${duel.opponentReady ? ' is-ready' : ''}" id="duelOpponentReadyBadge">${duel.opponentReady ? 'Prête ✓' : 'En choix…'}</span>
+        </div>
+      </div>
+      <div class="duel-draft-counter" id="duelDraftCounter">${selectedPerks.length} / 3 atouts sélectionnés</div>
+      <div class="duel-draft-grid" role="group" aria-label="Catalogue de 10 atouts">
+        ${Core.PERK_CATALOG.map(perk => {
+          const picked = selectedPerks.includes(perk.id);
+          return `<button type="button" class="duel-perk-card${picked ? ' is-picked' : ''}" data-perk-id="${esc(perk.id)}" aria-pressed="${picked}" ${alreadyReady ? 'disabled' : ''}>
+            <div class="duel-perk-top"><span class="duel-perk-icon">${esc(perk.icon)}</span><small>${esc(perk.category)}</small></div>
+            <b>${esc(perk.name)}</b>
+            <span>${esc(perk.desc)}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(alreadyReady ? 'Atouts verrouillés. En attente de l’autre sorcière…' : statusNotice)}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="primary" id="duelReadyBtn" ${alreadyReady || selectedPerks.length !== 3 ? 'disabled' : ''}>${alreadyReady ? 'Prête pour la nuit ✓' : 'Valider mes 3 atouts'}</button>
+        <button type="button" class="secondary team-danger" id="duelCancelDraft">Quitter le draft</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+
+    document.querySelectorAll('.duel-perk-card').forEach(btn => {
+      btn.onclick = () => {
+        if (alreadyReady) return;
+        const id = btn.dataset.perkId;
+        if (!id) return;
+        if (selectedPerks.includes(id)) {
+          selectedPerks = selectedPerks.filter(item => item !== id);
+        } else if (selectedPerks.length < 3) {
+          selectedPerks = [...selectedPerks, id];
+        } else {
+          setStatus('Trois atouts maximum : retire un atout avant d’en choisir un autre.', false);
+          return;
+        }
+        renderDraftScreen();
+      };
+    });
+
+    const readyBtn = el('duelReadyBtn');
+    if (readyBtn) readyBtn.onclick = submitDraftReady;
+    const cancelBtn = el('duelCancelDraft');
+    if (cancelBtn) cancelBtn.onclick = () => cancelOrForfeitDuel(false);
+  }
+
+  function renderResultScreen() {
+    const uid = myUserId();
+    const won = duel?.winnerId === uid;
+    const pMe = (players[0]?.id === uid ? players[0] : players[1]) || profile || Core.createDuelProfile();
+    const pOther = (players[0]?.id === uid ? players[1] : players[0]) || { name: 'Adversaire', rating: 1000 };
+    const delta = Number(duel?.ratingDelta) || 0;
+    const signedDelta = duel?.mode === 'ranked' ? (won ? `+${delta}` : `-${delta}`) : '±0 (amical)';
+    const wagerNote = duel?.wager > 0
+      ? (won ? `Pot remporté : +${duel.wager * 2} éclats de lune` : `Mise engagée : ${duel.wager} éclats de lune`)
+      : 'Duel sans mise d’éclats';
+
+    overlay(`<section class="night-duel-screen duel-result-screen" aria-label="Résultat du Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ ${duel?.mode === 'ranked' ? 'DUEL CLASSÉ TERMINÉ' : 'DUEL AMICAL TERMINÉ'}</div>
+        <h2>${won ? 'VICTOIRE NOCTURNE' : 'DÉFAITE DANS LA BRUME'}</h2>
+        <p>Face à <b>${esc(pOther.name || 'Adversaire')}</b> · Résultat validé par consensus des deux clients.</p>
+      </div>
+      <div class="duel-summary-grid">
+        <div class="duel-stat-box"><small>VARIATION DE COTE</small><b>${esc(signedDelta)}</b></div>
+        <div class="duel-stat-box"><small>NOUVELLE COTE DUEL</small><b>${Number(pMe.rating) || 1000}</b></div>
+        <div class="duel-stat-box"><small>BILAN CLASSÉ</small><b>${Number(pMe.wins) || 0} V · ${Number(pMe.losses) || 0} D</b></div>
+        <div class="duel-stat-box"><small>ÉCLATS DE LUNE</small><b>${Number(pMe.shards) || 0} ☾</b></div>
+      </div>
+      <p class="duel-wager-note">${esc(wagerNote)} · Les highscores de campagne et de team restent intacts.</p>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="primary" id="duelAgainBtn">Nouveau duel</button>
+        <button type="button" class="secondary" id="duelHomeBtn">Retour à l’accueil</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+    el('duelAgainBtn').onclick = () => {
+      duel = null;
+      players = [null, null];
+      statusNotice = '';
+      openHub();
+    };
+    el('duelHomeBtn').onclick = leaveToHome;
+  }
+
+  function renderHubScreen() {
+    const p = profile || Core.createDuelProfile();
+    const pseudo = p.name || window.MinuitCloud?.user?.displayName || window.MinuitCloud?.user?.email || 'Sorcière';
+    const unlocked = Array.isArray(p.unlocked) ? p.unlocked : ['halo-violet'];
+
+    overlay(`<section class="night-duel-screen" aria-label="Salon Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ DUEL DE LA NUIT NOIRE · 1 CONTRE 1 EN DIRECT</div>
+        <h2>SALON DES OMBRES</h2>
+        <p> Sorcière : <b>${esc(pseudo)}</b> · Manches de 90 s en 2 manches gagnantes · Visibilité limitée au halo et aux éclats.</p>
+      </div>
+      <div class="duel-summary-grid">
+        <div class="duel-stat-box"><small>COTE DUEL</small><b>${Number(p.rating) || 1000}</b></div>
+        <div class="duel-stat-box"><small>BILAN CLASSÉ</small><b>${Number(p.wins) || 0} V · ${Number(p.losses) || 0} D</b></div>
+        <div class="duel-stat-box"><small>ÉCLATS DE LUNE</small><b>${Number(p.shards) || 0} ☾</b></div>
+        <div class="duel-stat-box"><small>HALO ÉQUIPÉ</small><b>${esc(Core.getHaloCosmetic(p.equipped).name)}</b></div>
+      </div>
+      <div class="duel-hub-columns">
+        <div class="duel-card">
+          <h3>CRÉER UNE INVITATION PRIVÉE</h3>
+          <div class="duel-toggle-row" role="group" aria-label="Mode de duel">
+            <button type="button" class="secondary${createMode === 'ranked' ? ' is-selected' : ''}" id="duelModeRanked">Classé (max 2/jour/paire)</button>
+            <button type="button" class="secondary${createMode === 'friendly' ? ' is-selected' : ''}" id="duelModeFriendly">Amical (libre)</button>
+          </div>
+          <div class="duel-toggle-row" role="group" aria-label="Mise d’éclats de lune">
+            <button type="button" class="secondary${createWager === 0 ? ' is-selected' : ''}" id="duelWagerZero">Sans mise</button>
+            <button type="button" class="secondary${createWager === 10 ? ' is-selected' : ''}" id="duelWagerTen" ${(Number(p.shards) || 0) < 10 ? 'disabled' : ''}>Mise 10 ☾ (pot 20)</button>
+          </div>
+          <button type="button" class="primary duel-full-btn" id="duelCreateBtn">Créer le duel & obtenir le lien</button>
+        </div>
+        <div class="duel-card">
+          <h3>REJOINDRE UN DUEL</h3>
+          <label class="duel-field-label" for="duelJoinInput">Colle un lien d’invitation ou l’UUID du duel</label>
+          <input id="duelJoinInput" type="text" spellcheck="false" autocomplete="off" placeholder="https://…/?duel=… ou UUID" value="${esc(pendingInviteId)}">
+          <button type="button" class="primary duel-full-btn" id="duelJoinBtn">Rejoindre ce duel</button>
+        </div>
+      </div>
+      <div class="duel-card duel-halos-card">
+        <h3>HALOS COSMÉTIQUES (ÉCLATS DE LUNE · AUCUN AVANTAGE EN JEU)</h3>
+        <div class="duel-halo-grid">
+          ${Core.COSMETIC_HALOS.map(item => {
+            const isUnlocked = unlocked.includes(item.id);
+            const isEquipped = p.equipped === item.id;
+            return `<div class="duel-halo-item${isEquipped ? ' is-equipped' : ''}">
+              <div><i class="duel-halo-swatch" style="background:${esc(item.ring)}"></i><b>${esc(item.name)}</b><small>${item.cost > 0 ? `${item.cost} ☾` : 'Inclus'}</small></div>
+              ${isEquipped
+                ? '<span class="duel-equipped-tag">Équipé</span>'
+                : isUnlocked
+                  ? `<button type="button" class="secondary" data-equip-halo="${esc(item.id)}">Équiper</button>`
+                  : `<button type="button" class="secondary" data-unlock-halo="${esc(item.id)}" ${(Number(p.shards) || 0) < item.cost ? 'disabled' : ''}>Débloquer (${item.cost} ☾)</button>`}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(statusNotice)}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="secondary" id="duelBackHome">Retour à l’accueil</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+
+    el('duelModeRanked').onclick = () => {
+      createMode = 'ranked';
+      renderHubScreen();
+    };
+    el('duelModeFriendly').onclick = () => {
+      createMode = 'friendly';
+      renderHubScreen();
+    };
+    el('duelWagerZero').onclick = () => {
+      createWager = 0;
+      renderHubScreen();
+    };
+    el('duelWagerTen').onclick = () => {
+      createWager = 10;
+      renderHubScreen();
+    };
+    el('duelCreateBtn').onclick = createInvitation;
+    el('duelJoinBtn').onclick = () => joinInvitation(el('duelJoinInput')?.value || '');
+    el('duelJoinInput').addEventListener('keydown', evt => {
+      if (evt.key === 'Enter') {
+        evt.preventDefault();
+        joinInvitation(el('duelJoinInput')?.value || '');
+      }
+    });
+    document.querySelectorAll('[data-unlock-halo]').forEach(btn => {
+      btn.onclick = () => handleCosmeticAction(btn.dataset.unlockHalo, true);
+    });
+    document.querySelectorAll('[data-equip-halo]').forEach(btn => {
+      btn.onclick = () => handleCosmeticAction(btn.dataset.equipHalo, false);
+    });
+    el('duelBackHome').onclick = leaveToHome;
+  }
+
+  function renderScreen() {
+    if (!screenOpen) return;
+    setGameState('night-duel');
+    isolateFromCampaign();
+    if (!window.MinuitCloud?.connected) {
+      renderAuthRequiredScreen();
+      return;
+    }
+    if (duel?.status === 'waiting') {
+      renderWaitingScreen();
+      return;
+    }
+    if (duel?.status === 'draft') {
+      renderDraftScreen();
+      return;
+    }
+    if (duel?.status === 'completed') {
+      renderResultScreen();
+      return;
+    }
+    renderHubScreen();
+  }
+
+  async function openHub(options = {}) {
+    if (options.inviteId) pendingInviteId = Core.extractDuelId(options.inviteId) || pendingInviteId;
+    teardownDuelRuntime();
+    screenOpen = true;
+    statusNotice = '';
+    statusError = false;
+    isolateFromCampaign();
+    renderScreen();
+    if (window.MinuitCloud?.connected) {
+      await refreshProfile();
+      if (pendingInviteId) {
+        await joinInvitation(pendingInviteId);
+        return;
+      }
+      renderScreen();
+    }
+  }
+
+  function ensureTopHud() {
+    let hud = el('duelTopHud');
+    if (!hud) {
+      const holder = el('canvas')?.parentElement || document.body;
+      hud = document.createElement('div');
+      hud.id = 'duelTopHud';
+      hud.className = 'duel-top-hud';
+      hud.setAttribute('aria-live', 'polite');
+      hud.innerHTML = `
+        <div class="duel-hud-side duel-hud-self">
+          <small id="duelHudSelfName">TOI</small>
+          <b id="duelHudSelfHearts">♥♥♥♥♥</b>
+          <span id="duelHudDashState">Esquive prête</span>
+        </div>
+        <div class="duel-hud-center">
+          <div class="duel-hud-scoreline"><span id="duelHudRound">M1/3</span> · <strong id="duelHudScore">0 — 0</strong> · <b id="duelHudClock">01:30</b></div>
+          <div class="duel-hud-banner" id="duelHudBanner">Chasse dans la brume</div>
+        </div>
+        <div class="duel-hud-side duel-hud-opp">
+          <div class="duel-hud-opp-top">
+            <small id="duelHudOppName">ADVERSAIRE</small>
+            <button type="button" class="duel-hud-exit" id="duelForfeitBtn">Abandon</button>
+          </div>
+          <b id="duelHudOppHearts">♥♥♥♥♥</b>
+          <span id="duelHudOppVis">Hors du halo</span>
+        </div>
+      `;
+      holder.appendChild(hud);
+      const forfeitBtn = el('duelForfeitBtn');
+      if (forfeitBtn) {
+        forfeitBtn.onclick = evt => {
+          evt.stopPropagation();
+          openCombatPauseOverlay();
+        };
+      }
+    }
+    hud.style.display = 'grid';
+  }
+
+  function heartsText(count, maxCount, parry) {
+    const full = Math.max(0, Math.round(count || 0));
+    const empty = Math.max(0, Math.round((maxCount || 5) - full));
+    return '♥'.repeat(full) + '♡'.repeat(empty) + (parry > 0 ? ' 🛡' : '');
+  }
+
+  function formatClock(roundTime) {
+    const rem = Math.max(0, Math.ceil(Core.ROUND_DURATION - (Number(roundTime) || 0)));
+    const m = String(Math.floor(rem / 60)).padStart(2, '0');
+    const s = String(rem % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function updateTopHud() {
+    if (!combatActive || !renderSnap) return;
+    ensureTopHud();
+    const role = myRole();
+    const myScore = role === 'creator' ? renderSnap.scores.creator : renderSnap.scores.opponent;
+    const oppScore = role === 'creator' ? renderSnap.scores.opponent : renderSnap.scores.creator;
+    const meInfo = role === 'creator' ? players[0] : players[1];
+    const oppInfo = role === 'creator' ? players[1] : players[0];
+
+    const selfName = el('duelHudSelfName');
+    const oppName = el('duelHudOppName');
+    const selfHearts = el('duelHudSelfHearts');
+    const oppHearts = el('duelHudOppHearts');
+    const dashState = el('duelHudDashState');
+    const roundEl = el('duelHudRound');
+    const scoreEl = el('duelHudScore');
+    const clockEl = el('duelHudClock');
+    const bannerEl = el('duelHudBanner');
+    const oppVisEl = el('duelHudOppVis');
+
+    if (selfName) selfName.textContent = (meInfo?.name || 'TOI').slice(0, 16);
+    if (oppName) oppName.textContent = (oppInfo?.name || 'ADVERSAIRE').slice(0, 16);
+    if (selfHearts) selfHearts.textContent = heartsText(renderSnap.self.hearts, renderSnap.self.maxHearts, renderSnap.self.parry);
+    if (oppHearts) oppHearts.textContent = heartsText(renderSnap.opponent.hearts, renderSnap.opponent.maxHearts, renderSnap.opponent.parry);
+    if (dashState) {
+      dashState.textContent = renderSnap.self.dodgeSuccess
+        ? 'Esquive parfaite !'
+        : renderSnap.self.dashCooldown > 0
+          ? `Esquive ${renderSnap.self.dashCooldown.toFixed(1)} s`
+          : 'Esquive prête';
+    }
+    if (roundEl) roundEl.textContent = `M${renderSnap.round}/3`;
+    if (scoreEl) scoreEl.textContent = `${myScore} — ${oppScore}`;
+    if (clockEl) clockEl.textContent = renderSnap.suddenDeath ? 'MORT SUBITE' : formatClock(renderSnap.roundTime);
+
+    if (bannerEl) {
+      if (renderSnap.roundPhase === 'intermission') {
+        const wonRound = renderSnap.lastRoundWinner === role;
+        bannerEl.textContent = wonRound ? 'Manche remportée · préparation…' : 'Manche perdue · nouvelle manche…';
+      } else if (renderSnap.suddenDeath) {
+        bannerEl.textContent = 'MORT SUBITE · Le prochain coup gagne la manche !';
+      } else if (renderSnap.lunarRevealTimer > 0) {
+        bannerEl.textContent = '☾ Pulsation lunaire · positions révélées !';
+      } else if (renderSnap.roundTime >= Core.ZONE_SHRINK_START) {
+        bannerEl.textContent = 'La brume se resserre vers le centre !';
+      } else {
+        bannerEl.textContent = duel?.mode === 'ranked' ? 'Duel classé en direct' : 'Duel amical en direct';
+      }
+    }
+
+    if (oppVisEl) {
+      oppVisEl.textContent = renderSnap.opponent.visible
+        ? 'Révélée !'
+        : renderSnap.lastKnownOpponent
+          ? 'Silhouette connue'
+          : 'Hors du halo';
+    }
+
+    const statusBar = el('gameStatus');
+    if (statusBar) {
+      statusBar.textContent = `DUEL ${duel?.mode === 'ranked' ? 'CLASSÉ' : 'AMICAL'} · M${renderSnap.round}/3 · ${myScore}-${oppScore}`;
+    }
+  }
+
+  function openCombatPauseOverlay() {
+    if (!combatActive || !duel) return;
+    combatPaused = true;
+    const isRanked = duel.mode === 'ranked';
+    overlay(`<section class="night-duel-screen duel-pause-modal" aria-label="Menu du duel en cours">
+      <div class="duel-header">
+        <div class="eyebrow">☾ DUEL EN DIRECT · LE TEMPS CONTINUE</div>
+        <h2>ABANDONNER LE COMBAT ?</h2>
+        <p>${isRanked
+          ? 'Attention : abandonner un duel classé commencé compte immédiatement comme une défaite classée.'
+          : 'Abandonner ce duel amical donnera la victoire à ton adversaire sans modifier ta cote.'}</p>
+      </div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="primary" id="duelResumeCombat">Reprendre le combat</button>
+        <button type="button" class="secondary team-danger" id="duelConfirmForfeit">${isRanked ? 'Abandonner (défaite classée)' : 'Abandonner le duel'}</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+    el('duelResumeCombat').onclick = () => {
+      combatPaused = false;
+      if (typeof hideOverlay === 'function') hideOverlay();
+      document.body?.classList.remove('menu-open');
+    };
+    el('duelConfirmForfeit').onclick = () => {
+      combatPaused = false;
+      cancelOrForfeitDuel(true);
+    };
+  }
+
+  function readLocalCommand() {
+    let kx = 0;
+    let ky = 0;
+    const k = typeof keys === 'object' && keys ? keys : {};
+    if (k.ArrowLeft || k.a || k.q) kx -= 1;
+    if (k.ArrowRight || k.d) kx += 1;
+    if (k.ArrowUp || k.w || k.z) ky -= 1;
+    if (k.ArrowDown || k.s) ky += 1;
+
+    let moveX = kx;
+    let moveY = ky;
+    if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
+      moveX = pointerState.touchMoveX;
+      moveY = pointerState.touchMoveY;
+    }
+    const len = Math.hypot(moveX, moveY);
+    if (len > 1) {
+      moveX /= len;
+      moveY /= len;
+    }
+
+    const useMouseFollow = len < 0.05 && pointerState.mouseDown;
+    return {
+      moveX: Math.round(moveX * 1000) / 1000,
+      moveY: Math.round(moveY * 1000) / 1000,
+      focus: Boolean(k.Shift),
+      hasTarget: useMouseFollow,
+      targetX: Math.round(pointerState.aimX * 10) / 10,
+      targetY: Math.round(pointerState.aimY * 10) / 10,
+      hasAim: Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null),
+      aimX: Math.round(pointerState.aimX * 10) / 10,
+      aimY: Math.round(pointerState.aimY * 10) / 10,
+      dashSeq
+    };
+  }
+
+  function triggerLocalDodge() {
+    if (!combatActive) return false;
+    dashSeq += 1;
+    const cmd = readLocalCommand();
+    cmd.dash = true;
+    if (myRole() === 'creator' && hostMatch) {
+      Core.applyCommand(hostMatch, 'creator', cmd);
+    } else if (channel) {
+      channel.send('cmd', cmd);
+    }
+    if (typeof sfx === 'function') {
+      try {
+        sfx(540, 0.09, 'triangle', 0.05, 860);
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  function stepDuelFrame(dt) {
+    if (!combatActive || !duel) return;
+    applyTouchLayoutPreference();
+    const cmd = readLocalCommand();
+
+    if (myRole() === 'creator' && hostMatch) {
+      Core.applyCommand(hostMatch, 'creator', cmd);
+      Core.stepMatch(hostMatch, dt);
+      renderSnap = Core.createSnapshotFor(hostMatch, 'creator');
+
+      snapshotAccum += dt;
+      const mustFlush =
+        snapshotAccum >= SNAPSHOT_INTERVAL ||
+        hostMatch.events.some(ev => ev.type === 'round-end' || ev.type === 'match-end' || ev.type === 'lunar-pulse' || ev.type === 'sudden-death');
+      if (mustFlush) {
+        snapshotAccum = 0;
+        sendGuestSnapshotNow();
+      }
+      if (renderSnap.roundPhase === 'finished' && renderSnap.winnerRole) {
+        submitMatchReport(renderSnap.winnerRole);
+      }
+    } else if (myRole() === 'opponent') {
+      cmdAccum += dt;
+      if (cmdAccum >= CMD_INTERVAL && channel) {
+        cmdAccum = 0;
+        channel.send('cmd', cmd);
+      }
+      if (renderSnap && renderSnap.roundPhase === 'fighting') {
+        for (const p of renderSnap.projectiles || []) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+        }
+      }
+    }
+
+    updateTopHud();
+  }
+
+  function drawWitchFigure(c, x, y, aimAngle, ringColor, options = {}) {
+    c.save();
+    c.translate(x, y);
+
+    if (options.ghost) {
+      c.globalAlpha = Math.max(0.14, 0.55 * (1 - (options.age || 0) / (options.maxAge || 6)));
+      c.strokeStyle = '#c8b6e6';
+      c.lineWidth = 1.6;
+      c.setLineDash([5, 4]);
+      c.beginPath();
+      c.arc(0, 0, 20, 0, Math.PI * 2);
+      c.stroke();
+      c.setLineDash([]);
+    } else {
+      c.strokeStyle = ringColor;
+      c.lineWidth = options.isSelf ? 2.4 : 2.0;
+      c.beginPath();
+      c.arc(0, 0, 20, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    if (options.invulnerable) {
+      c.strokeStyle = '#9ef7e8';
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.arc(0, 0, 27, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    if (options.revealedByShot) {
+      c.strokeStyle = '#ffd27d';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(0, 0, 25, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    if (typeof aimAngle === 'number' && !options.ghost) {
+      c.strokeStyle = options.isSelf ? '#e7d7ff99' : '#ff9ca899';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
+      c.lineTo(Math.cos(aimAngle) * 30, Math.sin(aimAngle) * 30);
+      c.stroke();
+    }
+
+    c.rotate((typeof aimAngle === 'number' ? aimAngle : -Math.PI / 2) + Math.PI / 2);
+    c.fillStyle = options.ghost ? '#9e8cb8' : options.isSelf ? '#f5e8ff' : '#ffb8c9';
+    c.beginPath();
+    c.moveTo(0, -17);
+    c.lineTo(12, 13);
+    c.lineTo(0, 7);
+    c.lineTo(-12, 13);
+    c.closePath();
+    c.fill();
+
+    c.fillStyle = options.ghost ? '#6d5c88' : ringColor;
+    c.beginPath();
+    c.arc(0, -2, 5, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
+  function drawDuelArena() {
+    if (!combatActive || !renderSnap || typeof ctx === 'undefined' || !ctx) return;
+    const c = ctx;
+    const width = Core.ARENA_WIDTH;
+    const height = Core.ARENA_HEIGHT;
+    const cx = Core.ARENA_CENTER.x;
+    const cy = Core.ARENA_CENTER.y;
+
+    c.save();
+    const bg = c.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, '#070510');
+    bg.addColorStop(0.5, '#0d091b');
+    bg.addColorStop(1, '#06040d');
+    c.fillStyle = bg;
+    c.fillRect(0, 0, width, height);
+
+    // Repères géométriques discrets au sol pour lire les déplacements dans l'obscurité.
+    c.strokeStyle = 'rgba(155, 130, 196, 0.08)';
+    c.lineWidth = 1;
+    for (const r of [140, 280, 420]) {
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.stroke();
+    }
+    c.beginPath();
+    c.moveTo(cx, 40);
+    c.lineTo(cx, height - 40);
+    c.moveTo(40, cy);
+    c.lineTo(width - 40, cy);
+    c.stroke();
+
+    // Halo de vision de la joueuse locale.
+    const self = renderSnap.self;
+    const selfCosmetic = Core.getHaloCosmetic(self.cosmetic);
+    const haloGrad = c.createRadialGradient(self.x, self.y, 18, self.x, self.y, self.haloRadius);
+    haloGrad.addColorStop(0, selfCosmetic.color);
+    haloGrad.addColorStop(0.72, 'rgba(92, 68, 138, 0.09)');
+    haloGrad.addColorStop(1, 'rgba(10, 7, 20, 0)');
+    c.fillStyle = haloGrad;
+    c.beginPath();
+    c.arc(self.x, self.y, self.haloRadius, 0, Math.PI * 2);
+    c.fill();
+
+    c.strokeStyle = selfCosmetic.ring + '55';
+    c.lineWidth = 1.5;
+    c.setLineDash([7, 6]);
+    c.beginPath();
+    c.arc(self.x, self.y, self.haloRadius, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+
+    // Onde de pulsation lunaire.
+    if (renderSnap.lunarWave) {
+      const p = Math.min(1, renderSnap.lunarWave.age / Math.max(0.1, renderSnap.lunarWave.maxAge));
+      c.strokeStyle = `rgba(198, 226, 255, ${(1 - p) * 0.7})`;
+      c.lineWidth = 4;
+      c.beginPath();
+      c.arc(cx, cy, 40 + p * 620, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // Indices de pas (cercles acoustiques).
+    for (const step of renderSnap.footsteps || []) {
+      const ratio = Math.min(1, step.age / Math.max(0.1, step.maxAge));
+      const isMine = step.ownerRole === self.role;
+      c.strokeStyle = isMine
+        ? `rgba(166, 214, 255, ${(1 - ratio) * 0.28})`
+        : `rgba(255, 196, 132, ${(1 - ratio) * 0.58})`;
+      c.lineWidth = isMine ? 1.2 : 2;
+      c.beginPath();
+      c.arc(step.x, step.y, 6 + ratio * 22, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // Traînées d'esquive.
+    for (const trail of renderSnap.dodgeTrails || []) {
+      const ratio = Math.min(1, trail.age / Math.max(0.1, trail.maxAge));
+      const isMine = trail.ownerRole === self.role;
+      c.strokeStyle = isMine
+        ? `rgba(142, 245, 226, ${(1 - ratio) * 0.7})`
+        : `rgba(255, 148, 200, ${(1 - ratio) * 0.75})`;
+      c.lineWidth = 5 * (1 - ratio * 0.5);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(trail.x1, trail.y1);
+      c.lineTo(trail.x2, trail.y2);
+      c.stroke();
+    }
+
+    // Silhouette figée à la dernière position connue lorsque l'adversaire est cachée.
+    const opp = renderSnap.opponent;
+    if (!opp.visible && renderSnap.lastKnownOpponent) {
+      const lk = renderSnap.lastKnownOpponent;
+      drawWitchFigure(c, lk.x, lk.y, lk.aimAngle, '#b8a4d6', {
+        ghost: true,
+        age: lk.age,
+        maxAge: lk.maxAge
+      });
+    }
+
+    // Adversaire uniquement lorsqu'elle est réellement visible.
+    if (opp.visible && typeof opp.x === 'number' && typeof opp.y === 'number') {
+      const oppCosmetic = Core.getHaloCosmetic(opp.cosmetic);
+      drawWitchFigure(c, opp.x, opp.y, opp.aimAngle, oppCosmetic.ring, {
+        isSelf: false,
+        revealedByShot: opp.revealedByShot
+      });
+    }
+
+    // Projectiles dangereux : TOUJOURS visibles même hors du halo !
+    for (const proj of renderSnap.projectiles || []) {
+      const isDanger = proj.ownerRole !== self.role;
+      const speed = Math.hypot(proj.vx, proj.vy) || 1;
+      const tailX = proj.x - (proj.vx / speed) * (proj.r * 2.4);
+      const tailY = proj.y - (proj.vy / speed) * (proj.r * 2.4);
+
+      c.strokeStyle = isDanger ? 'rgba(255, 112, 96, 0.75)' : 'rgba(165, 225, 255, 0.65)';
+      c.lineWidth = Math.max(3, proj.r * 0.85);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(tailX, tailY);
+      c.lineTo(proj.x, proj.y);
+      c.stroke();
+
+      c.fillStyle = isDanger ? '#ff5d6c' : '#9ee7ff';
+      c.beginPath();
+      c.arc(proj.x, proj.y, proj.r, 0, Math.PI * 2);
+      c.fill();
+
+      c.fillStyle = '#fff8ea';
+      c.beginPath();
+      c.arc(proj.x, proj.y, Math.max(2.5, proj.r * 0.44), 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Sorcière locale.
+    drawWitchFigure(c, self.x, self.y, self.aimAngle, selfCosmetic.ring, {
+      isSelf: true,
+      invulnerable: self.invulnerable
+    });
+
+    if (self.dodgeSuccess) {
+      c.fillStyle = '#9ef7e8';
+      c.font = 'bold 13px Arial';
+      c.textAlign = 'center';
+      c.fillText('ESQUIVE !', self.x, self.y - 32);
+    }
+
+    // Brume extérieure au rayon de zone (rétrécissement progressif après 60 s).
+    if (renderSnap.zoneRadius < 680) {
+      c.save();
+      c.beginPath();
+      c.rect(0, 0, width, height);
+      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2, true);
+      c.fillStyle = renderSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
+      c.fill('evenodd');
+
+      c.strokeStyle = renderSnap.suddenDeath
+        ? '#ff6b88'
+        : renderSnap.roundTime >= Core.ZONE_SHRINK_START
+          ? '#ffb86c'
+          : 'rgba(182, 152, 224, 0.35)';
+      c.lineWidth = renderSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
+      c.beginPath();
+      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+
+    c.restore();
+  }
+
+  function canvasCoordsFromEvent(evt) {
+    const node = el('canvas');
+    if (!node) return { x: Core.ARENA_CENTER.x, y: Core.ARENA_CENTER.y };
+    const rect = node.getBoundingClientRect();
+    const rx = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0.5;
+    const ry = rect.height > 0 ? (evt.clientY - rect.top) / rect.height : 0.5;
+    return {
+      x: Math.max(0, Math.min(Core.ARENA_WIDTH, rx * Core.ARENA_WIDTH)),
+      y: Math.max(0, Math.min(Core.ARENA_HEIGHT, ry * Core.ARENA_HEIGHT))
+    };
+  }
+
+  function wireCombatInputs() {
+    const node = el('canvas');
+    if (node) {
+      node.addEventListener('pointerdown', evt => {
+        if (!combatActive) return;
+        const pt = canvasCoordsFromEvent(evt);
+        if (evt.pointerType === 'touch') {
+          if (pointerState.moveTouchId === null) {
+            pointerState.moveTouchId = evt.pointerId;
+            pointerState.moveOriginX = pt.x;
+            pointerState.moveOriginY = pt.y;
+            pointerState.touchMoveX = 0;
+            pointerState.touchMoveY = 0;
+          } else if (pointerState.aimTouchId === null) {
+            pointerState.aimTouchId = evt.pointerId;
+            pointerState.aimX = pt.x;
+            pointerState.aimY = pt.y;
+          }
+          return;
+        }
+        if (evt.button === 2) {
+          evt.preventDefault();
+          triggerLocalDodge();
+          return;
+        }
+        pointerState.mouseDown = true;
+        pointerState.mouseAimActive = true;
+        pointerState.aimX = pt.x;
+        pointerState.aimY = pt.y;
+      });
+
+      node.addEventListener('pointermove', evt => {
+        if (!combatActive) return;
+        const pt = canvasCoordsFromEvent(evt);
+        if (evt.pointerType === 'touch') {
+          if (evt.pointerId === pointerState.moveTouchId) {
+            const dx = pt.x - pointerState.moveOriginX;
+            const dy = pt.y - pointerState.moveOriginY;
+            const maxDrag = 46;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 4) {
+              const scale = Math.min(1, dist / maxDrag) / dist;
+              pointerState.touchMoveX = dx * scale;
+              pointerState.touchMoveY = dy * scale;
+            } else {
+              pointerState.touchMoveX = 0;
+              pointerState.touchMoveY = 0;
+            }
+          } else if (evt.pointerId === pointerState.aimTouchId) {
+            pointerState.aimX = pt.x;
+            pointerState.aimY = pt.y;
+          }
+          return;
+        }
+        pointerState.mouseAimActive = true;
+        pointerState.aimX = pt.x;
+        pointerState.aimY = pt.y;
+      });
+
+      const releasePointer = evt => {
+        if (evt.pointerId === pointerState.moveTouchId) {
+          pointerState.moveTouchId = null;
+          pointerState.touchMoveX = 0;
+          pointerState.touchMoveY = 0;
+        } else if (evt.pointerId === pointerState.aimTouchId) {
+          pointerState.aimTouchId = null;
+        } else if (evt.pointerType !== 'touch') {
+          pointerState.mouseDown = false;
+        }
+      };
+      node.addEventListener('pointerup', releasePointer);
+      node.addEventListener('pointercancel', releasePointer);
+      node.addEventListener('contextmenu', evt => {
+        if (combatActive) evt.preventDefault();
+      });
+    }
+
+    window.addEventListener('keydown', evt => {
+      if (!combatActive) return;
+      if (evt.code === 'Space' || evt.key === 'e' || evt.key === 'E') {
+        evt.preventDefault();
+        triggerLocalDodge();
+      } else if (evt.key === 'Escape') {
+        evt.preventDefault();
+        if (combatPaused) {
+          combatPaused = false;
+          if (typeof hideOverlay === 'function') hideOverlay();
+          document.body?.classList.remove('menu-open');
+        } else {
+          openCombatPauseOverlay();
+        }
+      }
+    });
+  }
+
+  // Hooks sur la boucle principale de game.js.
+  if (typeof update === 'function') {
+    const baseUpdate = update;
+    update = function(dt) {
+      if (combatActive) {
+        stepDuelFrame(dt);
+        return;
+      }
+      return baseUpdate(dt);
+    };
+  }
+
+  if (typeof drawGame === 'function') {
+    const baseDrawGame = drawGame;
+    drawGame = function() {
+      if (combatActive) {
+        drawDuelArena();
+        return;
+      }
+      return baseDrawGame();
+    };
+  }
+
+  if (typeof dodge === 'function') {
+    const baseDodge = dodge;
+    dodge = function(...args) {
+      if (combatActive) return triggerLocalDodge();
+      return baseDodge(...args);
+    };
+  }
+
+  if (typeof togglePause === 'function') {
+    const baseTogglePause = togglePause;
+    togglePause = function(...args) {
+      if (combatActive) {
+        openCombatPauseOverlay();
+        return;
+      }
+      return baseTogglePause(...args);
+    };
+  }
+
+  function installMenuButton() {
+    if (getGameState() !== 'league-menu' || document.querySelector('#overlay .training-mode')) return;
+    if (el('nightDuelEntry')) return;
+    const lab = el('labMenu');
+    const grid = lab?.closest('.menu-grid');
+    if (!grid) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'nightDuelEntry';
+    button.className = 'secondary menu-card-button';
+    button.innerHTML =
+      '<span class="menu-card-icon">☾</span><span>Duel de la Nuit noire<small>1v1 en direct · brouillard & éclats</small></span>';
+    button.onclick = () => openHub();
+    grid.insertBefore(button, grid.firstChild);
+  }
+
+  if (window.Journey?.menu) {
+    const baseJourneyMenu = window.Journey.menu;
+    window.Journey.menu = function(...args) {
+      const result = baseJourneyMenu.apply(this, args);
+      installMenuButton();
+      return result;
+    };
+  }
+
+  window.addEventListener('minuit:account-connected', async () => {
+    if (!screenOpen && !pendingInviteId) return;
+    screenOpen = true;
+    await refreshProfile();
+    if (pendingInviteId) {
+      await joinInvitation(pendingInviteId);
+      return;
+    }
+    renderScreen();
+  });
+
+  window.addEventListener('minuit:account-disconnected', () => {
+    profile = null;
+    if (screenOpen || combatActive) {
+      teardownDuelRuntime();
+      duel = null;
+      screenOpen = true;
+      renderScreen();
+    }
+  });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .overlay:has(.night-duel-screen){justify-content:flex-start}
+    .night-duel-screen{width:min(860px,100%);min-width:0;margin:0 auto;display:flex;flex-direction:column;gap:12px;text-align:left;color:#efe5f7}
+    .duel-header{text-align:center}
+    .duel-header h2{margin:4px 0 6px;font-size:clamp(22px,3.6vw,34px);color:#f7e9ff}
+    .duel-header p{margin:0 auto;max-width:660px;font-size:11px;line-height:1.55;color:#c3b2d4}
+    .duel-invite-banner{padding:10px 12px;border:1px dashed #d8b574aa;border-radius:10px;background:#2e233cdd;text-align:center}
+    .duel-invite-banner span{display:block;font-size:9px;letter-spacing:1.1px;color:#ffd28e}
+    .duel-invite-banner b{display:block;margin:4px 0;font:700 13px ui-monospace,monospace;color:#fff2d6;overflow-wrap:anywhere}
+    .duel-invite-banner small{font-size:10px;color:#cbbad9}
+    .duel-auth-mount{display:flex;justify-content:center;width:100%}
+    .duel-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%}
+    .duel-stat-box{padding:10px;border:1px solid #78608b66;border-radius:10px;background:#1c152acc;text-align:center}
+    .duel-stat-box small{display:block;font-size:8px;letter-spacing:.9px;color:#b8a5ca}
+    .duel-stat-box b{display:block;margin-top:4px;font-size:16px;color:#ffd596;overflow-wrap:anywhere}
+    .duel-hub-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%}
+    .duel-card{padding:13px;border:1px solid #78608b66;border-radius:11px;background:#1a1327d8;display:flex;flex-direction:column;gap:9px}
+    .duel-card h3{margin:0;font-size:11px;letter-spacing:.9px;color:#e8c99b}
+    .duel-field-label{font-size:10px;color:#cbbad9}
+    .duel-card input{width:100%;min-width:0;padding:9px 10px;border:1px solid #755e8a;border-radius:7px;background:#251c36;color:#f5ecff;font-size:11px}
+    .duel-toggle-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+    .duel-toggle-row button.is-selected{border-color:#ffd08e;background:#3a2849;color:#ffe6bd;box-shadow:0 0 0 1px #ffd08e88}
+    .duel-full-btn{width:100%;min-height:42px}
+    .duel-copy-row{display:flex;gap:7px;align-items:stretch}
+    .duel-copy-row input{flex:1}
+    .duel-uuid-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:10px;color:#c7b6d8}
+    .duel-uuid-line code{padding:4px 7px;border-radius:5px;background:#291f3b;color:#ffe0a6;overflow-wrap:anywhere}
+    .duel-share-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .duel-share-link{display:flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:1px solid #7b648f;border-radius:8px;background:#261d38;color:#f2e7ff;text-decoration:none;font-size:11px;text-align:center}
+    .duel-halo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .duel-halo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
+    .duel-halo-item.is-equipped{border-color:#ffd08e99}
+    .duel-halo-item b{font-size:11px;color:#f3e7ff}
+    .duel-halo-item small{display:block;font-size:9px;color:#bba8cd}
+    .duel-halo-swatch{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;vertical-align:middle}
+    .duel-equipped-tag{font-size:10px;color:#a9e5c8;font-weight:700}
+    .duel-versus-strip{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:10px;border:1px solid #78608b66;border-radius:10px;background:#1b1429cc}
+    .duel-fighter-pill{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-fighter-pill:last-child{text-align:right;align-items:flex-end}
+    .duel-fighter-pill b{font-size:12px;color:#f7ebff;overflow-wrap:anywhere}
+    .duel-fighter-pill small{font-size:9px;color:#bca9ce}
+    .duel-vs-mark{font-weight:700;font-size:12px;color:#ffd08e;padding:0 6px}
+    .duel-ready-badge{display:inline-block;margin-top:2px;padding:2px 7px;border-radius:999px;background:#312544;color:#cbb9dc;font-size:9px}
+    .duel-ready-badge.is-ready{background:#1f4438;color:#b6f2d4}
+    .duel-draft-counter{text-align:center;font-size:11px;font-weight:700;color:#ffd596}
+    .duel-draft-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .duel-perk-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px;border:1px solid #755d8888;border-radius:9px;background:#221933;color:#efe5f7;text-align:left;cursor:pointer}
+    .duel-perk-card.is-picked{border-color:#ffd08e;background:#36264b;box-shadow:0 0 0 1px #ffd08e99}
+    .duel-perk-top{display:flex;align-items:center;justify-content:space-between;width:100%;font-size:9px;color:#cbb7dd}
+    .duel-perk-icon{font-size:14px;color:#ffd596}
+    .duel-perk-card b{font-size:11px;color:#fff0d4}
+    .duel-perk-card span{font-size:10px;line-height:1.4;color:#c7b5d8}
+    .duel-status{min-height:18px;font-size:11px;text-align:center;color:#a9e0c7}
+    .duel-status.is-error{color:#f5aba4}
+    .duel-wager-note{margin:0;text-align:center;font-size:10px;color:#c5b3d6}
+    .duel-footer-actions{justify-content:center;flex-wrap:wrap}
+    .duel-top-hud{position:absolute;top:8px;left:8px;right:8px;z-index:5;display:none;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:7px 10px;border:1px solid #8a6fa166;border-radius:10px;background:rgba(16,11,28,0.86);backdrop-filter:blur(4px);color:#f4ebff;pointer-events:none}
+    .duel-hud-side{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-hud-opp{align-items:flex-end;text-align:right}
+    .duel-hud-opp-top{display:flex;align-items:center;gap:6px}
+    .duel-hud-exit{pointer-events:auto;padding:3px 7px;border:1px solid #b46b7888;border-radius:6px;background:#351c2acc;color:#ffd6dc;font-size:9px;cursor:pointer}
+    .duel-hud-side small{font-size:8px;letter-spacing:.8px;color:#c3b0d7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+    .duel-hud-side b{font-size:13px;color:#ff8fa3;letter-spacing:1px}
+    .duel-hud-self b{color:#9ef7e8}
+    .duel-hud-side span{font-size:9px;color:#cbb9dc}
+    .duel-hud-center{text-align:center;padding:0 6px}
+    .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
+    .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
+    .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
+    body.night-duel-combat .touchbar[data-touch-layout="left"]{justify-content:flex-end}
+    body.night-duel-combat .touchbar[data-touch-layout="right"]{justify-content:flex-start}
+    @media(max-width:720px){
+      .duel-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .duel-hub-columns,.duel-draft-grid,.duel-halo-grid,.duel-share-buttons{grid-template-columns:1fr}
+      .duel-copy-row{flex-direction:column}
+      .duel-top-hud{top:4px;left:4px;right:4px;padding:5px 7px;gap:4px}
+      .duel-hud-scoreline{font-size:10px}
+      .duel-hud-side b{font-size:11px}
+    }
+  `;
+  document.head?.appendChild(style);
+
+  wireCombatInputs();
+  installMenuButton();
+
+  pendingInviteId = readInitialInvite();
+  if (pendingInviteId) {
+    setTimeout(() => {
+      openHub({ inviteId: pendingInviteId });
+    }, 0);
+  }
+
+  window.NightDuel = {
+    open: openHub,
+    leave: leaveToHome,
+    triggerDodge: triggerLocalDodge,
+    get isOpen() {
+      return screenOpen;
+    },
+    get isCombatActive() {
+      return combatActive;
+    },
+    get snapshot() {
+      return renderSnap;
+    },
+    get currentDuel() {
+      return duel;
+    }
+  };
+})();
