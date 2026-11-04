@@ -37,6 +37,11 @@
   const ENEMY_SHOOT_CD = 2.3;
   const ENEMY_WAKE_RADIUS = 330;
   const ENEMY_SLEEP_RETURN = 7.5;
+  const ENEMY_PATROL_RADIUS = 170;
+  const ENEMY_PATROL_SPEED = 72;
+  const ENEMY_AGGRO_RADIUS = 470;
+  const ENEMY_LOSE_AGGRO = 1.15;
+  const ENEMY_KINDS = Object.freeze(['ghost', 'bat', 'spider', 'zombie', 'pumpkin', 'skull']);
   const PICKUP_RADIUS = 16;
   const PICKUP_LIFE = 22;
   const ALARM_LIFE = 4.0;
@@ -560,8 +565,8 @@
     }
     const spawns = match.spawns || { creator: SPAWN_CREATOR, opponent: SPAWN_OPPONENT };
     function nearSpawn(x, y, r) {
-      return Math.hypot(x - spawns.creator.x, y - spawns.creator.y) < 190 + r ||
-             Math.hypot(x - spawns.opponent.x, y - spawns.opponent.y) < 190 + r;
+      return Math.hypot(x - spawns.creator.x, y - spawns.creator.y) < 300 + r ||
+             Math.hypot(x - spawns.opponent.x, y - spawns.opponent.y) < 300 + r;
     }
     function inSpawnLane(x, y, r) {
       // Couloir dégagé entre chaque spawn et le centre, pour une approche équitable.
@@ -626,7 +631,10 @@
     for (let i = 0; i < 5; i += 1) {
       addPair(world.enemies, (x, y) => ({
         type: 'enemy', shape: 'circle', x, y, r: ENEMY_RADIUS, hp: ENEMY_HP,
+        kind: ENEMY_KINDS[Math.floor(rng() * ENEMY_KINDS.length)],
         state: 'sleep', targetRole: null, attackCd: 0, shootCd: 0, sleepTimer: 0,
+        loseTimer: 0, patrolAngle: rng() * Math.PI * 2,
+        perimeter: ENEMY_PATROL_RADIUS * (0.8 + rng() * 0.5),
         discovered: false, homeX: x, homeY: y
       }), ENEMY_RADIUS);
     }
@@ -647,10 +655,11 @@
     for (const enemy of match.world.enemies) {
       if (enemy.state === 'dead') continue;
       if (Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.r) {
-        const wasSleep = enemy.state === 'sleep';
+        const wasSleep = enemy.state === 'sleep' || enemy.state === 'patrol';
         enemy.state = 'awake';
         enemy.targetRole = role;
         enemy.sleepTimer = 0;
+        enemy.loseTimer = 0;
         enemy.discovered = true;
         if (wasSleep) match.events.push({ type: 'enemy-wake', enemyId: enemy.id, role });
       }
@@ -912,42 +921,10 @@
     world.pickups = world.pickups.filter(pk => !pk.taken && pk.age < pk.maxAge);
     for (const pk of world.pickups) pk.age += dt;
 
-    // Sentinelles.
-    for (const enemy of world.enemies) {
-      if (enemy.state === 'dead') continue;
-      if (enemy.state === 'sleep') {
-        for (const role of ['creator', 'opponent']) {
-          const w = match.witches[role];
-          if (Math.hypot(w.x - enemy.x, w.y - enemy.y) <= w.stats.haloRadius * 0.9) enemy.discovered = true;
-        }
-        continue;
-      }
-      let target = match.witches[enemy.targetRole];
-      if (!target || target.hearts <= 0) {
-        const otherRole = enemy.targetRole === 'creator' ? 'opponent' : 'creator';
-        target = match.witches[otherRole];
-        enemy.targetRole = otherRole;
-      }
-      const dist = Math.hypot(target.x - enemy.x, target.y - enemy.y);
-      if (dist > 640) {
-        enemy.sleepTimer += dt;
-        if (enemy.sleepTimer >= ENEMY_SLEEP_RETURN) {
-          enemy.state = 'sleep';
-          enemy.targetRole = null;
-          enemy.x = enemy.homeX; enemy.y = enemy.homeY;
-          continue;
-        }
-      } else {
-        enemy.sleepTimer = 0;
-      }
-      enemy.attackCd = Math.max(0, enemy.attackCd - dt);
-      enemy.shootCd = Math.max(0, enemy.shootCd - dt);
-      if (dist > 1) {
-        const step = Math.min(dist, ENEMY_SPEED * dt);
-        enemy.x += ((target.x - enemy.x) / dist) * step;
-        enemy.y += ((target.y - enemy.y) / dist) * step;
-      }
-      // Les sentinelles évitent les obstacles solides.
+    // Sentinelles : sommeil -> ronde dans le périmètre -> éveil par la lumière.
+    // Si la joueuse quitte la lumière, la sentinelle perd l'aggro, retourne en
+    // ronde puis se rendort. Elles ne sont visibles que dans la lumière.
+    function pushEnemyOutOfObstacles(enemy) {
       for (const ob of world.obstacles) {
         if (ob.shape === 'rect') circleRectPush(enemy, ob);
         else {
@@ -956,11 +933,104 @@
           if (d < min && d > 1e-4) { enemy.x = ob.x + (dx / d) * min; enemy.y = ob.y + (dy / d) * min; }
         }
       }
-      if (dist <= enemy.r + HIT_RADIUS + 8 && enemy.attackCd <= 0) {
+    }
+    function witchLightEngages(enemy, w) {
+      const dist = Math.hypot(w.x - enemy.x, w.y - enemy.y);
+      const halo = dist <= w.stats.haloRadius + enemy.r + 24;
+      const revealed = w.revealTimer > 0 && dist <= ENEMY_AGGRO_RADIUS;
+      const lunar = match.lunarRevealTimer > 0 && dist <= ENEMY_AGGRO_RADIUS;
+      return { dist, halo, engaged: dist <= ENEMY_AGGRO_RADIUS && (halo || revealed || lunar) };
+    }
+    for (const enemy of world.enemies) {
+      if (enemy.state === 'dead') continue;
+
+      // Réveil continu par le halo d'une sorcière (la lumière touche la sentinelle).
+      if (enemy.state === 'sleep' || enemy.state === 'patrol') {
+        let wokenBy = null;
+        for (const role of ['creator', 'opponent']) {
+          const w = match.witches[role];
+          if (w.hearts <= 0) continue;
+          if (witchLightEngages(enemy, w).halo) { wokenBy = role; break; }
+        }
+        if (wokenBy) {
+          const wasSleep = enemy.state === 'sleep';
+          enemy.state = 'awake';
+          enemy.targetRole = wokenBy;
+          enemy.sleepTimer = 0;
+          enemy.loseTimer = 0;
+          enemy.discovered = true;
+          if (wasSleep) match.events.push({ type: 'enemy-wake', enemyId: enemy.id, role: wokenBy });
+        }
+      }
+
+      if (enemy.state === 'sleep') {
+        enemy.sleepTimer = 0;
+        continue;
+      }
+
+      if (enemy.state === 'patrol') {
+        enemy.sleepTimer += dt;
+        if (enemy.sleepTimer >= ENEMY_SLEEP_RETURN) {
+          enemy.state = 'sleep';
+          enemy.sleepTimer = 0;
+          continue;
+        }
+        enemy.patrolAngle += dt * (ENEMY_PATROL_SPEED / Math.max(60, enemy.perimeter));
+        const tx = enemy.homeX + Math.cos(enemy.patrolAngle) * enemy.perimeter;
+        const ty = enemy.homeY + Math.sin(enemy.patrolAngle) * enemy.perimeter;
+        const dx = tx - enemy.x, dy = ty - enemy.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 2) {
+          const step = Math.min(d, ENEMY_PATROL_SPEED * dt);
+          enemy.x += (dx / d) * step;
+          enemy.y += (dy / d) * step;
+        }
+        pushEnemyOutOfObstacles(enemy);
+        continue;
+      }
+
+      // Éveillée : ne poursuit que si la cible est dans sa lumière / révélée.
+      let target = match.witches[enemy.targetRole];
+      let info = target && target.hearts > 0 ? witchLightEngages(enemy, target) : { dist: Infinity, engaged: false };
+      if (!info.engaged) {
+        const otherRole = enemy.targetRole === 'creator' ? 'opponent' : 'creator';
+        const other = match.witches[otherRole];
+        const otherInfo = other && other.hearts > 0 ? witchLightEngages(enemy, other) : { dist: Infinity, engaged: false };
+        if (otherInfo.engaged) {
+          enemy.targetRole = otherRole;
+          target = other;
+          info = otherInfo;
+        }
+      }
+      if (!info.engaged) {
+        enemy.loseTimer += dt;
+        if (enemy.loseTimer >= ENEMY_LOSE_AGGRO) {
+          enemy.state = 'patrol';
+          enemy.targetRole = null;
+          enemy.loseTimer = 0;
+          enemy.sleepTimer = 0;
+          enemy.patrolAngle = Math.atan2(enemy.y - enemy.homeY, enemy.x - enemy.homeX);
+          match.events.push({ type: 'enemy-calmed', enemyId: enemy.id });
+          continue;
+        }
+      } else {
+        enemy.loseTimer = 0;
+      }
+
+      enemy.attackCd = Math.max(0, enemy.attackCd - dt);
+      enemy.shootCd = Math.max(0, enemy.shootCd - dt);
+      const dist = info.dist;
+      if (target && target.hearts > 0 && dist > 1) {
+        const step = Math.min(dist, ENEMY_SPEED * dt);
+        enemy.x += ((target.x - enemy.x) / dist) * step;
+        enemy.y += ((target.y - enemy.y) / dist) * step;
+      }
+      pushEnemyOutOfObstacles(enemy);
+      if (target && target.hearts > 0 && dist <= enemy.r + HIT_RADIUS + 8 && enemy.attackCd <= 0) {
         enemy.attackCd = ENEMY_MELEE_CD;
         damageWitch(match, target, 1, 'enemy', 'enemy-melee');
         match.events.push({ type: 'enemy-attack', enemyId: enemy.id, targetRole: target.role });
-      } else if (dist > 140 && dist < 470 && enemy.shootCd <= 0) {
+      } else if (target && target.hearts > 0 && dist > 140 && dist < 470 && enemy.shootCd <= 0) {
         enemy.shootCd = ENEMY_SHOOT_CD;
         const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
         match.projectiles.push({
@@ -1742,28 +1812,48 @@
     };
   }
 
+  // Brouillard de guerre : seuls les objets/monstres touchés par la lumière
+  // (halo de la joueuse, lueur de tir, explosion) sont transmis au client.
+  function lightRadiusFor(match, w) {
+    return w.stats.haloRadius + (w.revealTimer > 0 ? 70 : 0);
+  }
+  function isLitFor(match, viewerRole, x, y, r = 0) {
+    const w = match.witches[viewerRole];
+    if (Math.hypot(x - w.x, y - w.y) <= lightRadiusFor(match, w) + r) return true;
+    for (const fx of match.effects) {
+      if (fx.type !== 'explosion') continue;
+      const p = Math.max(0, 1 - fx.age / Math.max(0.1, fx.maxAge));
+      if (Math.hypot(x - fx.x, y - fx.y) <= fx.r * p + r) return true;
+    }
+    return false;
+  }
+  function rectLitFor(match, viewerRole, ob) {
+    const w = match.witches[viewerRole];
+    const cx = Math.max(ob.x, Math.min(w.x, ob.x + ob.w));
+    const cy = Math.max(ob.y, Math.min(w.y, ob.y + ob.h));
+    return isLitFor(match, viewerRole, cx, cy, 0);
+  }
   function snapshotWorld(match, viewerRole) {
-    const self = match.witches[viewerRole];
     const world = match.world;
     const enemies = [];
     for (const enemy of world.enemies) {
       if (enemy.state === 'dead') continue;
-      const near = Math.hypot(enemy.x - self.x, enemy.y - self.y) <= self.stats.haloRadius * 1.15;
-      if (!enemy.discovered && !near && enemy.state === 'sleep') continue;
+      if (!isLitFor(match, viewerRole, enemy.x, enemy.y, enemy.r)) continue;
+      enemy.discovered = true;
       enemies.push({
         id: enemy.id, x: roundCoord(enemy.x), y: roundCoord(enemy.y), r: enemy.r,
-        hp: enemy.hp, state: enemy.state, targetRole: enemy.targetRole
+        hp: enemy.hp, state: enemy.state, targetRole: enemy.targetRole, kind: enemy.kind
       });
     }
     return {
-      obstacles: world.obstacles.map(ob => ob.shape === 'rect'
+      obstacles: world.obstacles.filter(ob => ob.shape === 'rect' ? rectLitFor(match, viewerRole, ob) : isLitFor(match, viewerRole, ob.x, ob.y, ob.r)).map(ob => ob.shape === 'rect'
         ? { id: ob.id, shape: 'rect', x: roundCoord(ob.x), y: roundCoord(ob.y), w: ob.w, h: ob.h }
         : { id: ob.id, shape: 'circle', x: roundCoord(ob.x), y: roundCoord(ob.y), r: ob.r }),
-      crates: world.crates.filter(c => c.alive).map(c => ({ id: c.id, x: roundCoord(c.x), y: roundCoord(c.y), r: c.r, hp: c.hp })),
-      bombs: world.bombs.filter(b => b.alive).map(b => ({ id: b.id, x: roundCoord(b.x), y: roundCoord(b.y), r: b.r })),
-      traps: world.traps.map(t => ({ id: t.id, x: roundCoord(t.x), y: roundCoord(t.y), r: t.r, cooldown: Math.round(t.cooldown * 100) / 100 })),
+      crates: world.crates.filter(c => c.alive && isLitFor(match, viewerRole, c.x, c.y, c.r)).map(c => ({ id: c.id, x: roundCoord(c.x), y: roundCoord(c.y), r: c.r, hp: c.hp })),
+      bombs: world.bombs.filter(b => b.alive && isLitFor(match, viewerRole, b.x, b.y, b.r)).map(b => ({ id: b.id, x: roundCoord(b.x), y: roundCoord(b.y), r: b.r })),
+      traps: world.traps.filter(t => isLitFor(match, viewerRole, t.x, t.y, t.r)).map(t => ({ id: t.id, x: roundCoord(t.x), y: roundCoord(t.y), r: t.r, cooldown: Math.round(t.cooldown * 100) / 100 })),
       enemies,
-      pickups: world.pickups.map(pk => ({ id: pk.id, x: roundCoord(pk.x), y: roundCoord(pk.y), r: pk.r, boon: pk.boon, age: Math.round(pk.age * 100) / 100, maxAge: pk.maxAge })),
+      pickups: world.pickups.filter(pk => isLitFor(match, viewerRole, pk.x, pk.y, pk.r)).map(pk => ({ id: pk.id, x: roundCoord(pk.x), y: roundCoord(pk.y), r: pk.r, boon: pk.boon, age: Math.round(pk.age * 100) / 100, maxAge: pk.maxAge })),
       alarms: world.alarms.map(a => ({ id: a.id, x: roundCoord(a.x), y: roundCoord(a.y), role: a.role, kind: a.kind, age: Math.round(a.age * 100) / 100, maxAge: a.maxAge }))
     };
   }
@@ -1841,6 +1931,9 @@
     CRATE_RADIUS,
     BOMB_BLAST_RADIUS,
     ENEMY_WAKE_RADIUS,
+    ENEMY_PATROL_RADIUS,
+    ENEMY_AGGRO_RADIUS,
+    ENEMY_KINDS,
     ARENA_WIDTH,
     ARENA_HEIGHT,
     ARENA_CENTER,
