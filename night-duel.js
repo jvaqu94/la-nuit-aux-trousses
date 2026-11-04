@@ -55,6 +55,8 @@
   let renderSnap = null;
   let snapshotAccum = 0;
   let cmdAccum = 0;
+  let snapshotRequestAccum = 0;
+  let lastSnapshotAt = 0;
   let dashSeq = 0;
   let finishSubmitting = false;
   let lastReportedDuelId = '';
@@ -276,8 +278,15 @@
     try {
       channel = window.MinuitCloud.openDuelChannel(duelId, {
         onStatus(st) {
-          if (st === 'SUBSCRIBED' && combatActive && myRole() === 'creator' && hostMatch) {
+          if (st !== 'SUBSCRIBED') return;
+          // À chaque (re)connexion on rattrape l'état du duel : un changement a pu
+          // survenir pendant une coupure réseau ou un onglet/appareil en veille.
+          syncDuelStatus(false);
+          if (combatActive && myRole() === 'creator' && hostMatch) {
             sendGuestSnapshotNow();
+          } else if (combatActive && myRole() === 'opponent') {
+            lastSnapshotAt = Date.now();
+            channel?.send('snapshot-request', {});
           }
         },
         onBroadcast(eventName, data) {
@@ -318,7 +327,12 @@
       });
       return;
     }
+    if (eventName === 'snapshot-request' && combatActive && myRole() === 'creator' && hostMatch) {
+      sendGuestSnapshotNow();
+      return;
+    }
     if (eventName === 'snapshot' && combatActive && myRole() === 'opponent') {
+      lastSnapshotAt = Date.now();
       if (!renderSnap || Number(data.seq) >= Number(renderSnap.seq || 0)) {
         renderSnap = data;
         updateTopHud();
@@ -342,6 +356,20 @@
       transitionForDuelStatus(prevStatus);
     } catch (err) {
       if (showErrors) setStatus(err?.message || 'Impossible d’actualiser le duel.', true);
+    }
+  }
+
+  // Rattrape l'état du duel après une veille d'onglet, une micro-coupure réseau ou
+  // un changement d'appareil : les timers sont gelés en arrière-plan, donc on
+  // resynchronise explicitement dès que la fenêtre redevient active/en ligne.
+  function resyncDuelConnection() {
+    if (!duel?.id || !window.MinuitCloud?.connected) return;
+    ensureRealtimeChannel(duel.id);
+    syncDuelStatus(false);
+    if (combatActive && myRole() === 'creator' && hostMatch) {
+      sendGuestSnapshotNow();
+    } else if (combatActive && myRole() === 'opponent') {
+      channel?.send('snapshot-request', {});
     }
   }
 
@@ -412,6 +440,8 @@
     dashSeq = 0;
     snapshotAccum = 0;
     cmdAccum = 0;
+    snapshotRequestAccum = 0;
+    lastSnapshotAt = 0;
 
     const creatorEquip = players[0]?.equipped || 'halo-violet';
     const opponentEquip = players[1]?.equipped || 'halo-violet';
@@ -440,6 +470,10 @@
         opponentCosmetic: opponentEquip
       });
       renderSnap = Core.createSnapshotFor(preview, 'opponent');
+      // Demande tout de suite un état frais à l'hôte (file d'attente du canal si
+      // la souscription n'est pas encore terminée).
+      snapshotRequestAccum = 0.5;
+      channel?.send('snapshot-request', {});
     }
 
     if (typeof hideOverlay === 'function') hideOverlay();
@@ -533,9 +567,10 @@
       transitionForDuelStatus('');
     } catch (err) {
       busy = false;
-      const msg = String(err?.message || 'Impossible de rejoindre ce duel.');
+      let msg = String(err?.message || 'Impossible de rejoindre ce duel.');
       if (msg.includes('Deux duels classés')) {
         createMode = 'friendly';
+        msg = 'Quota classé atteint avec cette joueuse aujourd’hui (2/2). Crée un duel AMICAL pour rejouer immédiatement : choisis « Amical » puis partage le nouveau lien.';
       }
       clearPendingInvite();
       renderScreen();
@@ -1508,11 +1543,16 @@
       </div>
       <div class="menu-actions duel-footer-actions">
         <button type="button" class="primary" id="duelResumeCombat">Reprendre le combat</button>
+        <button type="button" class="secondary" id="duelResyncCombat">Resynchroniser</button>
         <button type="button" class="secondary team-danger" id="duelConfirmForfeit">${isRanked ? 'Abandonner (défaite classée)' : 'Abandonner le duel'}</button>
       </div>
     </section>`);
     document.body?.classList.add('menu-open');
     el('duelResumeCombat').onclick = resumeCombat;
+    el('duelResyncCombat').onclick = () => {
+      resyncDuelConnection();
+      resumeCombat();
+    };
     el('duelConfirmForfeit').onclick = () => {
       combatPaused = false;
       cancelOrForfeitDuel(true);
@@ -1694,6 +1734,14 @@
       if (cmdAccum >= CMD_INTERVAL && channel) {
         cmdAccum = 0;
         channel.send('cmd', cmd);
+      }
+      // Si les snapshots de l'hôte n'arrivent plus (onglet hôte en veille, coupure),
+      // on redemande régulièrement un état frais plutôt que de rester figé.
+      snapshotRequestAccum += dt;
+      const staleMs = lastSnapshotAt ? Date.now() - lastSnapshotAt : Number.POSITIVE_INFINITY;
+      if (channel && staleMs > 1200 && snapshotRequestAccum >= 0.5) {
+        snapshotRequestAccum = 0;
+        channel.send('snapshot-request', {});
       }
       if (renderSnap && renderSnap.roundPhase === 'fighting') {
         for (const p of renderSnap.projectiles || []) {
@@ -2202,14 +2250,27 @@
 
   window.addEventListener('minuit:account-connected', async () => {
     startInviteWatcher();
-    if (!screenOpen && !pendingInviteId) return;
+    if (!screenOpen && !pendingInviteId && !duel) return;
     screenOpen = true;
     await refreshProfile();
     if (pendingInviteId) {
       await joinInvitation(pendingInviteId);
       return;
     }
+    if (duel?.id) {
+      resyncDuelConnection();
+      return;
+    }
     renderScreen();
+  });
+
+  // Retour d'onglet / reprise de réseau : les timers et le WebSocket ont pu être
+  // gelés. On resynchronise l'état du duel et on redemande un snapshot à l'hôte.
+  window.addEventListener('focus', () => resyncDuelConnection());
+  window.addEventListener('online', () => resyncDuelConnection());
+  window.addEventListener('pageshow', () => resyncDuelConnection());
+  document.addEventListener?.('visibilitychange', () => {
+    if (!document.hidden) resyncDuelConnection();
   });
 
   window.addEventListener('minuit:account-disconnected', () => {
