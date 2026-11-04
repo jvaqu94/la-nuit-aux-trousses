@@ -947,6 +947,7 @@ async function runTwoClientIntegration(mockSupabase) {
   // L'invitée envoie une commande de déplacement vers la droite de SON écran.
   // Comme son écran est orienté comme celui de la créatrice (elle se voit en bas),
   // la droite écran correspond à la gauche du monde arbitré par l'hôte.
+  const guestStartX = guest.ctx.NightDuel.snapshot.self.x;
   guest.ctx.moveInput.arrowright = true;
   tickClient(guest, 0.05);
   await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd'));
@@ -964,9 +965,11 @@ async function runTwoClientIntegration(mockSupabase) {
   await waitUntil(() => (guest.ctx.NightDuel.snapshot?.projectiles?.length || 0) >= 3);
   const guestWorld = guest.ctx.NightDuel.snapshot;
   const guestScreen = Core.orientSnapshotForViewer(guestWorld, 'opponent');
-  assert.ok(guestWorld.self.x < 400, 'La commande de l’invitée a bien déplacé sa sorcière côté hôte');
-  assert.ok(guestScreen.self.x > 400, 'À l’écran, l’invitée se voit bien aller vers la droite');
-  assert.ok(guestScreen.self.y > 650, 'L’invitée se voit en bas de son écran, comme la créatrice');
+  assert.ok(guestWorld.self.x < guestStartX, 'La commande de l’invitée a bien déplacé sa sorcière côté hôte');
+  assert.ok(guestScreen.self.x > Core.WORLD_WIDTH - guestStartX, 'À l’écran, l’invitée se voit bien aller vers la droite');
+  assert.ok(Math.abs(guestScreen.self.x - (Core.WORLD_WIDTH - guestWorld.self.x)) < 1.5, 'Le snapshot invité est bien orienté à 180°');
+  assert.ok(guestWorld.world && Array.isArray(guestWorld.world.obstacles), 'Le snapshot transporté contient le monde vaste');
+  assert.ok(Core.WORLD_WIDTH > Core.VIEW_WIDTH && Core.WORLD_HEIGHT > Core.VIEW_HEIGHT, 'La caméra ne montre qu’une partie de la map');
   guest.ctx.drawGame();
 
   // 4bis. Resynchronisation : un retour d'onglet côté invitée (événement focus)
@@ -989,8 +992,26 @@ async function runTwoClientIntegration(mockSupabase) {
   guest.ctx.moveInput.arrowright = false;
   guest.ctx.moveInput.arrowup = true;
   host.ctx.moveInput.arrowup = true;
+  // Les spawns sont aléatoires : chaque pilote se dirige vers le centre en
+  // diagonale (couloir dégagé), puis s'arrête à portée pour tirer.
+  function steerToCenter(input, self) {
+    const dx = Core.ARENA_CENTER.x - self.x;
+    const dy = Core.ARENA_CENTER.y - self.y;
+    const close = Math.hypot(dx, dy) < 230;
+    input.arrowleft = !close && dx < -15;
+    input.arrowright = !close && dx > 15;
+    input.arrowup = !close && dy < -15;
+    input.arrowdown = !close && dy > 15;
+  }
   let guard = 0;
-  while (host.ctx.NightDuel.isCombatActive && guard < 2400) {
+  while (host.ctx.NightDuel.isCombatActive && guard < 3000) {
+    const hostSnap = host.ctx.NightDuel.snapshot;
+    const guestSnap = guest.ctx.NightDuel.snapshot;
+    if (hostSnap && guestSnap) {
+      steerToCenter(host.ctx.moveInput, hostSnap.self);
+      const orientedGuest = Core.orientSnapshotForViewer(guestSnap, 'opponent');
+      steerToCenter(guest.ctx.moveInput, orientedGuest.self);
+    }
     tickClient(guest, 0.05);
     tickClient(host, 0.05);
     guard += 1;
