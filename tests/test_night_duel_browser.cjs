@@ -621,7 +621,7 @@ function createFakeDom(initialUrl, sessionObj) {
   const head = makeElement('head');
   const body = makeElement('body');
   const canvasHolder = makeElement('div', 'canvasHolder');
-  const canvas = makeElement('canvas', 'canvas');
+  const canvas = makeElement('canvas', 'game');
   canvasHolder.appendChild(canvas);
   const touchStick = makeElement('div', 'touchStick');
   const touchbar = makeElement('div', 'touchbar');
@@ -632,7 +632,14 @@ function createFakeDom(initialUrl, sessionObj) {
   const labMenu = makeElement('button', 'labMenu');
   menuGrid.appendChild(labMenu);
   makeElement('div', 'gameStatus');
+  makeElement('div', 'status');
   makeElement('button', 'specialCast');
+  const dashBtn = makeElement('button', 'dash');
+  const pauseBtn = makeElement('button', 'pause');
+  const hintEl = makeElement('span', 'hint');
+  touchbar.appendChild(dashBtn);
+  touchbar.appendChild(hintEl);
+  touchbar.appendChild(pauseBtn);
 
   const parsedUrl = new URL(initialUrl);
   const locationObj = {
@@ -707,8 +714,13 @@ function createFakeDom(initialUrl, sessionObj) {
     },
     document,
     state: 'league-menu',
-    prefs: { touchLayout: 'left', sound: true },
+    prefs: {
+      touchLayout: 'left',
+      sound: true,
+      keys: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', focus: 'Shift', dash: ' ', pause: 'p', special: 'f' }
+    },
     keys: {},
+    moveInput: {},
     ctx: canvas.getContext('2d'),
     overlay(html) {
       overlayEl.innerHTML = html;
@@ -778,6 +790,13 @@ const waitUntil = async (predicate, timeoutMs = 4000, stepMs = 25) => {
   }
   throw new Error('Délai dépassé en attente d’une condition asynchrone.');
 };
+
+// Reproduit la porte d'entrée réelle de game.js : la simulation n'avance que
+// si state === 'play'. Un duel qui resterait dans un état exotique serait figé.
+function tickClient(client, dt) {
+  if (client.ctx.state === 'play') client.ctx.update(dt);
+  client.ctx.drawGame();
+}
 
 async function verifyPythonStaticServer() {
   const port = 34000 + Math.floor(Math.random() * 4000);
@@ -879,17 +898,33 @@ async function runTwoClientIntegration(mockSupabase) {
 
   await waitUntil(() => host.ctx.NightDuel.isCombatActive && guest.ctx.NightDuel.isCombatActive);
   assert.equal(host.ctx.Journey.run, null, 'Journey.run est désactivé pendant le combat de duel');
+  assert.equal(host.ctx.state, 'play', 'la boucle principale doit simuler le duel (state play)');
+  assert.equal(guest.ctx.state, 'play', 'la boucle principale doit simuler le duel côté invitée');
+  assert.ok(host.document.getElementById('game'), 'le duel doit utiliser le canvas réel du jeu');
+  assert.equal(host.document.getElementById('pause').textContent, 'Ⅱ Abandon');
+  assert.ok(host.document.getElementById('hint').textContent.includes('DUEL'));
+
+  // Le bouton Esquive tactile doit déclencher l’esquive du duel, pas celle de la campagne.
+  host.document.getElementById('dash').click();
+  tickClient(host, 1 / 60);
+  assert.ok(host.ctx.NightDuel.snapshot.self.dashCooldown > 0, 'le bouton Esquive déclenche le bond du duel');
+
+  // Le bouton Pause ouvre le menu d’abandon du duel, puis reprend.
+  host.document.getElementById('pause').click();
+  assert.ok(host.document.getElementById('overlay').innerHTML.includes('duel-pause-modal'));
+  host.document.getElementById('duelResumeCombat').click();
+  assert.equal(host.document.getElementById('overlay').style.display, 'none', 'reprendre doit masquer le menu d’abandon');
 
   // Respect de prefs.touchLayout sur les deux clients.
   guest.ctx.prefs.touchLayout = 'right';
-  guest.ctx.update(1 / 60);
+  tickClient(guest, 1 / 60);
   assert.equal(guest.document.body.dataset.touchLayout, 'right');
 
   // 4. Simulation temps réel : vérification sur le fil WebSocket que les coordonnées cachées ne fuitent jamais,
   //    que les projectiles dangereux sont visibles et que les commandes de l'invitée déplacent sa sorcière côté hôte.
   mockSupabase.wireLog.length = 0;
   for (let i = 0; i < 6; i += 1) {
-    host.ctx.update(1 / 60);
+    tickClient(host, 1 / 60);
   }
   await waitUntil(() =>
     mockSupabase.wireLog.some(m => m.payload?.event === 'snapshot')
@@ -900,8 +935,8 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.equal(firstWireSnap.opponent.y, null, 'Aucune coordonnée Y cachée envoyée à l’invitée');
 
   // L'invitée envoie une commande de déplacement vers la droite (sans jamais envoyer de position d'autorité).
-  guest.ctx.keys.ArrowRight = true;
-  guest.ctx.update(0.05);
+  guest.ctx.moveInput.arrowright = true;
+  tickClient(guest, 0.05);
   await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd'));
   const wireCmd = mockSupabase.wireLog.find(m => m.payload?.event === 'cmd').payload.payload;
   assert.equal(wireCmd.moveX, 1);
@@ -909,8 +944,7 @@ async function runTwoClientIntegration(mockSupabase) {
 
   // Avance l'hôte d'1,2 s : les rafales automatiques tirent et les projectiles deviennent visibles chez l'invitée.
   for (let i = 0; i < 72; i += 1) {
-    host.ctx.update(1 / 60);
-    host.ctx.drawGame();
+    tickClient(host, 1 / 60);
   }
   await waitUntil(() => (guest.ctx.NightDuel.snapshot?.projectiles?.length || 0) >= 3);
   assert.ok(guest.ctx.NightDuel.snapshot.self.x > 400, 'La commande de l’invitée a bien déplacé sa sorcière côté hôte');
@@ -918,13 +952,13 @@ async function runTwoClientIntegration(mockSupabase) {
 
   // 5. Conclusion du duel en 2 manches gagnantes + double rapport de consensus + mise à jour de la cote (1000 -> 1020 / 980).
   // Rapproche les deux sorcières au centre et laisse les salves conclure les 2 manches.
-  guest.ctx.keys.ArrowRight = false;
-  guest.ctx.keys.ArrowDown = true;
-  host.ctx.keys.ArrowUp = true;
+  guest.ctx.moveInput.arrowright = false;
+  guest.ctx.moveInput.arrowdown = true;
+  host.ctx.moveInput.arrowup = true;
   let guard = 0;
   while (host.ctx.NightDuel.isCombatActive && guard < 2400) {
-    guest.ctx.update(0.05);
-    host.ctx.update(0.05);
+    tickClient(guest, 0.05);
+    tickClient(host, 0.05);
     guard += 1;
     if (guard % 20 === 0) await new Promise(r => setTimeout(r, 10));
   }

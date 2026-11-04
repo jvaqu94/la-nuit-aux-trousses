@@ -343,19 +343,21 @@ if(state==='play'&&transition<=0&&spawnIndex>=schedule.length&&waveTime>16&&!ene
 function updateHUD(){trackHighScore();$('score').textContent=String(Math.floor(score)).padStart(6,'0');$('combo').textContent='COMBO ×'+combo;$('dailyBonusHUD').textContent=mode==='daily'?'BONUS DÉFI +'+dailyBonus:'';$('wave').textContent=String(wave).padStart(2,'0')+' / 05';$('realmHUD').textContent=world.short;$('lives').textContent='♥ '.repeat(Math.max(0,lives));$('graze').textContent=player.slow>0?'TOILE −'+Math.round((1-WEB_SPEED_FACTOR)*100)+' %':graze+' FRÔLEMENTS';if(Math.ceil(player.missileTime||0)!==player.lastMissileUI){player.lastMissileUI=Math.ceil(player.missileTime||0);updateLoadout()}const dash=$('dash'),touch=(typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches)||(typeof innerWidth==='number'&&innerWidth<=850),dashActive=state==='play'&&window.CombatFeel?.dashVisual?.life>0,dashSeconds=dashActive?window.CombatFeel.dashVisual.life.toFixed(1):'0.0',dashKey=(touch?'touch':'key')+'-'+(dashActive?'active-'+dashSeconds:player.dashCD>0?player.dashCD.toFixed(1):'ready');if(dash?.dataset){if(dash.dataset.labelKey!==dashKey){dash.dataset.labelKey=dashKey;if(touch)dash.innerHTML='<span>'+(dashActive?'✦ PROTÉGÉE':player.dashCD>0?'✦ '+player.dashCD.toFixed(1)+'s':'✦ ESQUIVE')+'</span><small>'+(dashActive?'Esquive active · '+dashSeconds+' s':player.dashCD>0?'Recharge':'Bond + protection')+'</small>';else dash.textContent=dashActive?'✦ Protégée · '+dashSeconds+' s':player.dashCD>0?'✦ '+player.dashCD.toFixed(1)+'s':'✦ Esquive'}}const boss=enemies.find(e=>e.boss);$('bossbar').classList.add('hidden');if(boss){$('bossname').textContent=world.boss;$('bosshp').style.width=Math.max(0,boss.hp/boss.max*100)+'%';$('bossphase').textContent='PHASE '+boss.phase+' / 3'+(boss.kind==='demon'&&enemies.some(e=>e.lantern)?' · DÉTRUIS LES LANTERNES':'')}$('status').textContent=world.name+' · '+Math.floor(gameTime/60)+' min '+String(Math.floor(gameTime%60)).padStart(2,'0')+' s · VOL '+Math.round(scrollSpeed()/58*100)+' %'}
 function broomMuzzle(){let a=player.lean||0;return{x:Math.max(8,Math.min(W-8,player.x+Math.sin(a)*67)),y:player.y-Math.cos(a)*67}}
 function held(k){return !!moveInput[k.toLowerCase()]}
-window.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();moveInput[e.key.toLowerCase()]=true;pointer=null;if(e.repeat)return;if(e.key.toLowerCase()===prefs.keys.pause.toLowerCase()||e.key==='Escape')togglePause();if(e.key.toLowerCase()===prefs.keys.dash.toLowerCase())dodge();if(state==='menu'&&e.key==='Enter')start('story')});window.addEventListener('keyup',e=>delete moveInput[e.key.toLowerCase()]);window.addEventListener('blur',()=>{moveInput={};pointer=null;if(state==='play')pauseScreen()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='play')pauseScreen()});
+window.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();moveInput[e.key.toLowerCase()]=true;pointer=null;if(window.NightDuel?.isCombatActive)return;if(e.repeat)return;if(e.key.toLowerCase()===prefs.keys.pause.toLowerCase()||e.key==='Escape')togglePause();if(e.key.toLowerCase()===prefs.keys.dash.toLowerCase())dodge();if(state==='menu'&&e.key==='Enter')start('story')});window.addEventListener('keyup',e=>delete moveInput[e.key.toLowerCase()]);window.addEventListener('blur',()=>{moveInput={};pointer=null;if(state==='play'&&!window.NightDuel?.isCombatActive)pauseScreen()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='play'&&!window.NightDuel?.isCombatActive)pauseScreen()});
 function coords(e){let r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
 let drag=null;
 function hideTouchStick(){const el=$('touchStick');if(el){el.classList.add('hidden');if(el.firstElementChild)el.firstElementChild.style.transform='translate(0,0)'}}
 function showTouchStick(){const el=$('touchStick');if(!el||!drag?.touch)return;const r=c.getBoundingClientRect();el.style.left=(drag.cx-r.left)+'px';el.style.top=(drag.cy-r.top)+'px';el.classList.remove('hidden')}
 function moveTouchStick(e){const el=$('touchStick');if(!el||!drag?.touch||!el.firstElementChild)return;const dx=Math.max(-26,Math.min(26,e.clientX-drag.cx)),dy=Math.max(-26,Math.min(26,e.clientY-drag.cy));el.firstElementChild.style.transform=`translate(${dx}px,${dy}px)`}
 c.addEventListener('pointerdown',e=>{
+ if(window.NightDuel?.isCombatActive)return;
  if(state!=='play'||drag?.touch)return;
  e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch{}
  const p=coords(e);drag={...p,px:player.x,py:player.y,touch:e.pointerType!=='mouse',id:e.pointerId,cx:e.clientX,cy:e.clientY};
  if(!drag.touch)pointer=p;else showTouchStick();
 });
 c.addEventListener('pointermove',e=>{
+ if(window.NightDuel?.isCombatActive)return;
  if(state!=='play')return;
  const p=coords(e);
  if(e.pointerType==='mouse')pointer=p;
@@ -365,7 +367,7 @@ c.addEventListener('pointermove',e=>{
   const sensitivity=1.15;pointer={x:drag.px+(p.x-drag.x)*sensitivity,y:drag.py+(p.y-drag.y)*sensitivity};moveTouchStick(e);
  }
 });
-function release(e){if(e&&drag?.touch&&e.pointerId!==drag.id)return;drag=null;pointer=null;hideTouchStick()}
+function release(e){if(window.NightDuel?.isCombatActive){drag=null;pointer=null;hideTouchStick();return}if(e&&drag?.touch&&e.pointerId!==drag.id)return;drag=null;pointer=null;hideTouchStick()}
 c.addEventListener('pointerup',release);c.addEventListener('pointercancel',release);c.addEventListener('contextmenu',e=>e.preventDefault());
 function menuPad(){const gp=navigator.getGamepads?.()[0];if(!gp)return;const press=gp.buttons[0]?.pressed;if(state==='pause'&&press&&!padDash){state='play';hideOverlay()}else if(['menu','league-menu'].includes(state)&&press&&!padDash)start('story');padDash=press;if(gp.buttons[9]?.pressed&&!padPause&&state==='pause'){state='play';hideOverlay()}padPause=gp.buttons[9]?.pressed}
 function safeText(s){return String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
