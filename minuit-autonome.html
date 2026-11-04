@@ -868,10 +868,10 @@ boardTab='local';updateDailyInfo();renderMenu();
 (()=>{
 'use strict';
 const KEY='minuit-journey-v1',fmt=n=>Math.floor(n||0).toLocaleString('fr-FR');
-const blank=()=>({version:1,xp:0,selected:{outfit:'night',spell:'violet',broom:'classic',pet:'none',title:'novice'},lifetime:{},days:{},seen:{},achievements:[],activeDates:[],streak:0,lastActive:'',weeks:[],tutorialDone:false,trainingDone:false,dodgeGuideDone:false,giftedCosmetics:[],dailyRewards:{},mastery:{selected:'base',done:[],unlocked:[],best:{}},recent:[]});
+const blank=()=>({version:1,xp:0,selected:{outfit:'night',spell:'violet',broom:'classic',pet:'none',title:'novice'},lifetime:{},days:{},seen:{},achievements:[],activeDates:[],streak:0,lastActive:'',weeks:[],tutorialDone:false,trainingDone:false,firstGameAt:null,dodgeGuideDone:false,giftedCosmetics:[],dailyRewards:{},mastery:{selected:'base',done:[],unlocked:[],best:{}},recent:[]});
 let wardrobePaused=false,goalsOpen=true,teamSubmission=null;
 let j=blank(),run=null,timer=0,tutorialStep=-1,pendingRecord=0,writeOK=true,lastResult=null;
-try{const v=JSON.parse(localStorage.getItem(KEY)||'null');if(v?.version===1){j={...blank(),...v,selected:{...blank().selected,...v.selected}};j.mastery={...blank().mastery,...(v.mastery||{}),done:Array.isArray(v.mastery?.done)?v.mastery.done:[],unlocked:Array.isArray(v.mastery?.unlocked)?v.mastery.unlocked:[],best:{...(v.mastery?.best||{})}};if(v.trainingDone===undefined)j.trainingDone=Boolean(v.tutorialDone||v.xp>0||v.recent?.length||v.activeDates?.length||Object.keys(v.seen||{}).length||localStorage.getItem('minuit-checkpoint'))}}catch{}
+try{const v=JSON.parse(localStorage.getItem(KEY)||'null');if(v?.version===1){j={...blank(),...v,selected:{...blank().selected,...v.selected}};j.mastery={...blank().mastery,...(v.mastery||{}),done:Array.isArray(v.mastery?.done)?v.mastery.done:[],unlocked:Array.isArray(v.mastery?.unlocked)?v.mastery.unlocked:[],best:{...(v.mastery?.best||{})}};normalizeTraining(j)}}catch{}
 const items=[
  {id:'night',kind:'outfit',name:'Velours de minuit',xp:0,color:'#ad91d8',filter:'none'},
  {id:'emerald',kind:'outfit',name:'Tenue émeraude',xp:450,color:'#86dfc0',filter:'hue-rotate(100deg) saturate(1.15)'},
@@ -917,6 +917,65 @@ const achievementRules={hunter:{label:'Vaincre 100 créatures',metric:'kills',ta
  function unlockMastery(stats,win){j.mastery??={selected:'base',done:[],unlocked:[],best:{}};j.mastery.done??=[];j.mastery.unlocked??=[];j.mastery.best??={};for(const [id,r] of Object.entries(masteryRules)){const value=r.metric?(j.lifetime[r.metric]||0):0;const ok=r.run?r.run(stats,win):value>=r.target;if(ok&&!masteryEarned(id)){j.mastery.unlocked.push(id);j.mastery.best[id]=r.metric?value:1;say('Maîtrise débloquée · '+items.filter(i=>i.mastery===id).map(i=>i.name).join(' · '),4)}}write()}
 const contracts=[{id:'kills',metric:'kills',target:30,title:'Éclaircir les ombres',reward:60},{id:'waves',metric:'waves',target:2,title:'Deux pas dans la nuit',reward:80},{id:'graze',metric:'graze',target:6,title:'Danser entre les sorts',reward:90}];
 function write(){if(window.MinuitImporting||window.SandboxMode)return;try{localStorage.setItem(KEY,JSON.stringify(j));writeOK=true}catch{writeOK=false}window.MinuitCloud?.schedule?.()}
+
+/* Un profil n'est plus « nouveau » dès qu'il a commencé/terminé un vol normal,
+   terminé l'entraînement, ou conserve une trace de partie (score, checkpoint,
+   essai local, XP, journal). Une journée vide créée par le simple affichage du
+   menu ne compte pas : sinon un ordinateur neuf bloquerait la restauration cloud. */
+function savedJSON(key){try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null}}
+function nonEmptyObject(value){return !!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length>0}
+function hasPositiveStats(stats){return !!stats&&typeof stats==='object'&&!Array.isArray(stats)&&Object.values(stats).some(value=>Number(value)>0)}
+function profileHasPlayed(profile=j,saves=null){
+ const p=profile&&typeof profile==='object'?profile:{};
+ if(p.trainingDone===true||p.tutorialDone===true||p.firstGameAt)return true;
+ if(Number(p.xp)>0)return true;
+ if(Array.isArray(p.recent)&&p.recent.length)return true;
+ if(Array.isArray(p.activeDates)&&p.activeDates.length)return true;
+ if(nonEmptyObject(p.seen))return true;
+ if(hasPositiveStats(p.lifetime))return true;
+ if(Object.values(p.days||{}).some(day=>day&&(hasPositiveStats(day.stats)||Array.isArray(day.claimed)&&day.claimed.length)))return true;
+ const read=key=>saves&&typeof saves==='object'?saves[key]:savedJSON(key);
+ const high=read('minuit-highscores');
+ if(high&&typeof high==='object'&&!Array.isArray(high)&&Object.values(high).some(value=>Number(value)>0))return true;
+ const records=read('minuit-v2-scores');
+ if(Array.isArray(records)&&records.length)return true;
+ const checkpoint=read('minuit-checkpoint');
+ if(checkpoint&&typeof checkpoint==='object'&&checkpoint.version)return true;
+ const league=read('minuit-local-league-v1');
+ if(league&&typeof league==='object'){
+  if(nonEmptyObject(league.runs))return true;
+  if(Object.values(league.days||{}).some(day=>day&&(Number(day.best)>0||Number(day.bonus)>0||Number(day.rankedUsed)>0||Number(day.dailyUsed)>0||hasPositiveStats(day.stats))))return true;
+ }
+ return false;
+}
+function normalizeTraining(profile=j,saves=null){
+ if(!profile||typeof profile!=='object')return false;
+ if(profileHasPlayed(profile,saves))profile.trainingDone=true;
+ return profile.trainingDone===true;
+}
+function trainingRequired(){normalizeTraining(j);return j.trainingDone!==true}
+/* Répare les anciens exports/clouds incomplets avant validation, sans inventer
+   de progression : seules les traces déjà présentes débloquent l'entraînement. */
+function normalizeBundle(bundle){
+ if(!bundle||typeof bundle!=='object'||!bundle.saves||typeof bundle.saves!=='object')return bundle;
+ const base=blank(),p=bundle.saves[KEY];
+ if(p&&typeof p==='object'&&p.version===1){
+  const mastery=p.mastery&&typeof p.mastery==='object'?p.mastery:{};
+  const next={...base,...p,selected:{...base.selected,...(p.selected&&typeof p.selected==='object'?p.selected:{})},mastery:{...base.mastery,...mastery,done:Array.isArray(mastery.done)?mastery.done:[],unlocked:Array.isArray(mastery.unlocked)?mastery.unlocked:[],best:{...(mastery.best&&typeof mastery.best==='object'?mastery.best:{})}}};
+  for(const key of ['achievements','activeDates','weeks','recent','giftedCosmetics'])if(!Array.isArray(next[key]))next[key]=[];
+  for(const key of ['lifetime','days','seen','dailyRewards'])if(!next[key]||typeof next[key]!=='object'||Array.isArray(next[key]))next[key]={};
+  for(const key of ['tutorialDone','trainingDone','dodgeGuideDone'])if(typeof next[key]!=='boolean')next[key]=false;
+  if(!Number.isFinite(next.xp)||next.xp<0)next.xp=0;
+  if(!Number.isFinite(next.streak)||next.streak<0)next.streak=0;
+  normalizeTraining(next,bundle.saves);
+  bundle.saves[KEY]=next;
+ }
+ const league=bundle.saves['minuit-local-league-v1'];
+ if(!league||typeof league!=='object'||Array.isArray(league))bundle.saves['minuit-local-league-v1']={days:{},runs:{}};
+ else{if(!league.days||typeof league.days!=='object'||Array.isArray(league.days))league.days={};if(!league.runs||typeof league.runs!=='object'||Array.isArray(league.runs))league.runs={}}
+ return bundle;
+}
+
 function level(){return Math.floor(Math.sqrt(j.xp/120))+1}
 function nextItem(){return items.filter(i=>i.xp>j.xp&&!earned(i)).sort((a,b)=>a.xp-b.xp)[0]}
 function earned(i){return j.giftedCosmetics.includes(i.id)||(i.mastery?masteryEarned(i.mastery):i.achievement?j.achievements.includes(i.achievement):j.xp>=i.xp)}
@@ -934,10 +993,10 @@ function grantDailyReward(userId){
 function unlockAchievements(){for(const [id,a]of Object.entries(achievementRules)){const value=a.metric==='days'?j.activeDates.length:(j.lifetime[a.metric]||0);if(value>=a.target&&!j.achievements.includes(id)){j.achievements.push(id);say('Nouveau titre · '+items.find(i=>i.id===id).name,4)}}}
 function weekOf(day){const d=new Date(day+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));return d.toISOString().slice(0,10)}
 function returnVisit(){const d=diary(run.day);if(d.returnReward)return;d.returnReward=true;const diff=(Date.parse(run.day)-Date.parse(j.lastActive))/86400000;if(!j.lastActive||diff>1)j.streak=1;else if(diff===1)j.streak++;if(!j.lastActive||run.day>j.lastActive)j.lastActive=run.day;if(!j.activeDates.includes(run.day))j.activeDates.push(run.day);xp(40,'Première vague du jour');const week=weekOf(run.day);if(j.activeDates.filter(d=>weekOf(d)===week).length>=3&&!j.weeks.includes(week)){j.weeks.push(week);xp(120,'Trois nuits cette semaine')}unlockAchievements()}
-function begin(options={}){run={id:options.id||('free-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)),day:options.day||dateKey(),mode:options.mode||'free',transient:!!options.transient,stats:{},beforeXP:j.xp,beforeAchievements:[...j.achievements],beforeMastery:[...(j.mastery?.unlocked||[])],beforeTotal:LocalLeague.total(),beforeBonus:LocalLeague.dayState(options.day||dateKey()).bonus,record:getHighScore(),started:Date.now(),tutorial:!j.tutorialDone};if(!run.transient)j.seen[run.id]??={stats:{},paid:0,done:false};timer=0;tutorialStep=-1;renderTutorial();write()}
+function begin(options={}){run={id:options.id||('free-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)),day:options.day||dateKey(),mode:options.mode||'free',transient:!!options.transient,stats:{},beforeXP:j.xp,beforeAchievements:[...j.achievements],beforeMastery:[...(j.mastery?.unlocked||[])],beforeTotal:LocalLeague.total(),beforeBonus:LocalLeague.dayState(options.day||dateKey()).bonus,record:getHighScore(),started:Date.now(),tutorial:!j.tutorialDone};if(!run.transient)j.seen[run.id]??={stats:{},paid:0,done:false};if(!run.transient&&!window.SandboxMode){if(!j.firstGameAt)j.firstGameAt=new Date().toISOString();j.trainingDone=true}timer=0;tutorialStep=-1;renderTutorial();write()}
 function event(metric,n=1){if(!run||state!=='play')return;run.stats[metric]=(run.stats[metric]||0)+n;if(run.transient)return;const seen=j.seen[run.id],last=seen.stats[metric]||0,delta=Math.max(0,run.stats[metric]-last);if(!delta)return;seen.stats[metric]=run.stats[metric];j.lifetime[metric]=(j.lifetime[metric]||0)+delta;const d=diary(run.day);d.stats[metric]=(d.stats[metric]||0)+delta;if(metric==='candyXP')xp(delta,'Bonbon d’expérience');if(metric==='waves')returnVisit();for(const c of contracts){if((d.stats[c.metric]||0)>=c.target&&!d.claimed.includes(c.id)){d.claimed.push(c.id);xp(c.reward,'Contrat rempli : '+c.title)}}if(d.claimed.length===contracts.length&&!d.complete){d.complete=true;xp(100,'Carnet du jour terminé')}unlockAchievements()}
 function baseXP(stats,time,win){return Math.min(400,Math.floor((stats.kills||0)/2))+60*(stats.waves||0)+250*(stats.bosses||0)+5*Math.floor(Math.min(time,1800)/20)+(win?300:0)}
-function settle(win,abandon=false){if(!run)return null;if(run.transient){delete j.seen[run.id];run=null;$('journeyTutor').classList.add('hidden');return null}const seen=j.seen[run.id];if(seen.done){run=null;return null}const stats={...seen.stats};const n=Math.max(0,baseXP(stats,gameTime,win)-seen.paid);seen.paid+=n;seen.done=true;const prior=j.xp;xp(n);if(win)j.lifetime.wins=(j.lifetime.wins||0)+1;unlockAchievements();unlockMastery(stats,win);if(gameTime>=25)j.tutorialDone=true;const result={id:run.id,day:run.day,mode:run.mode,score:Math.floor(score),record:run.record,delta:Math.max(0,LocalLeague.total()-run.beforeTotal),bonus:Math.max(0,LocalLeague.dayState(run.day).bonus-run.beforeBonus),xp:n,extraXP:Math.max(0,j.xp-(run.beforeXP??prior)-n),unlocks:items.filter(i=>i.xp>(run.beforeXP??prior)&&i.xp<=j.xp||i.achievement&&j.achievements.includes(i.achievement)&&!(run.beforeAchievements||[]).includes(i.achievement)||i.mastery&&masteryEarned(i.mastery)&&!(run.beforeMastery||[]).includes(i.mastery)).map(i=>i.name),stats,stage:stage+1,wave,world:world.name,time:Math.floor(gameTime),cause:win?'Victoire':abandon?'Partie quittée':lastDamage,win,abandon,feedback:null,comment:''};j.recent.unshift(result);j.recent=j.recent.slice(0,30);run=null;$('journeyTutor').classList.add('hidden');write();renderPanel();return result}
+function settle(win,abandon=false){if(!run)return null;if(run.transient){delete j.seen[run.id];run=null;$('journeyTutor').classList.add('hidden');return null}const seen=j.seen[run.id];if(seen.done){run=null;return null}const stats={...seen.stats};const n=Math.max(0,baseXP(stats,gameTime,win)-seen.paid);seen.paid+=n;seen.done=true;const prior=j.xp;xp(n);if(win)j.lifetime.wins=(j.lifetime.wins||0)+1;unlockAchievements();unlockMastery(stats,win);if(gameTime>=25)j.tutorialDone=true;const result={id:run.id,day:run.day,mode:run.mode,score:Math.floor(score),record:run.record,delta:Math.max(0,LocalLeague.total()-run.beforeTotal),bonus:Math.max(0,LocalLeague.dayState(run.day).bonus-run.beforeBonus),xp:n,extraXP:Math.max(0,j.xp-(run.beforeXP??prior)-n),unlocks:items.filter(i=>i.xp>(run.beforeXP??prior)&&i.xp<=j.xp||i.achievement&&j.achievements.includes(i.achievement)&&!(run.beforeAchievements||[]).includes(i.achievement)||i.mastery&&masteryEarned(i.mastery)&&!(run.beforeMastery||[]).includes(i.mastery)).map(i=>i.name),stats,stage:stage+1,wave,world:world.name,time:Math.floor(gameTime),cause:win?'Victoire':abandon?'Partie quittée':lastDamage,win,abandon,feedback:null,comment:''};j.recent.unshift(result);j.recent=j.recent.slice(0,30);if(!j.firstGameAt)j.firstGameAt=new Date().toISOString();j.trainingDone=true;run=null;$('journeyTutor').classList.add('hidden');write();renderPanel();return result}
 function beforeEnd(){pendingRecord=run?.record||recordAtStart}
 function finish(win){const r=settle(win);if(!r)return;lastResult=r;queueTeamResult(r);renderResult(r)}
 function abandon(){if(run&&!window.SandboxMode){try{if(checkpoint()?.journey?.id===run.id)localStorage.removeItem('minuit-checkpoint')}catch{}}settle(false,true)}
@@ -1104,18 +1163,20 @@ function filter(){return get('outfit').filter||'none'}
 function spellColor(){return get('spell').color}
 function decorate(g,t){const broom=get('broom'),pet=get('pet');if(broom.id!=='classic'){g.strokeStyle=broom.color;g.lineWidth=2;g.beginPath();g.moveTo(0,-56);g.lineTo(0,48);g.stroke();g.globalAlpha=.75;for(let i=0;i<3;i++){g.fillStyle=i%2?'#fff6dc':broom.color;g.beginPath();g.arc((i-1)*7,60+Math.sin(t*5+i)*5,2,0,Math.PI*2);g.fill()}g.globalAlpha=1}if(pet.id!=='none'){g.save();g.translate(-53,12+Math.sin(t*3)*7);g.fillStyle=pet.color;if(pet.id==='owl'){g.beginPath();g.ellipse(0,0,9,11,0,0,Math.PI*2);g.fill();g.fillStyle='#292135';g.beginPath();g.arc(-3,-2,2,0,7);g.arc(3,-2,2,0,7);g.fill();g.fillStyle='#eac680';g.beginPath();g.moveTo(-2,2);g.lineTo(2,2);g.lineTo(0,6);g.fill()}else{g.beginPath();g.moveTo(0,3);g.lineTo(-18,-9-Math.sin(t*8)*5);g.lineTo(-11,6);g.lineTo(0,10);g.lineTo(11,6);g.lineTo(18,-9-Math.sin(t*8)*5);g.closePath();g.fill()}g.restore()}}
 const exportKeys=['minuit-settings','minuit-highscores','minuit-v2-scores','minuit-checkpoint','minuit-local-league-v1','minuit-campaign-v1',KEY];
-function bundle(){LocalLeague.flush();saveHighScores();write();const saves={};for(const key of exportKeys){try{saves[key]=JSON.parse(localStorage.getItem(key)||'null')}catch{saves[key]=null}}saves[KEY]=JSON.parse(JSON.stringify(j));saves['minuit-local-league-v1']=JSON.parse(JSON.stringify(LocalLeague.data));saves['minuit-settings']=JSON.parse(JSON.stringify(prefs));saves['minuit-highscores']=JSON.parse(JSON.stringify(highScores));saves['minuit-v2-scores']=JSON.parse(JSON.stringify(records));if(saves['minuit-checkpoint']){saves['minuit-checkpoint'].session='';if(!saves['minuit-checkpoint'].league?.local)saves['minuit-checkpoint'].league=null}return{format:'MinuitProgression',version:1,exportedAt:new Date().toISOString(),saves}}
+function bundle(){normalizeTraining(j);LocalLeague.flush();saveHighScores();write();const saves={};for(const key of exportKeys){try{saves[key]=JSON.parse(localStorage.getItem(key)||'null')}catch{saves[key]=null}}saves[KEY]=JSON.parse(JSON.stringify(j));saves['minuit-local-league-v1']=JSON.parse(JSON.stringify(LocalLeague.data));saves['minuit-settings']=JSON.parse(JSON.stringify(prefs));saves['minuit-highscores']=JSON.parse(JSON.stringify(highScores));saves['minuit-v2-scores']=JSON.parse(JSON.stringify(records));if(saves['minuit-checkpoint']){saves['minuit-checkpoint'].session='';if(!saves['minuit-checkpoint'].league?.local)saves['minuit-checkpoint'].league=null}return{format:'MinuitProgression',version:1,exportedAt:new Date().toISOString(),saves}}
 function exportSave(){const blob=new Blob([JSON.stringify(bundle(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='La-Nuit-aux-Trousses-sauvegarde-'+dateKey()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function validate(b){if(b?.format!=='MinuitProgression'||b.version!==1||!b.saves||typeof b.saves!=='object')throw Error('Ce fichier n’est pas une sauvegarde La Nuit aux Trousses compatible.');function walk(v,depth=0){if(depth>20)throw Error('Sauvegarde trop complexe.');if(typeof v==='number'&&(!Number.isFinite(v)||Math.abs(v)>1e15))throw Error('Valeur numérique invalide.');if(typeof v==='string'&&v.length>5000)throw Error('Texte trop long.');if(v&&typeof v==='object'){if(Object.keys(v).length>10000)throw Error('Sauvegarde trop volumineuse.');for(const [k,x]of Object.entries(v)){if(['__proto__','prototype','constructor'].includes(k))throw Error('Champ interdit.');walk(x,depth+1)}}}walk(b);for(const k of Object.keys(b.saves))if(!exportKeys.includes(k))throw Error('Donnée inconnue dans la sauvegarde.');const p=b.saves[KEY],l=b.saves['minuit-local-league-v1'],cp=b.saves['minuit-checkpoint'];if(!p||p.version!==1||!Number.isFinite(p.xp)||p.xp<0||!p.days||!p.seen||!p.selected||!Array.isArray(p.achievements)||!Array.isArray(p.activeDates)||!Array.isArray(p.recent))throw Error('Progression invalide.');for(const [k,v] of Object.entries(p.selected))if(!items.some(i=>i.kind===k&&i.id===v))throw Error('Cosmétique inconnu.');if(!l?.days||!l?.runs)throw Error('Cumul local invalide.');for(const [day,d] of Object.entries(l.days)){if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!['best','bonus','rankedUsed','dailyUsed'].every(k=>Number.isFinite(d[k])&&d[k]>=0)||!d.stats||!Array.isArray(d.claimed))throw Error('Journée de défi invalide.')}for(const d of Object.values(p.days))if(!d.stats||!Array.isArray(d.claimed))throw Error('Carnet invalide.');for(const s of Object.values(p.seen))if(!s.stats||!Number.isFinite(s.paid))throw Error('Historique invalide.');if(cp&&(![4,5,6,7,8].includes(cp.version)||!Number.isInteger(cp.stage)||cp.stage<0||cp.stage>4||!Number.isInteger(cp.wave)||cp.wave<1||cp.wave>5||!cp.player||!cp.upgrades||!Array.isArray(cp.schedule)))throw Error('Point de reprise invalide.');const statMap=o=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.values(o).every(n=>Number.isFinite(n)&&n>=0);if(!statMap(p.lifetime)||!Array.isArray(p.weeks)||p.weeks.some(w=>typeof w!=='string')||p.activeDates.some(d=>typeof d!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(d))||p.achievements.some(id=>!achievementRules[id])||typeof p.tutorialDone!=='boolean'||p.trainingDone!==undefined&&typeof p.trainingDone!=='boolean'||p.dodgeGuideDone!==undefined&&typeof p.dodgeGuideDone!=='boolean'||!Number.isFinite(p.streak)||p.streak<0)throw Error('Profil invalide.');for(const d of Object.values(p.days))if(!statMap(d.stats)||d.claimed.some(id=>!contracts.some(c=>c.id===id)))throw Error('Contrats invalides.');for(const d of Object.values(l.days))if(!statMap(d.stats)||d.rankedUsed>3||d.dailyUsed>1)throw Error('Défis invalides.');for(const d of Object.values(p.seen))if(!statMap(d.stats)||typeof d.done!=='boolean')throw Error('Vol invalide.');for(const r of p.recent)if(!r||typeof r.id!=='string'||typeof r.day!=='string'||typeof r.world!=='string'||typeof r.cause!=='string'||!statMap(r.stats)||!Number.isFinite(r.score))throw Error('Journal invalide.');for(const r of p.recent)if(r.comment!==undefined&&(typeof r.comment!=='string'||r.comment.length>1000))throw Error('Commentaire invalide.');for(const r of Object.values(l.runs))if(!r||typeof r.id!=='string'||!['ranked','daily'].includes(r.mode)||typeof r.day!=='string'||!statMap(r.stats)||!Number.isFinite(r.score)||typeof r.finished!=='boolean'||!Array.isArray(r.credited))throw Error('Essai local invalide.');if(cp?.journey&&(!statMap(cp.journey.stats)||typeof cp.journey.id!=='string'||!['free','ranked','daily'].includes(cp.journey.mode)))throw Error('Progression du vol invalide.');const settings=b.saves['minuit-settings'];if(settings&&(!settings.keys||!['easy','normal','hard'].includes(settings.difficulty)||settings.touchLayout!==undefined&&!['standard','left','right'].includes(settings.touchLayout)))throw Error('Réglages invalides.');const scores=b.saves['minuit-v2-scores'];if(scores&&(!Array.isArray(scores)||scores.some(r=>!r||!Number.isFinite(r.score)||r.score<0||typeof r.name!=='string'||!['easy','normal','hard','ranked','daily','world2-easy','world2-normal','world2-hard'].includes(r.category))))throw Error('Records invalides.');const high=b.saves['minuit-highscores'];if(high&&!statMap(high))throw Error('HI-SCORE invalide.');if(settings&&(typeof settings.name!=='string'||Object.values(settings.keys).some(k=>typeof k!=='string')))throw Error('Touches invalides.');if(cp&&(!Number.isFinite(cp.score)||!Number.isFinite(cp.lives)||!Number.isFinite(cp.gameTime)||!Number.isFinite(cp.diff)||!Number.isFinite(cp.player.x)||!Number.isFinite(cp.player.y)))throw Error('Point de reprise corrompu.');if(cp?.sweets&&(!Array.isArray(cp.sweets)||cp.sweets.length>20||cp.sweets.some(d=>!d||d.kind!=='sweet'||!['xp','points','shield'].includes(d.sweetType)||!Number.isFinite(d.x)||!Number.isFinite(d.y)||!Number.isFinite(d.xp)||d.xp<0||d.xp>1000||!Number.isFinite(d.points)||d.points<0||d.points>50000)))throw Error('Bonbons de sauvegarde invalides.');window.Arsenal?.validateSave?.(b);window.Adventure?.validateSave?.(b);window.Nemesis?.validateSave?.(b);window.Campaign?.validateSave?.(b);return b}
 async function importSave(file,status,options={}){
  try{
   if(!file)return false;if(file.size>2*1024*1024)throw Error('Fichier trop volumineux (2 Mo maximum).');
-  const b=validate(JSON.parse(await file.text()));
+  const b=validate(normalizeBundle(JSON.parse(await file.text())));
   // La restauration automatique du cloud sur un appareil sans progression locale
   // ne demande pas de confirmation ; une copie de secours reste toujours conservée.
   if(!options?.skipConfirm&&!confirm('Remplacer ta progression locale par cette sauvegarde ? Une copie de secours sera conservée dans ce navigateur.'))return false;
   const previous={};for(const k of exportKeys)previous[k]=localStorage.getItem(k);localStorage.setItem('minuit-import-rollback',JSON.stringify(previous));window.MinuitImporting=true;
   try{for(const k of exportKeys){if(b.saves[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(b.saves[k]))}}catch(e){for(const k of exportKeys){if(previous[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,previous[k])}window.MinuitImporting=false;throw Error('Stockage insuffisant. Import annulé.')}
+  if(b.saves[KEY])j=b.saves[KEY];
+  try{window.dispatchEvent(new CustomEvent('minuit:progress-restored',{detail:{source:options?.skipConfirm?'cloud':'file'}}))}catch{}
   location.reload();return true;
  }catch(e){status.textContent=e instanceof SyntaxError?'Fichier JSON illisible. Aucun changement effectué.':e.message;return false}
 }
@@ -1182,7 +1243,7 @@ css.textContent+=`
 }
 `;
 document.head.appendChild(css);document.querySelector('.sidebar').insertAdjacentHTML('afterbegin','<section class="panel" id="journeyPanel"></section>');document.querySelector('.arena').insertAdjacentHTML('beforeend','<div id="journeyTutor" class="journey-tutor hidden"></div>');
-window.Journey={contractHTML,menu,archives,begin,event,tick,beforeEnd,finish,abandon,snapshot,restore,canResume,completeDodgeGuide,filter,spellColor,decorate,bundle,exportSave,importSave,validate,saveProgress:write,grantDailyReward,isEarned:earned,collectionArt:grimoireCollectionArt,dailyCosmetics:()=>items.filter(giftEligible),get state(){return j},get run(){return run},set run(value){run=value},items,masteryRules};
+window.Journey={contractHTML,menu,archives,begin,event,tick,beforeEnd,finish,abandon,snapshot,restore,canResume,completeDodgeGuide,filter,spellColor,decorate,bundle,exportSave,importSave,validate,saveProgress:write,grantDailyReward,isEarned:earned,trainingRequired,hasPlayed:()=>profileHasPlayed(j),normalizeBundle,collectionArt:grimoireCollectionArt,dailyCosmetics:()=>items.filter(giftEligible),get state(){return j},get run(){return run},set run(value){run=value},items,masteryRules};
 window.addEventListener('pagehide',write);renderPanel();menu();
 })();
 </script><script>/* Le terrain et ses commandes tiennent dans la fenêtre ; les infos défilent à part. */
@@ -2307,7 +2368,7 @@ function finishTraining(){
  $('trainingMenu').onclick=exitTraining;
 }
 function startTraining(){
- if(active)return;active=true;finished=false;requiredRun=!Journey.state.trainingDone;
+ if(active)return;active=true;finished=false;requiredRun=typeof Journey.trainingRequired==='function'?Journey.trainingRequired():!Journey.state.trainingDone;
  try{Adventure.startGuided()}catch(error){active=false;requiredRun=false;throw error}
  document.body.classList.add('guided-training');$('modeLabel').textContent=(requiredRun?'Entraînement obligatoire':'Entraînement guidé')+' · sans score ni récompense';$('labTools').classList.add('hidden');$('adventureStatus').classList.add('hidden');setupStep(0);
 }
@@ -2361,7 +2422,8 @@ function renderGuide(){
 function openGuide(returnTo='menu'){guideReturn=returnTo;guidePage=0;state='help';clearMessages();renderGuide()}
 function closeGuide(){if(guideReturn==='settings')settings();else LocalLeague.menu()}
 function applyRequirement(){
- if(Journey.state.trainingDone||!$('playAdventure'))return;
+ const required=typeof Journey.trainingRequired==='function'?Journey.trainingRequired():!Journey.state.trainingDone;
+ if(!required||!$('playAdventure'))return;
  const play=$('playAdventure');play.innerHTML='<span class="button-icon">⌁</span>Entraînement obligatoire';play.onclick=()=>{activateAudio();startTraining()};$('startGuided')?.classList.add('hidden');
  let note=$('trainingRequiredNote');const route=document.querySelector('.home-world-route');
  if(!note&&route){route.id='trainingRequiredNote';route.className='training-required-note home-required-note';note=route}
@@ -2393,7 +2455,7 @@ const previousUpdate=update;update=function(dt){
  if(currentMessage&&toastTime<=0){currentMessage=null;if(messageQueue.length)showMessage(messageQueue.shift());else{toast='';$('toast').replaceChildren()}}
  if(active&&state==='play')tickTraining(dt,before);
 };
-window.GuidedTraining={clearMessages,start:startTraining,exit:exitTraining,openGuide,applyRequirement,required:()=>!Journey.state.trainingDone,stepCount:steps.length,get active(){return active},get finished(){return finished},get step(){return active?steps[stepIndex].id:null},get stepIndex(){return stepIndex},get exerciseDone(){return!!exercise.done},get showProjectileCue(){return active&&state==='play'&&steps[stepIndex]?.id==='dodge'&&!exercise.done},showCoach:false};
+window.GuidedTraining={clearMessages,start:startTraining,exit:exitTraining,openGuide,applyRequirement,required:()=>typeof Journey.trainingRequired==='function'?Journey.trainingRequired():!Journey.state.trainingDone,stepCount:steps.length,get active(){return active},get finished(){return finished},get step(){return active?steps[stepIndex].id:null},get stepIndex(){return stepIndex},get exerciseDone(){return!!exercise.done},get showProjectileCue(){return active&&state==='play'&&steps[stepIndex]?.id==='dodge'&&!exercise.done},showCoach:false};
 
 const style=document.createElement('style');style.textContent=`
 body.menu-open>header,body.menu-open main .heading,body.menu-open .sidebar,body.menu-open .touchbar,body.menu-open>.footer{display:none!important}body.menu-open main{padding-top:0}body.menu-open .layout{display:block}body.menu-open .arena{height:min(900px,100vh);min-height:620px;border-radius:0;box-shadow:none}#menuVisual{display:flex;align-items:center;justify-content:center;gap:4px;min-height:170px;border:1px solid #b88cc055;border-radius:16px;background:radial-gradient(circle at 50% 42%,#8f5a7650,#1a1229 68%);box-shadow:inset 0 0 36px #d4936c18;overflow:hidden}#menuVisual .lesson-icon{width:78px;height:78px;transform:translateY(7px)}#menuVisual .lesson-icon:first-child{width:105px;height:105px;z-index:2}#menuVisual .lesson-icon:last-child{width:64px;height:64px;opacity:.75}.redesigned-menu{max-width:760px!important}.menu-hero-card{display:grid;grid-template-columns:210px 1fr;gap:20px;align-items:center;padding:18px;border:1px solid #a57db455;border-radius:18px;background:linear-gradient(145deg,#21172fe8,#100d1be8);box-shadow:0 18px 70px #05030ccc}.menu-copy{text-align:left}.menu-copy h1{font-family:Georgia,serif;font-size:clamp(34px,5vw,58px);line-height:.92;margin:5px 0 12px;color:#fff0e1}.menu-copy p{font-size:12px;line-height:1.6;color:#c9bad5;margin:0 0 14px}.button-icon{margin-right:6px;color:#ffd08b}.menu-primary{display:grid;grid-template-columns:1.35fr 1fr;gap:8px}.menu-primary>button{min-height:52px;margin:0}.menu-primary .primary{font-size:14px}.training-entry{font-size:10px;border-color:#b99bd4}.training-entry small{display:block;font-size:8px;margin-top:4px;color:#cfc0d9}.resume-button{margin-top:8px;width:100%;font-size:10px}.menu-status{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 3px 3px;color:#cbb5d8;font-size:10px}.menu-status b{color:#f0d49c;margin-right:10px}.menu-audio-note{color:#e8be87}.redesigned-menu .menu-group{margin-top:12px;padding-top:12px;border-top:1px solid #76608055}.redesigned-menu .menu-group h2{font-size:10px;letter-spacing:1.5px;color:#e6d4ee;margin:0 0 7px}.redesigned-menu .menu-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.redesigned-menu .menu-grid.three{grid-template-columns:repeat(3,1fr)}.menu-card-button{display:flex;align-items:center;gap:8px;min-height:42px;margin:0;padding:9px;text-align:left;background:#2a2038}.menu-card-icon{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:#4a3157;color:#ffd08b;font-size:15px}.menu-bottom{display:flex;justify-content:center;gap:8px;margin-top:12px}.menu-bottom button{margin:0;font-size:10px}@media(max-width:650px){.menu-hero-card{grid-template-columns:1fr;gap:10px;padding:13px}.menu-copy{text-align:center}.menu-copy h1{font-size:36px}.menu-copy p{font-size:11px}.menu-primary{grid-template-columns:1fr 1fr}.menu-status{align-items:flex-start;flex-direction:column;gap:5px}.redesigned-menu .menu-grid.three{grid-template-columns:1fr 1fr}.redesigned-menu .menu-grid.three .menu-card-button:last-child{grid-column:1/-1}.menu-bottom{justify-content:stretch}.menu-bottom button{flex:1}}#toast{max-width:min(92%,650px)}.toast-card{display:flex;align-items:center;justify-content:center;gap:10px;line-height:1.45}.toast-copy{display:block}.toast-card .lesson-icon{width:46px;height:46px;flex:0 0 46px}.lesson-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:74px;height:74px;flex:0 0 auto}.lesson-icon img{display:block;width:100%;height:100%;object-fit:contain}.lesson-icon .icon-mark{position:absolute;right:-2px;bottom:0;display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#302342;border:2px solid #e4d4ff;color:#fff;font-size:18px;box-shadow:0 0 16px #b89cff88}.spell-icon{border-radius:50%;color:#fff4ff;font-size:38px;background:radial-gradient(circle at 35% 30%,#f7e5ff 0 5%,#c598ff 12%,#7847bc 35%,#2b1b48 68%);border:2px solid #dbc1ff;box-shadow:0 0 24px #ad7bff77,inset 0 0 15px #fff5}.overlay:has(.main-menu){justify-content:flex-start;padding:20px 14px;overflow-y:auto}.main-menu{width:100%;max-width:610px;margin:auto;text-align:left}.menu-heading{display:block;height:auto;padding:0;border:0;text-align:center}.menu-heading h1{font-size:29px;line-height:1.05;margin:5px 0 8px}.menu-heading p{font-size:11px;line-height:1.5;margin:0 auto 15px;max-width:440px}.menu-kicker{font-size:8px;letter-spacing:2px;color:#d0b6df;text-transform:uppercase}.menu-primary{display:grid;grid-template-columns:1fr 1.35fr;gap:9px}.menu-primary>button{min-height:54px;margin:0}.menu-primary>button:first-child{font-size:17px}.training-entry{border-color:#b99bd4}.training-entry small{display:block;font-size:8px;font-weight:400;letter-spacing:.2px;margin-top:4px}.main-menu>#localResume{width:100%;margin-top:9px;border-color:#c3a6dc}.menu-progress{display:flex;justify-content:space-between;gap:12px;margin:13px 2px 4px;color:#cbb5d8;font-size:10px}.menu-progress b{color:#f0d49c}.menu-group{margin-top:12px;padding-top:10px;border-top:1px solid #76608055}.menu-group h2{font-size:10px;letter-spacing:1.2px;color:#e6d4ee;margin:0 0 7px}.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}.menu-grid.three{grid-template-columns:repeat(3,1fr)}.menu-grid button{min-height:35px;margin:0;padding:7px 9px;font-size:10px;text-align:left;background:#2a2038}.training-card{position:absolute;z-index:7;left:12px;right:12px;top:104px;display:grid;grid-template-columns:66px 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #b99bd4;border-radius:14px;background:linear-gradient(135deg,#241b35f5,#161224f5);box-shadow:0 8px 35px #090612aa;pointer-events:auto}.training-card h3{font-size:15px;color:#fff0ff;margin:3px 0}.training-card p{font-size:10px;line-height:1.45;margin:3px 0;color:#d8c8e4}.training-card .training-goal{color:#f1d7a2}.training-card .training-goal.done{color:#a9f1d7}.training-icon .lesson-icon{width:64px;height:64px}.training-nav{display:flex;flex-direction:column;gap:5px}.training-nav button{font-size:9px;padding:7px 10px;margin:0;min-width:76px}.training-nav button:disabled{opacity:.4}.guided-training .hud>div:first-child{visibility:hidden}.guided-training #labTools,.guided-training #adventureStatus,.guided-training #journeyTutor,.guided-training #dodgeCoach,.guided-training #questHUD,.guided-training #toast{display:none!important}.guide-card,.training-finish{width:100%;max-width:590px;text-align:center;margin:auto}.guide-card h2,.training-finish h2{font-size:23px;margin:8px 0;color:#f1e2fa}.guide-card>p,.training-finish>p{font-size:12px;line-height:1.6;color:#d9c9e4}.guide-art{display:flex;align-items:center;justify-content:center;gap:12px;min-height:100px;margin:10px 0}.guide-art .lesson-icon{width:90px;height:90px}.guide-notes{text-align:left;max-width:510px;margin:12px auto 18px;padding-left:22px;color:#cdbbda;font-size:11px;line-height:1.65}.guide-nav,.training-finish-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:8px}.guide-nav button,.training-finish-actions button{margin:0;padding:10px 16px}.finish-art .lesson-icon{width:64px;height:64px}@media(max-width:850px){.overlay:has(.main-menu){padding:14px 10px}.menu-heading h1{font-size:25px}.menu-heading p{font-size:10px;margin-bottom:11px}.menu-primary>button{min-height:50px}.menu-grid.three{grid-template-columns:1fr 1fr}.menu-grid.three button:last-child{grid-column:1/-1}.training-card{top:96px;grid-template-columns:52px 1fr;gap:8px;padding:9px}.training-icon .lesson-icon{width:50px;height:50px}.training-card h3{font-size:13px}.training-card p{font-size:10px}.training-nav{grid-column:1/-1;flex-direction:row;justify-content:flex-end}.training-nav button{min-width:0;flex:1;padding:6px}.toast-card .lesson-icon{width:40px;height:40px;flex-basis:40px}.toast-card{gap:7px}.guide-art .lesson-icon{width:72px;height:72px}.guide-card h2{font-size:20px}}@media(max-height:500px){.training-card{top:68px;padding:6px;grid-template-columns:42px 1fr auto}.training-card p{font-size:8px}.training-card h3{font-size:11px}.training-nav{grid-column:auto;flex-direction:column}.training-icon .lesson-icon{width:40px;height:40px}.menu-heading p{display:none}.menu-group{margin-top:7px;padding-top:6px}.menu-progress{margin-top:8px}}
@@ -2556,14 +2618,22 @@ async function fetchCloudSave(){
 }
 function localHasProgress(){
  try{
+  // Le profil sait distinguer un vrai premier vol d'une simple journée vide
+  // créée par l'affichage du menu sur un appareil neuf.
+  if(typeof window.Journey?.hasPlayed==='function')return !!window.Journey.hasPlayed();
   const j=window.Journey?.state;
-  if(j&&(Number(j.xp)>0||j.trainingDone||j.tutorialDone||(Array.isArray(j.recent)&&j.recent.length)||(Array.isArray(j.activeDates)&&j.activeDates.length)||Object.keys(j.seen||{}).length))return true;
+  if(j&&(Number(j.xp)>0||j.trainingDone||j.tutorialDone||j.firstGameAt||(Array.isArray(j.recent)&&j.recent.length)||(Array.isArray(j.activeDates)&&j.activeDates.length)||Object.keys(j.seen||{}).length))return true;
   const high=JSON.parse(localStorage.getItem('minuit-highscores')||'null');
-  if(high&&typeof high==='object'&&Object.values(high).some(value=>Number(value)>0))return true;
-  const league=JSON.parse(localStorage.getItem('minuit-local-league-v1')||'null');
-  if(league&&typeof league==='object'&&Object.keys(league.days||{}).length)return true;
+  if(high&&typeof high==='object'&&!Array.isArray(high)&&Object.values(high).some(value=>Number(value)>0))return true;
   const scores=JSON.parse(localStorage.getItem('minuit-v2-scores')||'null');
   if(Array.isArray(scores)&&scores.length)return true;
+  const checkpoint=JSON.parse(localStorage.getItem('minuit-checkpoint')||'null');
+  if(checkpoint&&typeof checkpoint==='object'&&checkpoint.version)return true;
+  const league=JSON.parse(localStorage.getItem('minuit-local-league-v1')||'null');
+  if(league&&typeof league==='object'){
+   if(Object.keys(league.runs||{}).length)return true;
+   if(Object.values(league.days||{}).some(day=>day&&(Number(day.best)>0||Number(day.bonus)>0||Number(day.rankedUsed)>0||Number(day.dailyUsed)>0||Object.values(day.stats||{}).some(value=>Number(value)>0))))return true;
+  }
  }catch{}
  return false;
 }
@@ -2803,7 +2873,7 @@ async function pushSave(){
 /* Restauration d’une ligne cloud. L’état de synchro est aligné avant l’import,
  * car Journey.importSave recharge la page en cas de succès. */
 async function restoreCloud(row,options={}){
- const payload=row?.payload;
+ const payload=typeof Journey.normalizeBundle==='function'?Journey.normalizeBundle(row?.payload):row?.payload;
  if(!payload)throw Error('Aucune sauvegarde cloud pour ce compte.');
  Journey.validate(payload);
  const stamp=cloudRowStamp(row);
@@ -4237,7 +4307,14 @@ const style=document.createElement('style');style.textContent=`
 @media(max-height:500px) and (min-width:651px){.home-menu .home-hero{min-height:275px}#menuVisual.home-visual{min-height:275px}.home-witch{width:255px}.home-moon{width:150px;height:150px}.home-hero .menu-copy{padding-top:18px;padding-bottom:18px}.home-hero .menu-copy h1{font-size:39px}.home-menu-panels{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){.home-menu *{scroll-behavior:auto}}
 `;
-document.head.appendChild(style);setInterval(updateHomeAudio,800);Journey.menu();
+document.head.appendChild(style);setInterval(updateHomeAudio,800);
+/* Après connexion / restauration, le menu doit refléter le profil récupéré :
+   un compte ayant déjà joué ou terminé l'entraînement ne reste pas bloqué sur
+   le bouton « Entraînement obligatoire » rendu avant la synchronisation. */
+function refreshHomeAfterAccount(){if(state==='league-menu'&&!Adventure.training)Journey.menu()}
+window.addEventListener('minuit:account-connected',refreshHomeAfterAccount);
+window.addEventListener('minuit:progress-restored',refreshHomeAfterAccount);
+Journey.menu();
 })();
 </script><script>/* La Nuit aux Trousses — tableau de highscores arcade local, plein écran sur téléphone. */
 (function(){

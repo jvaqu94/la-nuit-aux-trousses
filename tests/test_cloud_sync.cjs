@@ -24,6 +24,9 @@ const bundle = (journeyOver, high = {}, leagueDays = {}) => ({
 });
 const pcBundle = () => bundle({ xp: 4200, trainingDone: true, tutorialDone: true, recent: [{ id: 'r1' }], activeDates: ['2026-11-01'], seen: { r1: { stats: {}, paid: 10, done: true } } }, { ranked: 18500, normal: 9000 }, { '2026-11-01': { best: 18500, bonus: 0, rankedUsed: 1, dailyUsed: 0, stats: {}, claimed: [] } });
 const freshBundle = () => bundle({}, {}, {});
+/* Un appareil neuf qui a seulement affiché le menu possède une journée vide.
+   Elle ne doit pas être considérée comme une progression locale divergente. */
+const freshDeviceBundle = () => bundle({}, {}, { '2026-11-04': { best: 0, bonus: 0, rankedUsed: 0, dailyUsed: 0, stats: { kills: 0 }, claimed: [] } });
 
 /* Each device keeps a mutable bundle; importSave replaces it (simulating the
  * page reload that follows a real restore). */
@@ -79,6 +82,18 @@ async function login(device, pseudo) {
   assert.equal(phone.cloud.connected, true, 'téléphone connecté');
   assert.equal(phoneJourney.state.trainingDone, true, 'BUG 1 corrigé : l’entraînement est récupéré automatiquement sur le téléphone');
   assert.equal(phoneJourney._current().saves['minuit-highscores'].ranked, 18500, 'BUG 1 corrigé : les scores sont récupérés automatiquement');
+
+  // === 2b. Another fresh computer: an empty menu day must not force a choice ===
+  let emptyDayConfirms = 0;
+  const emptyDayJourney = makeJourney(freshDeviceBundle);
+  const emptyDayPC = await makeDevice(db, 'empty-day-pc', {
+    tokens, users, journey: emptyDayJourney,
+    confirm: () => { emptyDayConfirms += 1; return false; },
+  });
+  await login(emptyDayPC, 'Alice');
+  assert.equal(emptyDayJourney.state.trainingDone, true, 'la journée vide ne bloque pas la récupération du profil entraîné');
+  assert.equal(emptyDayJourney._current().saves['minuit-highscores'].ranked, 18500);
+  assert.equal(emptyDayConfirms, 0, 'aucune confirmation ne doit être demandée sur un appareil réellement neuf');
 
   // === 3. The phone (now aligned) does not clobber the cloud with empty data ===
   await phone.cloud.sync();
