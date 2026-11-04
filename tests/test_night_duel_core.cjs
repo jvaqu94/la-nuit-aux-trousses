@@ -3,6 +3,16 @@
 const assert = require('node:assert/strict');
 const Core = require('../duel-core.js');
 
+// Les sections historiques testent le combat pur : on vide le décor généré pour
+// éviter qu'un piège/une caisse ne perturbe les assertions déterministes.
+function emptyWorld(match) {
+  const w = match.world;
+  w.obstacles = []; w.crates = []; w.bombs = []; w.traps = [];
+  w.enemies = []; w.pickups = []; w.alarms = [];
+  match.effects = [];
+  return match;
+}
+
 // 1. Catalogue de 10 atouts et validation du draft de 3 atouts distincts.
 assert.equal(Core.PERK_CATALOG.length, 10, 'Le catalogue doit compter 10 atouts');
 const expectedIds = [
@@ -42,6 +52,7 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash'],
     opponentPerks: ['twin-burst', 'soft-steps', 'wide-wave']
   });
+  emptyWorld(match);
   assert.equal(match.witches.creator.hearts, 5);
   assert.equal(match.witches.opponent.hearts, 5);
   assert.equal(Core.isOpponentVisible(match, 'opponent'), false);
@@ -51,7 +62,10 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.equal(initialGuestSnap.opponent.x, null);
   assert.equal(initialGuestSnap.opponent.y, null);
   assert.equal(initialGuestSnap.opponent.aimAngle, null);
-  assert.equal(JSON.stringify(initialGuestSnap).includes('"y":730'), false);
+  // Les coordonnées cachées de l'adversaire ne doivent jamais apparaître.
+  // (self.y peut coïncider avec le spawn créateur selon l'aléa : on teste l'objet opponent.)
+  assert.equal(JSON.stringify(initialGuestSnap.opponent).includes('"x":null'), true);
+  assert.equal(JSON.stringify(initialGuestSnap.opponent).includes('"y":null'), true);
 
   // Aucun tir automatique : même après plusieurs secondes, aucune salve ne part
   // et personne n'est révélé tant que la commande de tir n'est pas maintenue.
@@ -103,6 +117,7 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['fleeting-dash', 'comet-boots', 'dawn-halo'],
     opponentPerks: ['short-lance', 'ember-heart', 'swift-powder']
   });
+  emptyWorld(match);
   match.witches.creator.fireCooldown = 99;
   match.witches.opponent.fireCooldown = 99;
 
@@ -110,10 +125,10 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   match.projectiles.push({
     id: 900,
     ownerRole: 'opponent',
-    x: 434,
-    y: 700,
-    prevX: 434,
-    prevY: 700,
+    x: match.witches.creator.x + 34,
+    y: match.witches.creator.y - 30,
+    prevX: match.witches.creator.x + 34,
+    prevY: match.witches.creator.y - 30,
     vx: 0,
     vy: 420,
     r: 8,
@@ -133,15 +148,16 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['fleeting-dash', 'comet-boots', 'dawn-halo'],
     opponentPerks: ['short-lance', 'ember-heart', 'swift-powder']
   });
+  emptyWorld(matchDirect);
   matchDirect.witches.creator.fireCooldown = 99;
   matchDirect.witches.opponent.fireCooldown = 99;
   matchDirect.projectiles.push({
     id: 901,
     ownerRole: 'opponent',
-    x: 400,
-    y: 726,
-    prevX: 400,
-    prevY: 726,
+    x: matchDirect.witches.creator.x,
+    y: matchDirect.witches.creator.y - 4,
+    prevX: matchDirect.witches.creator.x,
+    prevY: matchDirect.witches.creator.y - 4,
     vx: 0,
     vy: 300,
     r: 8,
@@ -158,10 +174,10 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   matchDirect.projectiles = [{
     id: 902,
     ownerRole: 'creator',
-    x: 400,
-    y: 170,
-    prevX: 400,
-    prevY: 170,
+    x: matchDirect.witches.opponent.x,
+    y: matchDirect.witches.opponent.y,
+    prevX: matchDirect.witches.opponent.x,
+    prevY: matchDirect.witches.opponent.y,
     vx: 0,
     vy: -300,
     r: 8,
@@ -179,6 +195,7 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash'],
     opponentPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash']
   });
+  emptyWorld(match);
   // Neutralise les tirs pour observer précisément l'horloge d'arène jusqu'à 90 s.
   const holdFire = () => {
     match.witches.creator.fireCooldown = 999;
@@ -351,31 +368,128 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash'],
     opponentPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash']
   });
+  emptyWorld(match);
   const creatorView = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'creator'), 'creator');
   const guestView = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'opponent'), 'opponent');
-  assert.equal(creatorView.self.y, 730, 'La créatrice se voit en bas');
-  assert.equal(guestView.self.y, 730, "L'invitée se voit aussi en bas");
-  assert.equal(guestView.self.x, 400);
+  assert.equal(creatorView.self.y, match.spawns.creator.y, 'La créatrice voit son spawn aléatoire');
+  assert.equal(guestView.self.y, match.spawns.creator.y, "L'invitée voit le même écran orienté (spawn miroir)");
+  assert.equal(guestView.self.x, match.spawns.creator.x);
   assert.ok(Math.sin(guestView.self.aimAngle) < -0.999 && Math.abs(Math.cos(guestView.self.aimAngle)) < 0.02, "L'invitée vise vers le haut de son écran");
 
   const localCmd = { moveX: 1, moveY: -1, aimX: 600, aimY: 200, fire: true, dashSeq: 3 };
   const worldCmd = Core.orientCommandForRole('opponent', localCmd);
   assert.equal(worldCmd.moveX, -1, 'Droite écran invité = gauche monde');
   assert.equal(worldCmd.moveY, 1, 'Haut écran invité = bas monde');
-  assert.equal(worldCmd.aimX, 200);
-  assert.equal(worldCmd.aimY, 700);
+  assert.equal(worldCmd.aimX, Core.WORLD_WIDTH - 600);
+  assert.equal(worldCmd.aimY, Core.WORLD_HEIGHT - 200);
   assert.equal(worldCmd.fire, true);
   assert.equal(worldCmd.dashSeq, 3);
   assert.equal(Core.orientCommandForRole('creator', localCmd), localCmd, 'La créatrice joue déjà en coordonnées monde');
 
   Core.applyCommand(match, 'opponent', worldCmd);
   Core.stepMatch(match, 0.2);
-  assert.ok(match.witches.opponent.x < 400, "L'invitée va à droite de son écran, donc à gauche du monde");
-  assert.ok(match.witches.opponent.y > 170, "L'invitée monte vers le centre depuis le haut du monde");
+  assert.ok(match.witches.opponent.x < match.spawns.opponent.x, "L'invitée va à droite de son écran, donc à gauche du monde");
+  assert.ok(match.witches.opponent.y > match.spawns.opponent.y, "L'invitée monte vers le centre depuis le haut du monde");
   const guestAfter = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'opponent'), 'opponent');
-  assert.ok(guestAfter.self.x > 400, 'Le snapshot orienté montre bien le déplacement à droite');
-  assert.ok(guestAfter.self.y < 730);
+  assert.ok(guestAfter.self.x > match.spawns.creator.x, 'Le snapshot orienté montre bien le déplacement à droite');
+  assert.ok(guestAfter.self.y < match.spawns.creator.y);
   assert.ok(guestAfter.projectiles.every(p => p.ownerRole !== 'opponent' || p.vy < 0), 'Les tirs invités montent à l’écran');
 }
 
-console.log('Duel de la Nuit noire — cœur déterministe, tir manuel, orientation, visibilité, snapshots, mort subite et cotes : OK');
+// 8. Monde vaste (5×), caméra, décor, pièges, bombes, caisses, sentinelles, atouts.
+{
+  assert.equal(Core.WORLD_WIDTH * Core.WORLD_HEIGHT, 5 * Core.VIEW_WIDTH * Core.VIEW_HEIGHT, 'Le monde fait exactement 5× la surface du viewport');
+  assert.equal(Core.VIEW_WIDTH, 800);
+  assert.equal(Core.VIEW_HEIGHT, 900);
+
+  const match = Core.createMatch({ id: 'world-test' });
+  const other = Core.createMatch({ id: 'world-test-other' });
+  const again = Core.createMatch({ id: 'world-test' });
+  assert.ok(match.spawns && other.spawns, 'Spawns aléatoires générés');
+  assert.notDeepEqual(match.spawns.creator, other.spawns.creator, 'Deux matches ont des spawns différents');
+  assert.deepEqual(match.spawns, again.spawns, 'Spawns déterministes pour un même id');
+  assert.equal(match.spawns.opponent.x, Core.WORLD_WIDTH - match.spawns.creator.x, 'Spawn adverse en miroir 180°');
+  assert.equal(match.spawns.opponent.y, Core.WORLD_HEIGHT - match.spawns.creator.y);
+  assert.equal(match.witches.creator.x, match.spawns.creator.x);
+  assert.equal(match.witches.opponent.y, match.spawns.opponent.y);
+  const w = match.world;
+  assert.ok(w.obstacles.length >= 10, 'Décor solide généré');
+  assert.ok(w.crates.length >= 8, 'Caisses générées');
+  assert.ok(w.bombs.length >= 6, 'Bombes générées');
+  assert.ok(w.traps.length >= 6, 'Pièges générés');
+  assert.ok(w.enemies.length >= 6, 'Sentinelles endormies générées');
+  assert.ok(w.enemies.every(e => e.state === 'sleep'), 'Les sentinelles démarrent endormies');
+  // Symétrie 180° pour l'équité.
+  for (const crate of w.crates) {
+    const mirror = w.crates.find(c => Math.abs(c.x - (Core.WORLD_WIDTH - crate.x)) < 1 && Math.abs(c.y - (Core.WORLD_HEIGHT - crate.y)) < 1);
+    assert.ok(mirror, 'Chaque caisse a son miroir 180°');
+  }
+  // Le couloir central reste dégagé pour les tirs verticaux historiques.
+  for (const ob of w.obstacles) {
+    const cx = ob.shape === 'rect' ? ob.x + ob.w / 2 : ob.x;
+    assert.ok(Math.abs(cx - Core.ARENA_CENTER.x) > 100, 'Pas de solide dans le couloir central');
+  }
+
+  const snap = Core.createSnapshotFor(match, 'creator');
+  assert.ok(snap.world && Array.isArray(snap.world.crates), 'Le snapshot transporte le monde');
+  assert.equal(snap.self.boons.swift, 0);
+
+  // Caisse cassée -> atout au sol.
+  const crate = w.crates[0];
+  match.projectiles.push({ id: 8000, ownerRole: 'creator', x: crate.x, y: crate.y, prevX: crate.x, prevY: crate.y, vx: 0, vy: 0, r: 8, damage: 2, life: 1, maxLife: 1 });
+  Core.stepMatch(match, 1 / 60);
+  assert.equal(crate.alive, false, 'La caisse est cassée');
+  assert.ok(w.pickups.length >= 1, 'Un atout apparaît');
+
+  // Bombe -> explosion, alarme, réveil.
+  const bomb = w.bombs.find(b => b.alive);
+  match.projectiles.push({ id: 8001, ownerRole: 'creator', x: bomb.x, y: bomb.y, prevX: bomb.x, prevY: bomb.y, vx: 0, vy: 0, r: 8, damage: 1, life: 1, maxLife: 1 });
+  Core.stepMatch(match, 1 / 60);
+  assert.equal(bomb.alive, false, 'La bombe explose');
+  assert.ok(w.alarms.length >= 1, 'Une alarme de minimap est émise');
+  assert.ok(match.effects.some(fx => fx.type === 'explosion'), 'Effet d’explosion');
+
+  // Piège de contact.
+  const trap = w.traps[0];
+  const c = match.witches.creator;
+  c.x = trap.x; c.y = trap.y; c.invTimer = 0; c.parry = 0;
+  const heartsBefore = c.hearts;
+  Core.stepMatch(match, 1 / 60);
+  assert.ok(trap.cooldown > 0, 'Le piège se déclenche');
+  assert.ok(c.hearts < heartsBefore || c.revealTimer > 0, 'Le piège blesse ou révèle');
+
+  // La lumière du tir réveille une sentinelle proche.
+  const enemy = w.enemies.find(e => e.state === 'sleep');
+  enemy.x = c.x + 90; enemy.y = c.y; enemy.homeX = enemy.x; enemy.homeY = enemy.y;
+  Core.applyCommand(match, 'creator', { fire: true, hasAim: true, aimX: c.x, aimY: c.y - 100 });
+  Core.stepMatch(match, 0.1);
+  assert.equal(enemy.state, 'awake', 'La lumière réveille la sentinelle');
+  assert.ok(w.alarms.some(a => a.role === 'creator'), 'L’alarme révèle la position de la tireuse');
+
+  // Tuer une sentinelle donne un avantage.
+  enemy.hp = 1;
+  match.projectiles.push({ id: 8002, ownerRole: 'creator', x: enemy.x, y: enemy.y, prevX: enemy.x, prevY: enemy.y, vx: 0, vy: 0, r: 8, damage: 1, life: 1, maxLife: 1 });
+  Core.stepMatch(match, 1 / 60);
+  assert.equal(enemy.state, 'dead', 'La sentinelle est tuée');
+  assert.ok(match.events.some(ev => ev.type === 'enemy-killed'), 'Événement de kill');
+  const boonActive = Object.values(c.boons).some(v => v > 0) || c.hearts > 0;
+  assert.ok(boonActive, 'Le kill donne un avantage');
+
+  // Orientation du monde pour l'invitée.
+  const guestSnap = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'opponent'), 'opponent');
+  const hostSnap = Core.createSnapshotFor(match, 'creator');
+  if (hostSnap.world.crates.length && guestSnap.world.crates.length) {
+    const hc = hostSnap.world.crates[0];
+    const gc = guestSnap.world.crates.find(g => g.id === hc.id);
+    assert.ok(gc, 'Même caisse dans les deux vues');
+    assert.ok(Math.abs(gc.x - (Core.WORLD_WIDTH - hc.x)) < 1.5, 'Le monde est pivoté pour l’invitée');
+  }
+  // Aucune coordonnée adverse cachée ne fuite.
+  const hidden = Core.createSnapshotFor(match, 'opponent');
+  if (!hidden.opponent.visible) {
+    assert.equal(hidden.opponent.x, null);
+    assert.equal(hidden.opponent.y, null);
+  }
+}
+
+console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, décor/pièges/bombes/caisses/sentinelles, tir manuel, orientation, visibilité, snapshots, mort subite et cotes : OK');

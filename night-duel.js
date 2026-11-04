@@ -67,6 +67,7 @@
   let padDashHeld = false;
   let padPauseHeld = false;
   let fireButtonHeld = false;
+  const duelCamera = { x: 0, y: 0 };
 
   const pointerState = {
     mouseAimActive: false,
@@ -1401,6 +1402,7 @@
           <b id="duelHudSelfHearts">♥♥♥♥♥</b>
           <span id="duelHudDashState">Esquive prête</span>
           <span id="duelHudFireState">Tir manuel prêt</span>
+          <span id="duelHudBoons"></span>
         </div>
         <div class="duel-hud-center">
           <div class="duel-hud-scoreline"><span id="duelHudRound">M1/3</span> · <strong id="duelHudScore">0 — 0</strong> · <b id="duelHudClock">01:30</b></div>
@@ -1476,6 +1478,12 @@
       const fireCd = Number(renderSnap.self.fireCooldown) || 0;
       fireState.textContent = fireCd > 0 ? `Tir ${fireCd.toFixed(1)} s` : 'Tir manuel prêt';
     }
+    const boonsEl = el('duelHudBoons');
+    if (boonsEl) {
+      const boons = renderSnap.self.boons || {};
+      const active = Object.keys(boons).filter(k => boons[k] > 0).map(k => `${Core.BOON_LABELS?.[k] || k} ${Math.ceil(boons[k])}s`);
+      boonsEl.textContent = active.length ? `Atouts : ${active.join(' · ')}` : 'Casse des caisses pour des atouts';
+    }
     if (roundEl) roundEl.textContent = `M${renderSnap.round}/3`;
     if (scoreEl) scoreEl.textContent = `${myScore} — ${oppScore}`;
     if (clockEl) clockEl.textContent = renderSnap.suddenDeath ? 'MORT SUBITE' : formatClock(renderSnap.roundTime);
@@ -1486,6 +1494,9 @@
         bannerEl.textContent = wonRound ? 'Manche remportée · préparation…' : 'Manche perdue · nouvelle manche…';
       } else if (renderSnap.suddenDeath) {
         bannerEl.textContent = 'MORT SUBITE · Le prochain coup gagne la manche !';
+      } else if ((renderSnap.world?.alarms || []).some(a => a.age < 1.2)) {
+        const mine = (renderSnap.world.alarms || []).some(a => a.role === role && a.age < 1.2);
+        bannerEl.textContent = mine ? '⚠ Alarme ! Ta position est repérée sur la minimap' : '⚠ Alarme adverse · position repérée sur la minimap';
       } else if (renderSnap.lunarRevealTimer > 0) {
         bannerEl.textContent = '☾ Pulsation lunaire · positions révélées !';
       } else if (renderSnap.roundTime >= Core.ZONE_SHRINK_START) {
@@ -1636,8 +1647,8 @@
       const ry = Number(gp.axes?.[3]) || 0;
       if (Math.hypot(rx, ry) > 0.22 && renderSnap) {
         const screenSelf = Core.orientSnapshotForViewer(renderSnap, myRole()).self;
-        aimX = Math.max(0, Math.min(Core.ARENA_WIDTH, screenSelf.x + rx * 260));
-        aimY = Math.max(0, Math.min(Core.ARENA_HEIGHT, screenSelf.y + ry * 260));
+        aimX = Math.max(0, Math.min(Core.WORLD_WIDTH, screenSelf.x + rx * 260));
+        aimY = Math.max(0, Math.min(Core.WORLD_HEIGHT, screenSelf.y + ry * 260));
         hasAim = true;
       }
     }
@@ -1709,6 +1720,7 @@
 
   function stepDuelFrame(dt) {
     if (!combatActive || !duel) return;
+    computeDuelCamera();
     applyTouchLayoutPreference();
     pollDuelGamepadActions();
     const cmd = localCommandToWorld(readLocalCommand());
@@ -1752,6 +1764,285 @@
     }
 
     updateTopHud();
+  }
+
+  function clampNum(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+
+  function computeDuelCamera() {
+    const vw = Core.VIEW_WIDTH || 800;
+    const vh = Core.VIEW_HEIGHT || 900;
+    const ww = Core.WORLD_WIDTH || vw;
+    const wh = Core.WORLD_HEIGHT || vh;
+    let sx = vw / 2;
+    let sy = vh / 2;
+    if (renderSnap) {
+      const oriented = Core.orientSnapshotForViewer(renderSnap, myRole());
+      if (oriented && oriented.self) {
+        sx = Number(oriented.self.x) || sx;
+        sy = Number(oriented.self.y) || sy;
+      }
+    }
+    duelCamera.x = clampNum(sx - vw / 2, 0, Math.max(0, ww - vw));
+    duelCamera.y = clampNum(sy - vh / 2, 0, Math.max(0, wh - vh));
+    return duelCamera;
+  }
+
+  function viewToWorld(pt) {
+    return { x: pt.x + duelCamera.x, y: pt.y + duelCamera.y };
+  }
+
+  function boonColor(type) {
+    return ({
+      heal: '#7dffb0', swift: '#8fd6ff', rapid: '#ffd36e',
+      power: '#ff8f6e', ward: '#b9a6ff', ghost: '#9ef7e8', dash: '#c6ff8f'
+    })[type] || '#e7d7ff';
+  }
+
+  function drawWorldDecor(c, world, self, time) {
+    if (!world) return;
+    // Obstacles solides.
+    for (const ob of world.obstacles || []) {
+      c.fillStyle = '#1b1430';
+      c.strokeStyle = 'rgba(150, 126, 196, 0.5)';
+      c.lineWidth = 2;
+      if (ob.shape === 'rect') {
+        c.fillRect(ob.x, ob.y, ob.w, ob.h);
+        c.strokeRect(ob.x, ob.y, ob.w, ob.h);
+      } else {
+        c.beginPath();
+        c.arc(ob.x, ob.y, ob.r, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+      }
+    }
+    // Pièges.
+    for (const trap of world.traps || []) {
+      const armed = !(trap.cooldown > 0);
+      c.strokeStyle = armed ? 'rgba(255, 120, 170, 0.8)' : 'rgba(120, 100, 140, 0.4)';
+      c.fillStyle = armed ? 'rgba(90, 20, 50, 0.55)' : 'rgba(40, 30, 55, 0.4)';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(trap.x, trap.y, trap.r, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      for (let i = 0; i < 6; i += 1) {
+        const a = (i / 6) * Math.PI * 2;
+        c.beginPath();
+        c.moveTo(trap.x + Math.cos(a) * 6, trap.y + Math.sin(a) * 6);
+        c.lineTo(trap.x + Math.cos(a) * (trap.r - 4), trap.y + Math.sin(a) * (trap.r - 4));
+        c.stroke();
+      }
+    }
+    // Bombes.
+    for (const bomb of world.bombs || []) {
+      const pulse = 0.6 + 0.4 * Math.sin(time * 5 + bomb.id);
+      c.fillStyle = `rgba(255, 90, 70, ${0.35 + pulse * 0.3})`;
+      c.strokeStyle = '#ff8a6e';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(bomb.x, bomb.y, bomb.r, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      c.strokeStyle = '#ffd27d';
+      c.beginPath();
+      c.moveTo(bomb.x, bomb.y - bomb.r);
+      c.lineTo(bomb.x + 5, bomb.y - bomb.r - 8);
+      c.stroke();
+    }
+    // Caisses.
+    for (const crate of world.crates || []) {
+      const r = crate.r;
+      c.fillStyle = crate.hp > 1 ? '#6b4a2a' : '#4a3018';
+      c.strokeStyle = '#c99a5b';
+      c.lineWidth = 2;
+      c.fillRect(crate.x - r, crate.y - r, r * 2, r * 2);
+      c.strokeRect(crate.x - r, crate.y - r, r * 2, r * 2);
+      c.beginPath();
+      c.moveTo(crate.x - r, crate.y - r);
+      c.lineTo(crate.x + r, crate.y + r);
+      c.moveTo(crate.x + r, crate.y - r);
+      c.lineTo(crate.x - r, crate.y + r);
+      c.stroke();
+    }
+    // Atouts au sol.
+    for (const pk of world.pickups || []) {
+      const bob = Math.sin(time * 4 + pk.id) * 3;
+      const col = boonColor(pk.boon);
+      c.fillStyle = col;
+      c.globalAlpha = 0.85;
+      c.beginPath();
+      c.arc(pk.x, pk.y + bob, pk.r * 0.7, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 0.3;
+      c.beginPath();
+      c.arc(pk.x, pk.y + bob, pk.r * 1.3, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 1;
+    }
+    // Sentinelles.
+    for (const enemy of world.enemies || []) {
+      const awake = enemy.state === 'awake';
+      c.fillStyle = awake ? '#5a1f2a' : '#241a38';
+      c.strokeStyle = awake ? '#ff6b88' : 'rgba(150, 130, 190, 0.55)';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(enemy.x, enemy.y, enemy.r, 0, Math.PI * 2);
+      c.fill();
+      c.stroke();
+      if (awake) {
+        c.fillStyle = '#ff9ca8';
+        c.beginPath();
+        c.arc(enemy.x - 6, enemy.y - 3, 3, 0, Math.PI * 2);
+        c.arc(enemy.x + 6, enemy.y - 3, 3, 0, Math.PI * 2);
+        c.fill();
+      } else {
+        c.strokeStyle = 'rgba(200, 190, 230, 0.7)';
+        c.beginPath();
+        c.moveTo(enemy.x - 8, enemy.y - 2);
+        c.lineTo(enemy.x - 2, enemy.y - 2);
+        c.moveTo(enemy.x + 2, enemy.y - 2);
+        c.lineTo(enemy.x + 8, enemy.y - 2);
+        c.stroke();
+        c.fillStyle = 'rgba(200, 190, 230, 0.6)';
+        c.font = '10px Arial';
+        c.textAlign = 'center';
+        c.fillText('z', enemy.x + enemy.r + 4, enemy.y - enemy.r);
+      }
+    }
+    // Alarmes de réveil / révélation.
+    for (const alarm of world.alarms || []) {
+      const ratio = Math.min(1, alarm.age / Math.max(0.1, alarm.maxAge));
+      const isMine = alarm.role === self.role;
+      const col = alarm.role === 'world' ? '255, 170, 90' : isMine ? '140, 220, 255' : '255, 120, 140';
+      c.strokeStyle = `rgba(${col}, ${(1 - ratio) * 0.9})`;
+      c.lineWidth = 3;
+      c.beginPath();
+      c.arc(alarm.x, alarm.y, 14 + ratio * 46, 0, Math.PI * 2);
+      c.stroke();
+      c.fillStyle = `rgba(${col}, ${(1 - ratio) * 0.9})`;
+      c.font = 'bold 14px Arial';
+      c.textAlign = 'center';
+      c.fillText('!', alarm.x, alarm.y + 5);
+    }
+  }
+
+  function drawWorldEffects(c, effects) {
+    for (const fx of effects || []) {
+      const ratio = Math.min(1, fx.age / Math.max(0.1, fx.maxAge));
+      if (fx.type === 'explosion') {
+        c.fillStyle = `rgba(255, 150, 70, ${(1 - ratio) * 0.5})`;
+        c.beginPath();
+        c.arc(fx.x, fx.y, (fx.r || 120) * (0.3 + ratio * 0.7), 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = `rgba(255, 220, 150, ${(1 - ratio) * 0.9})`;
+        c.lineWidth = 4;
+        c.beginPath();
+        c.arc(fx.x, fx.y, (fx.r || 120) * ratio, 0, Math.PI * 2);
+        c.stroke();
+      } else if (fx.type === 'crate-break') {
+        c.strokeStyle = `rgba(201, 154, 91, ${(1 - ratio)})`;
+        c.lineWidth = 3;
+        for (let i = 0; i < 6; i += 1) {
+          const a = (i / 6) * Math.PI * 2;
+          const d = 8 + ratio * 30;
+          c.beginPath();
+          c.moveTo(fx.x + Math.cos(a) * 6, fx.y + Math.sin(a) * 6);
+          c.lineTo(fx.x + Math.cos(a) * d, fx.y + Math.sin(a) * d);
+          c.stroke();
+        }
+      } else if (fx.type === 'enemy-death') {
+        c.fillStyle = `rgba(255, 107, 136, ${(1 - ratio) * 0.7})`;
+        c.beginPath();
+        c.arc(fx.x, fx.y, 10 + ratio * 34, 0, Math.PI * 2);
+        c.fill();
+      } else if (fx.type === 'trap') {
+        c.strokeStyle = `rgba(255, 120, 170, ${(1 - ratio)})`;
+        c.lineWidth = 3;
+        c.beginPath();
+        c.arc(fx.x, fx.y, 10 + ratio * 30, 0, Math.PI * 2);
+        c.stroke();
+      }
+    }
+  }
+
+  function drawMinimap(c, viewSnap, cam) {
+    const vw = Core.VIEW_WIDTH || 800;
+    const ww = Core.WORLD_WIDTH || 1800;
+    const wh = Core.WORLD_HEIGHT || 2000;
+    const mmW = 168;
+    const mmH = Math.round(mmW * (wh / ww));
+    const mx = vw - mmW - 12;
+    const my = 58;
+    const sx = mmW / ww;
+    const sy = mmH / wh;
+    const world = viewSnap.world || {};
+    const self = viewSnap.self;
+
+    c.save();
+    c.fillStyle = 'rgba(8, 5, 16, 0.82)';
+    c.strokeStyle = 'rgba(182, 152, 224, 0.6)';
+    c.lineWidth = 1.5;
+    c.fillRect(mx, my, mmW, mmH);
+    c.strokeRect(mx, my, mmW, mmH);
+    c.fillStyle = 'rgba(220, 205, 245, 0.8)';
+    c.font = 'bold 9px Arial';
+    c.textAlign = 'left';
+    c.fillText('CARTE', mx + 5, my + 11);
+
+    function px(x) { return mx + x * sx; }
+    function py(y) { return my + y * sy; }
+
+    for (const ob of world.obstacles || []) {
+      c.fillStyle = 'rgba(120, 100, 160, 0.55)';
+      if (ob.shape === 'rect') c.fillRect(px(ob.x), py(ob.y), ob.w * sx, ob.h * sy);
+      else { c.beginPath(); c.arc(px(ob.x), py(ob.y), Math.max(1.5, ob.r * sx), 0, Math.PI * 2); c.fill(); }
+    }
+    for (const trap of world.traps || []) {
+      c.fillStyle = trap.cooldown > 0 ? 'rgba(120,90,120,0.5)' : 'rgba(255,120,170,0.8)';
+      c.fillRect(px(trap.x) - 1.5, py(trap.y) - 1.5, 3, 3);
+    }
+    for (const bomb of world.bombs || []) {
+      c.fillStyle = '#ff8a6e';
+      c.beginPath(); c.arc(px(bomb.x), py(bomb.y), 2, 0, Math.PI * 2); c.fill();
+    }
+    for (const crate of world.crates || []) {
+      c.fillStyle = '#c99a5b';
+      c.fillRect(px(crate.x) - 2, py(crate.y) - 2, 4, 4);
+    }
+    for (const pk of world.pickups || []) {
+      c.fillStyle = boonColor(pk.boon);
+      c.beginPath(); c.arc(px(pk.x), py(pk.y), 2, 0, Math.PI * 2); c.fill();
+    }
+    for (const enemy of world.enemies || []) {
+      c.fillStyle = enemy.state === 'awake' ? '#ff6b88' : 'rgba(180,170,210,0.7)';
+      c.beginPath(); c.arc(px(enemy.x), py(enemy.y), enemy.state === 'awake' ? 2.5 : 1.8, 0, Math.PI * 2); c.fill();
+    }
+    for (const alarm of world.alarms || []) {
+      const ratio = Math.min(1, alarm.age / Math.max(0.1, alarm.maxAge));
+      const col = alarm.role === 'world' ? '255,170,90' : alarm.role === self.role ? '140,220,255' : '255,120,140';
+      c.strokeStyle = `rgba(${col}, ${1 - ratio})`;
+      c.lineWidth = 1.5;
+      c.beginPath(); c.arc(px(alarm.x), py(alarm.y), 3 + ratio * 8, 0, Math.PI * 2); c.stroke();
+    }
+    const opp = viewSnap.opponent;
+    if (opp && opp.visible && typeof opp.x === 'number') {
+      c.fillStyle = '#ff9ca8';
+      c.beginPath(); c.arc(px(opp.x), py(opp.y), 3, 0, Math.PI * 2); c.fill();
+    } else if (viewSnap.lastKnownOpponent) {
+      c.fillStyle = 'rgba(184,164,214,0.6)';
+      c.beginPath(); c.arc(px(viewSnap.lastKnownOpponent.x), py(viewSnap.lastKnownOpponent.y), 2.5, 0, Math.PI * 2); c.fill();
+    }
+    if (self) {
+      c.fillStyle = '#9ee7ff';
+      c.beginPath(); c.arc(px(self.x), py(self.y), 3.2, 0, Math.PI * 2); c.fill();
+    }
+    // Cadre de la caméra.
+    c.strokeStyle = 'rgba(255,255,255,0.55)';
+    c.lineWidth = 1;
+    c.strokeRect(px(cam.x), py(cam.y), (Core.VIEW_WIDTH || 800) * sx, (Core.VIEW_HEIGHT || 900) * sy);
+    c.restore();
   }
 
   function drawWitchFigure(c, x, y, aimAngle, ringColor, options = {}) {
@@ -1821,36 +2112,57 @@
     if (!combatActive || !renderSnap || typeof ctx === 'undefined' || !ctx) return;
     const c = ctx;
     const viewSnap = Core.orientSnapshotForViewer(renderSnap, myRole());
-    const width = Core.ARENA_WIDTH;
-    const height = Core.ARENA_HEIGHT;
+    const vw = Core.VIEW_WIDTH || 800;
+    const vh = Core.VIEW_HEIGHT || 900;
+    const ww = Core.WORLD_WIDTH || vw;
+    const wh = Core.WORLD_HEIGHT || vh;
     const cx = Core.ARENA_CENTER.x;
     const cy = Core.ARENA_CENTER.y;
+    const cam = computeDuelCamera();
+    const self = viewSnap.self;
+    const time = Number(viewSnap.roundTime) || 0;
 
     c.save();
-    const bg = c.createLinearGradient(0, 0, 0, height);
+    // Fond écran.
+    c.fillStyle = '#06040d';
+    c.fillRect(0, 0, vw, vh);
+
+    c.save();
+    c.translate(-cam.x, -cam.y);
+
+    // Sol visible.
+    const bg = c.createLinearGradient(cam.x, cam.y, cam.x, cam.y + vh);
     bg.addColorStop(0, '#070510');
     bg.addColorStop(0.5, '#0d091b');
     bg.addColorStop(1, '#06040d');
     c.fillStyle = bg;
-    c.fillRect(0, 0, width, height);
+    c.fillRect(cam.x, cam.y, vw, vh);
 
-    // Repères géométriques discrets au sol pour lire les déplacements dans l'obscurité.
-    c.strokeStyle = 'rgba(155, 130, 196, 0.08)';
+    // Grille / repères.
+    c.strokeStyle = 'rgba(155, 130, 196, 0.07)';
     c.lineWidth = 1;
-    for (const r of [140, 280, 420]) {
-      c.beginPath();
-      c.arc(cx, cy, r, 0, Math.PI * 2);
-      c.stroke();
+    const grid = 120;
+    const gx0 = Math.floor(cam.x / grid) * grid;
+    const gy0 = Math.floor(cam.y / grid) * grid;
+    for (let x = gx0; x <= cam.x + vw; x += grid) {
+      c.beginPath(); c.moveTo(x, cam.y); c.lineTo(x, cam.y + vh); c.stroke();
     }
-    c.beginPath();
-    c.moveTo(cx, 40);
-    c.lineTo(cx, height - 40);
-    c.moveTo(40, cy);
-    c.lineTo(width - 40, cy);
-    c.stroke();
+    for (let y = gy0; y <= cam.y + vh; y += grid) {
+      c.beginPath(); c.moveTo(cam.x, y); c.lineTo(cam.x + vw, y); c.stroke();
+    }
+    c.strokeStyle = 'rgba(155, 130, 196, 0.12)';
+    for (const r of [220, 440, 660]) {
+      c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke();
+    }
+    // Bordure du monde.
+    c.strokeStyle = 'rgba(182, 152, 224, 0.4)';
+    c.lineWidth = 3;
+    c.strokeRect(2, 2, ww - 4, wh - 4);
 
-    // Halo de vision de la joueuse locale.
-    const self = viewSnap.self;
+    // Décor, pièges, bombes, caisses, ennemis, alarmes.
+    drawWorldDecor(c, viewSnap.world, self, time);
+
+    // Halo de vision.
     const selfCosmetic = Core.getHaloCosmetic(self.cosmetic);
     const haloGrad = c.createRadialGradient(self.x, self.y, 18, self.x, self.y, self.haloRadius);
     haloGrad.addColorStop(0, selfCosmetic.color);
@@ -1860,7 +2172,6 @@
     c.beginPath();
     c.arc(self.x, self.y, self.haloRadius, 0, Math.PI * 2);
     c.fill();
-
     c.strokeStyle = selfCosmetic.ring + '55';
     c.lineWidth = 1.5;
     c.setLineDash([7, 6]);
@@ -1869,17 +2180,17 @@
     c.stroke();
     c.setLineDash([]);
 
-    // Onde de pulsation lunaire.
+    // Onde lunaire.
     if (viewSnap.lunarWave) {
       const p = Math.min(1, viewSnap.lunarWave.age / Math.max(0.1, viewSnap.lunarWave.maxAge));
       c.strokeStyle = `rgba(198, 226, 255, ${(1 - p) * 0.7})`;
       c.lineWidth = 4;
       c.beginPath();
-      c.arc(cx, cy, 40 + p * 620, 0, Math.PI * 2);
+      c.arc(cx, cy, 40 + p * 900, 0, Math.PI * 2);
       c.stroke();
     }
 
-    // Indices de pas (cercles acoustiques).
+    // Pas.
     for (const step of viewSnap.footsteps || []) {
       const ratio = Math.min(1, step.age / Math.max(0.1, step.maxAge));
       const isMine = step.ownerRole === self.role;
@@ -1907,33 +2218,23 @@
       c.stroke();
     }
 
-    // Silhouette figée à la dernière position connue lorsque l'adversaire est cachée.
+    // Dernière position connue.
     const opp = viewSnap.opponent;
     if (!opp.visible && viewSnap.lastKnownOpponent) {
       const lk = viewSnap.lastKnownOpponent;
-      drawWitchFigure(c, lk.x, lk.y, lk.aimAngle, '#b8a4d6', {
-        ghost: true,
-        age: lk.age,
-        maxAge: lk.maxAge
-      });
+      drawWitchFigure(c, lk.x, lk.y, lk.aimAngle, '#b8a4d6', { ghost: true, age: lk.age, maxAge: lk.maxAge });
     }
-
-    // Adversaire uniquement lorsqu'elle est réellement visible.
     if (opp.visible && typeof opp.x === 'number' && typeof opp.y === 'number') {
       const oppCosmetic = Core.getHaloCosmetic(opp.cosmetic);
-      drawWitchFigure(c, opp.x, opp.y, opp.aimAngle, oppCosmetic.ring, {
-        isSelf: false,
-        revealedByShot: opp.revealedByShot
-      });
+      drawWitchFigure(c, opp.x, opp.y, opp.aimAngle, oppCosmetic.ring, { isSelf: false, revealedByShot: opp.revealedByShot });
     }
 
-    // Projectiles dangereux : TOUJOURS visibles même hors du halo !
+    // Projectiles.
     for (const proj of viewSnap.projectiles || []) {
       const isDanger = proj.ownerRole !== self.role;
       const speed = Math.hypot(proj.vx, proj.vy) || 1;
       const tailX = proj.x - (proj.vx / speed) * (proj.r * 2.4);
       const tailY = proj.y - (proj.vy / speed) * (proj.r * 2.4);
-
       c.strokeStyle = isDanger ? 'rgba(255, 112, 96, 0.75)' : 'rgba(165, 225, 255, 0.65)';
       c.lineWidth = Math.max(3, proj.r * 0.85);
       c.lineCap = 'round';
@@ -1941,24 +2242,21 @@
       c.moveTo(tailX, tailY);
       c.lineTo(proj.x, proj.y);
       c.stroke();
-
       c.fillStyle = isDanger ? '#ff5d6c' : '#9ee7ff';
       c.beginPath();
       c.arc(proj.x, proj.y, proj.r, 0, Math.PI * 2);
       c.fill();
-
       c.fillStyle = '#fff8ea';
       c.beginPath();
       c.arc(proj.x, proj.y, Math.max(2.5, proj.r * 0.44), 0, Math.PI * 2);
       c.fill();
     }
 
-    // Sorcière locale.
-    drawWitchFigure(c, self.x, self.y, self.aimAngle, selfCosmetic.ring, {
-      isSelf: true,
-      invulnerable: self.invulnerable
-    });
+    // Effets monde.
+    drawWorldEffects(c, viewSnap.effects);
 
+    // Sorcière locale.
+    drawWitchFigure(c, self.x, self.y, self.aimAngle, selfCosmetic.ring, { isSelf: true, invulnerable: self.invulnerable });
     if (self.dodgeSuccess) {
       c.fillStyle = '#9ef7e8';
       c.font = 'bold 13px Arial';
@@ -1966,20 +2264,17 @@
       c.fillText('ESQUIVE !', self.x, self.y - 32);
     }
 
-    // Brume extérieure au rayon de zone (rétrécissement progressif après 60 s).
-    if (viewSnap.zoneRadius < 680) {
+    // Brume de zone.
+    if (viewSnap.zoneRadius < (Core.ZONE_INITIAL_RADIUS || 1320) - 1) {
       c.save();
       c.beginPath();
-      c.rect(0, 0, width, height);
+      c.rect(cam.x, cam.y, vw, vh);
       c.arc(cx, cy, viewSnap.zoneRadius, 0, Math.PI * 2, true);
       c.fillStyle = viewSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
       c.fill('evenodd');
-
       c.strokeStyle = viewSnap.suddenDeath
         ? '#ff6b88'
-        : viewSnap.roundTime >= Core.ZONE_SHRINK_START
-          ? '#ffb86c'
-          : 'rgba(182, 152, 224, 0.35)';
+        : viewSnap.roundTime >= Core.ZONE_SHRINK_START ? '#ffb86c' : 'rgba(182, 152, 224, 0.35)';
       c.lineWidth = viewSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
       c.beginPath();
       c.arc(cx, cy, viewSnap.zoneRadius, 0, Math.PI * 2);
@@ -1987,18 +2282,25 @@
       c.restore();
     }
 
+    c.restore(); // caméra
+
+    // Minimap en haut à droite de l'espace de jeu.
+    drawMinimap(c, viewSnap, cam);
     c.restore();
   }
 
   function canvasCoordsFromEvent(evt) {
     const node = getCanvas();
-    if (!node) return { x: Core.ARENA_CENTER.x, y: Core.ARENA_CENTER.y };
+    const vw = Core.VIEW_WIDTH || 800;
+    const vh = Core.VIEW_HEIGHT || 900;
+    if (!node) return { x: vw / 2, y: vh / 2 };
     const rect = node.getBoundingClientRect();
     const rx = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0.5;
     const ry = rect.height > 0 ? (evt.clientY - rect.top) / rect.height : 0.5;
+    // Coordonnées ÉCRAN (viewport). La conversion vers le monde se fait avec la caméra.
     return {
-      x: Math.max(0, Math.min(Core.ARENA_WIDTH, rx * Core.ARENA_WIDTH)),
-      y: Math.max(0, Math.min(Core.ARENA_HEIGHT, ry * Core.ARENA_HEIGHT))
+      x: Math.max(0, Math.min(vw, rx * vw)),
+      y: Math.max(0, Math.min(vh, ry * vh))
     };
   }
 
@@ -2019,8 +2321,9 @@
             pointerState.touchMoveY = 0;
           } else if (pointerState.aimTouchId === null) {
             pointerState.aimTouchId = evt.pointerId;
-            pointerState.aimX = pt.x;
-            pointerState.aimY = pt.y;
+            const wp = viewToWorld(pt);
+            pointerState.aimX = wp.x;
+            pointerState.aimY = wp.y;
           }
           return;
         }
@@ -2032,8 +2335,9 @@
         if (evt.button === 0) {
           pointerState.fireMouse = true;
           pointerState.mouseAimActive = true;
-          pointerState.aimX = pt.x;
-          pointerState.aimY = pt.y;
+          const wp = viewToWorld(pt);
+          pointerState.aimX = wp.x;
+          pointerState.aimY = wp.y;
         }
       });
 
@@ -2056,14 +2360,16 @@
               pointerState.touchMoveY = 0;
             }
           } else if (evt.pointerId === pointerState.aimTouchId) {
-            pointerState.aimX = pt.x;
-            pointerState.aimY = pt.y;
+            const wp = viewToWorld(pt);
+            pointerState.aimX = wp.x;
+            pointerState.aimY = wp.y;
           }
           return;
         }
         pointerState.mouseAimActive = true;
-        pointerState.aimX = pt.x;
-        pointerState.aimY = pt.y;
+        const wp = viewToWorld(pt);
+        pointerState.aimX = wp.x;
+        pointerState.aimY = wp.y;
       });
 
       const releasePointer = evt => {
@@ -2176,7 +2482,7 @@
       };
     }
     const hint = el('hint');
-    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt · F/clic gauche ou bouton Tir · Espace/E esquive · Maj précision';
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt · F/clic gauche ou Tir · Espace/E esquive · Maj précision · Casse les caisses, évite pièges/bombes, la lumière réveille les sentinelles';
     if (bar) bar.style.display = 'flex';
   }
 

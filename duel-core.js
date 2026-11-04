@@ -8,11 +8,39 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function() {
   'use strict';
 
-  const ARENA_WIDTH = 800;
-  const ARENA_HEIGHT = 900;
-  const ARENA_CENTER = Object.freeze({ x: 400, y: 450 });
-  const ARENA_PADDING_X = 28;
-  const ARENA_PADDING_Y = 36;
+  // Le monde est 5x plus vaste en surface que l'ancien écran (800x900).
+  // L'écran n'affiche qu'une fenêtre (VIEW) centrée sur la sorcière locale.
+  const WORLD_WIDTH = 1800;
+  const WORLD_HEIGHT = 2000;
+  const VIEW_WIDTH = 800;
+  const VIEW_HEIGHT = 900;
+  const ARENA_WIDTH = WORLD_WIDTH;
+  const ARENA_HEIGHT = WORLD_HEIGHT;
+  const ARENA_CENTER = Object.freeze({ x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 });
+  const ARENA_PADDING_X = 40;
+  const ARENA_PADDING_Y = 40;
+  const SPAWN_CREATOR = Object.freeze({ x: ARENA_CENTER.x, y: WORLD_HEIGHT - 220 });
+  const SPAWN_OPPONENT = Object.freeze({ x: ARENA_CENTER.x, y: 220 });
+
+  // Décor / gameplay de l'arène vaste.
+  const CRATE_HP = 2;
+  const CRATE_RADIUS = 22;
+  const BOMB_RADIUS = 18;
+  const BOMB_TRIGGER_RADIUS = 34;
+  const BOMB_BLAST_RADIUS = 150;
+  const TRAP_RADIUS = 26;
+  const TRAP_COOLDOWN = 4.0;
+  const ENEMY_RADIUS = 20;
+  const ENEMY_HP = 3;
+  const ENEMY_SPEED = 168;
+  const ENEMY_MELEE_CD = 1.15;
+  const ENEMY_SHOOT_CD = 2.3;
+  const ENEMY_WAKE_RADIUS = 330;
+  const ENEMY_SLEEP_RETURN = 7.5;
+  const PICKUP_RADIUS = 16;
+  const PICKUP_LIFE = 22;
+  const ALARM_LIFE = 4.0;
+  const BOON_DURATION = 12;
 
   const BASE_HEARTS = 5;
   const ROUND_DURATION = 90;
@@ -33,9 +61,9 @@
   const LUNAR_REVEAL_DURATION = 1.35;
 
   const ZONE_SHRINK_START = 60;
-  const ZONE_INITIAL_RADIUS = 560;
-  const ZONE_MIN_RADIUS = 185;
-  const ZONE_SUDDEN_DEATH_MIN = 145;
+  const ZONE_INITIAL_RADIUS = 1320;
+  const ZONE_MIN_RADIUS = 430;
+  const ZONE_SUDDEN_DEATH_MIN = 330;
   const SUDDEN_DEATH_AT = 90;
 
   const HIT_RADIUS = 16;
@@ -436,15 +464,533 @@
     };
   }
 
+  // ------------------------------------------------------------------
+  // Monde vaste : décor solide, pièges, bombes, caisses, ennemis endormis,
+  // atouts temporaires et alarmes de minimap. Tout est déterministe (seed).
+  // ------------------------------------------------------------------
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function() {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hashSeed(str) {
+    let h = 2166136261;
+    const text = String(str || 'nuit');
+    for (let i = 0; i < text.length; i += 1) {
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  const BOON_TYPES = Object.freeze(['heal', 'swift', 'rapid', 'power', 'ward', 'ghost', 'dash']);
+  const BOON_LABELS = Object.freeze({
+    heal: 'Cœur rendu',
+    swift: 'Vol rapide',
+    rapid: 'Cadence vive',
+    power: 'Tir puissant',
+    ward: 'Parade',
+    ghost: 'Voile furtif',
+    dash: 'Bond léger'
+  });
+
+  function effectiveStats(w) {
+    const b = w.baseStats;
+    const out = { ...b, sideAngles: b.sideAngles.slice(), perks: b.perks.slice() };
+    const bo = w.boons || {};
+    if (bo.swift > 0) { out.moveSpeed *= 1.25; out.focusSpeed *= 1.18; }
+    if (bo.rapid > 0) { out.burstInterval *= 0.72; out.burstStep *= 0.85; }
+    if (bo.power > 0) { out.shotDamage += 1; }
+    if (bo.ghost > 0) { out.stealthFactor *= 0.7; out.shotRevealDuration *= 0.6; }
+    if (bo.dash > 0) { out.dashCooldown *= 0.65; }
+    return out;
+  }
+
+  function emptyBoons() {
+    return { swift: 0, rapid: 0, power: 0, ghost: 0, dash: 0 };
+  }
+
+  function mirrorEntity(e) {
+    const m = { ...e };
+    if (e.shape === 'rect') {
+      m.x = WORLD_WIDTH - e.x - e.w;
+      m.y = WORLD_HEIGHT - e.y - e.h;
+    } else {
+      m.x = WORLD_WIDTH - e.x;
+      m.y = WORLD_HEIGHT - e.y;
+    }
+    if (typeof e.homeX === 'number') { m.homeX = WORLD_WIDTH - e.homeX; m.homeY = WORLD_HEIGHT - e.homeY; }
+    return m;
+  }
+
+  function chooseSpawns(match) {
+    const rng = match.rng;
+    const margin = 180;
+    const minCenterDist = 380;
+    // Spawns aléatoires partout dans la map, en miroir 180° pour l'équité,
+    // déterministes par match/manche, et jamais collés au centre.
+    let x = ARENA_CENTER.x;
+    let y = WORLD_HEIGHT - margin;
+    for (let i = 0; i < 60; i += 1) {
+      const cx = margin + rng() * (WORLD_WIDTH - margin * 2);
+      const cy = margin + rng() * (WORLD_HEIGHT - margin * 2);
+      if (Math.hypot(cx - ARENA_CENTER.x, cy - ARENA_CENTER.y) >= minCenterDist) {
+        x = cx; y = cy; break;
+      }
+    }
+    const creator = { x: Math.round(x), y: Math.round(y) };
+    const opponent = { x: WORLD_WIDTH - creator.x, y: WORLD_HEIGHT - creator.y };
+    match.spawns = { creator, opponent };
+    return match.spawns;
+  }
+
+  function buildWorld(match) {
+    const rng = mulberry32((match.seed + match.round * 104729) >>> 0);
+    const world = { obstacles: [], crates: [], bombs: [], traps: [], enemies: [], pickups: [], alarms: [] };
+    const placed = [];
+    const corridor = { x1: ARENA_CENTER.x - 110, x2: ARENA_CENTER.x + 110, y1: 140, y2: WORLD_HEIGHT - 140 };
+
+    function inCorridor(x, y, r) {
+      return x + r > corridor.x1 && x - r < corridor.x2 && y + r > corridor.y1 && y - r < corridor.y2;
+    }
+    const spawns = match.spawns || { creator: SPAWN_CREATOR, opponent: SPAWN_OPPONENT };
+    function nearSpawn(x, y, r) {
+      return Math.hypot(x - spawns.creator.x, y - spawns.creator.y) < 190 + r ||
+             Math.hypot(x - spawns.opponent.x, y - spawns.opponent.y) < 190 + r;
+    }
+    function inSpawnLane(x, y, r) {
+      // Couloir dégagé entre chaque spawn et le centre, pour une approche équitable.
+      const d1 = distancePointToSegment(x, y, spawns.creator.x, spawns.creator.y, ARENA_CENTER.x, ARENA_CENTER.y);
+      const d2 = distancePointToSegment(x, y, spawns.opponent.x, spawns.opponent.y, ARENA_CENTER.x, ARENA_CENTER.y);
+      return d1 < 150 + r || d2 < 150 + r;
+    }
+    function overlaps(x, y, r) {
+      for (const q of placed) {
+        if (Math.hypot(x - q.x, y - q.y) < r + q.r + 26) return true;
+      }
+      return false;
+    }
+    function spot(r) {
+      for (let i = 0; i < 80; i += 1) {
+        const x = 120 + rng() * (WORLD_WIDTH - 240);
+        const y = 150 + rng() * (WORLD_HEIGHT - 300);
+        if (inCorridor(x, y, r) || inSpawnLane(x, y, r) || nearSpawn(x, y, r) || overlaps(x, y, r)) continue;
+        // On ne garde que la moitié haute ; l'autre moitié est le miroir 180°.
+        if (y > ARENA_CENTER.y - 40) continue;
+        placed.push({ x, y, r });
+        placed.push({ x: WORLD_WIDTH - x, y: WORLD_HEIGHT - y, r });
+        return { x, y };
+      }
+      return null;
+    }
+    function addPair(list, maker, r) {
+      const pos = spot(r);
+      if (!pos) return;
+      const a = maker(pos.x, pos.y);
+      a.id = ++match.entitySeq;
+      const b = mirrorEntity(a);
+      b.id = ++match.entitySeq;
+      list.push(a, b);
+    }
+
+    // Rochers / ruines solides.
+    for (let i = 0; i < 11; i += 1) {
+      const isRect = rng() < 0.45;
+      if (isRect) {
+        const w = 90 + rng() * 90;
+        const h = 42 + rng() * 40;
+        addPair(world.obstacles, (x, y) => ({ type: 'obstacle', shape: 'rect', x: x - w / 2, y: y - h / 2, w, h, r: Math.max(w, h) / 2 }), Math.max(w, h) / 2);
+      } else {
+        const r = 34 + rng() * 30;
+        addPair(world.obstacles, (x, y) => ({ type: 'obstacle', shape: 'circle', x, y, r }), r);
+      }
+    }
+    // Caisses à atouts.
+    for (let i = 0; i < 8; i += 1) {
+      addPair(world.crates, (x, y) => ({ type: 'crate', shape: 'circle', x, y, r: CRATE_RADIUS, hp: CRATE_HP, alive: true }), CRATE_RADIUS);
+    }
+    // Bombes révélatrices.
+    for (let i = 0; i < 5; i += 1) {
+      addPair(world.bombs, (x, y) => ({ type: 'bomb', shape: 'circle', x, y, r: BOMB_RADIUS, alive: true }), BOMB_RADIUS);
+    }
+    // Pièges de contact.
+    for (let i = 0; i < 5; i += 1) {
+      addPair(world.traps, (x, y) => ({ type: 'trap', shape: 'circle', x, y, r: TRAP_RADIUS, cooldown: 0 }), TRAP_RADIUS);
+    }
+    // Sentinelles endormies.
+    for (let i = 0; i < 5; i += 1) {
+      addPair(world.enemies, (x, y) => ({
+        type: 'enemy', shape: 'circle', x, y, r: ENEMY_RADIUS, hp: ENEMY_HP,
+        state: 'sleep', targetRole: null, attackCd: 0, shootCd: 0, sleepTimer: 0,
+        discovered: false, homeX: x, homeY: y
+      }), ENEMY_RADIUS);
+    }
+    match.world = world;
+  }
+
+  function addAlarm(match, x, y, role, kind) {
+    match.world.alarms.push({
+      id: ++match.entitySeq,
+      x: roundCoord(x), y: roundCoord(y),
+      role: role || 'world', kind: kind || 'reveal',
+      age: 0, maxAge: ALARM_LIFE
+    });
+    match.events.push({ type: 'alarm', role: role || 'world', kind: kind || 'reveal', x: roundCoord(x), y: roundCoord(y) });
+  }
+
+  function wakeEnemies(match, x, y, radius, role) {
+    for (const enemy of match.world.enemies) {
+      if (enemy.state === 'dead') continue;
+      if (Math.hypot(enemy.x - x, enemy.y - y) <= radius + enemy.r) {
+        const wasSleep = enemy.state === 'sleep';
+        enemy.state = 'awake';
+        enemy.targetRole = role;
+        enemy.sleepTimer = 0;
+        enemy.discovered = true;
+        if (wasSleep) match.events.push({ type: 'enemy-wake', enemyId: enemy.id, role });
+      }
+    }
+  }
+
+  function markRevealed(match, w, duration, kind) {
+    w.revealTimer = Math.max(w.revealTimer, duration);
+    wakeEnemies(match, w.x, w.y, ENEMY_WAKE_RADIUS, w.role);
+    // Une seule alarme par rafale : on évite de spammer la minimap.
+    if (w.lastAlarmAt == null || match.roundTime - w.lastAlarmAt >= 0.8) {
+      w.lastAlarmAt = match.roundTime;
+      addAlarm(match, w.x, w.y, w.role, kind);
+    }
+    const other = match.witches[w.role === 'creator' ? 'opponent' : 'creator'];
+    if (other) {
+      other.lastKnownOpponent = {
+        x: roundCoord(w.x), y: roundCoord(w.y),
+        aimAngle: Math.round(w.aimAngle * 100) / 100,
+        age: 0, maxAge: 6.0
+      };
+    }
+  }
+
+  function applyBoon(match, w, type) {
+    if (type === 'heal') {
+      w.hearts = Math.min(w.maxHearts, w.hearts + 1);
+    } else if (type === 'ward') {
+      w.parry = Math.min(2, w.parry + 1);
+      w.invTimer = Math.max(w.invTimer, 0.5);
+    } else if (w.boons && type in w.boons) {
+      w.boons[type] = BOON_DURATION;
+    }
+    match.events.push({ type: 'pickup', role: w.role, boon: type, label: BOON_LABELS[type] || type });
+  }
+
+  function randomBoon(rng) {
+    return BOON_TYPES[Math.floor(rng() * BOON_TYPES.length)];
+  }
+
+  function spawnPickup(match, x, y, type) {
+    match.world.pickups.push({
+      id: ++match.entitySeq,
+      type: 'pickup', x: roundCoord(x), y: roundCoord(y), r: PICKUP_RADIUS,
+      boon: type || randomBoon(match.rng), age: 0, maxAge: PICKUP_LIFE
+    });
+  }
+
+  function breakCrate(match, crate) {
+    if (!crate.alive) return;
+    crate.alive = false;
+    spawnPickup(match, crate.x, crate.y);
+    match.effects.push({ id: ++match.entitySeq, type: 'crate-break', x: crate.x, y: crate.y, age: 0, maxAge: 0.6, r: CRATE_RADIUS });
+    match.events.push({ type: 'crate-break', crateId: crate.id });
+  }
+
+  function damageWitch(match, target, amount, attackerRole, kind) {
+    if (!target || target.hearts <= 0) return;
+    if (target.invTimer > 0 || target.dashTimer > 0) return;
+    if (match.suddenDeath) {
+      target.parry = 0;
+      target.hearts = 0;
+    } else if (target.parry > 0) {
+      target.parry -= 1;
+      target.hearts = Math.max(0, target.hearts - 1);
+    } else {
+      target.hearts = Math.max(0, target.hearts - amount);
+    }
+    target.invTimer = 0.55;
+    markRevealed(match, target, HIT_REVEAL_DURATION, kind || 'hit');
+    match.events.push({
+      type: 'hit', targetRole: target.role, attackerRole: attackerRole || 'world',
+      remainingHearts: target.hearts, kind: kind || 'hit', time: match.roundTime
+    });
+  }
+
+  function explodeBomb(match, bomb, sourceRole) {
+    if (!bomb.alive) return;
+    bomb.alive = false;
+    match.effects.push({ id: ++match.entitySeq, type: 'explosion', x: bomb.x, y: bomb.y, age: 0, maxAge: 0.7, r: BOMB_BLAST_RADIUS });
+    match.events.push({ type: 'bomb-explode', bombId: bomb.id, role: sourceRole || 'world' });
+    addAlarm(match, bomb.x, bomb.y, sourceRole || 'world', 'bomb');
+    wakeEnemies(match, bomb.x, bomb.y, BOMB_BLAST_RADIUS * 1.6, sourceRole || 'world');
+    for (const role of ['creator', 'opponent']) {
+      const w = match.witches[role];
+      if (Math.hypot(w.x - bomb.x, w.y - bomb.y) <= BOMB_BLAST_RADIUS + HIT_RADIUS) {
+        damageWitch(match, w, 1, sourceRole || 'world', 'bomb');
+        markRevealed(match, w, 1.1, 'bomb');
+      }
+    }
+    for (const crate of match.world.crates) {
+      if (crate.alive && Math.hypot(crate.x - bomb.x, crate.y - bomb.y) <= BOMB_BLAST_RADIUS + crate.r) breakCrate(match, crate);
+    }
+    for (const enemy of match.world.enemies) {
+      if (enemy.state !== 'dead' && Math.hypot(enemy.x - bomb.x, enemy.y - bomb.y) <= BOMB_BLAST_RADIUS + enemy.r) {
+        enemy.hp -= 2;
+        enemy.discovered = true;
+        if (enemy.hp <= 0) killEnemy(match, enemy, sourceRole);
+      }
+    }
+    // Réaction en chaîne des bombes voisines.
+    for (const other of match.world.bombs) {
+      if (other.alive && Math.hypot(other.x - bomb.x, other.y - bomb.y) <= BOMB_BLAST_RADIUS + other.r) {
+        explodeBomb(match, other, sourceRole);
+      }
+    }
+  }
+
+  function killEnemy(match, enemy, killerRole) {
+    if (enemy.state === 'dead') return;
+    enemy.state = 'dead';
+    enemy.hp = 0;
+    match.effects.push({ id: ++match.entitySeq, type: 'enemy-death', x: enemy.x, y: enemy.y, age: 0, maxAge: 0.8, r: ENEMY_RADIUS });
+    spawnPickup(match, enemy.x, enemy.y);
+    if (killerRole === 'creator' || killerRole === 'opponent') {
+      const w = match.witches[killerRole];
+      applyBoon(match, w, randomBoon(match.rng));
+      match.events.push({ type: 'enemy-killed', enemyId: enemy.id, role: killerRole });
+    }
+  }
+
+  function circleRectPush(w, rect) {
+    const cx = Math.max(rect.x, Math.min(w.x, rect.x + rect.w));
+    const cy = Math.max(rect.y, Math.min(w.y, rect.y + rect.h));
+    let dx = w.x - cx;
+    let dy = w.y - cy;
+    let dist = Math.hypot(dx, dy);
+    if (dist >= HIT_RADIUS) return;
+    if (dist < 1e-4) {
+      // Centre dans le rect : pousser vers le bord le plus proche.
+      const left = w.x - rect.x, right = rect.x + rect.w - w.x;
+      const top = w.y - rect.y, bottom = rect.y + rect.h - w.y;
+      const m = Math.min(left, right, top, bottom);
+      if (m === left) w.x = rect.x - HIT_RADIUS;
+      else if (m === right) w.x = rect.x + rect.w + HIT_RADIUS;
+      else if (m === top) w.y = rect.y - HIT_RADIUS;
+      else w.y = rect.y + rect.h + HIT_RADIUS;
+      return;
+    }
+    const push = (HIT_RADIUS - dist) / dist;
+    w.x += dx * push;
+    w.y += dy * push;
+  }
+
+  function resolveWorldCollisions(match, w) {
+    for (const ob of match.world.obstacles) {
+      if (ob.shape === 'rect') circleRectPush(w, ob);
+      else {
+        const dx = w.x - ob.x, dy = w.y - ob.y;
+        const dist = Math.hypot(dx, dy);
+        const min = ob.r + HIT_RADIUS;
+        if (dist < min && dist > 1e-4) {
+          w.x = ob.x + (dx / dist) * min;
+          w.y = ob.y + (dy / dist) * min;
+        }
+      }
+    }
+    for (const crate of match.world.crates) {
+      if (!crate.alive) continue;
+      const dx = w.x - crate.x, dy = w.y - crate.y;
+      const dist = Math.hypot(dx, dy);
+      const min = crate.r + HIT_RADIUS;
+      if (dist < min && dist > 1e-4) {
+        w.x = crate.x + (dx / dist) * min;
+        w.y = crate.y + (dy / dist) * min;
+      }
+    }
+  }
+
+  function segmentHitsRect(x1, y1, x2, y2, rect, pad) {
+    const rx = rect.x - pad, ry = rect.y - pad, rw = rect.w + pad * 2, rh = rect.h + pad * 2;
+    const dx = x2 - x1, dy = y2 - y1;
+    let t0 = 0, t1 = 1;
+    const p = [-dx, dx, -dy, dy];
+    const q = [x1 - rx, rx + rw - x1, y1 - ry, ry + rh - y1];
+    for (let i = 0; i < 4; i += 1) {
+      if (Math.abs(p[i]) < 1e-9) {
+        if (q[i] < 0) return false;
+      } else {
+        const t = q[i] / p[i];
+        if (p[i] < 0) { if (t > t1) return false; if (t > t0) t0 = t; }
+        else { if (t < t0) return false; if (t < t1) t1 = t; }
+      }
+    }
+    return true;
+  }
+
+  function projectileHitsWorld(match, p) {
+    // Renvoie true si le projectile doit disparaître.
+    for (const ob of match.world.obstacles) {
+      if (ob.shape === 'rect') {
+        if (segmentHitsRect(p.prevX, p.prevY, p.x, p.y, ob, p.r)) return true;
+      } else if (distancePointToSegment(ob.x, ob.y, p.prevX, p.prevY, p.x, p.y) <= ob.r + p.r) {
+        return true;
+      }
+    }
+    if (p.ownerRole === 'enemy') return false;
+    for (const crate of match.world.crates) {
+      if (!crate.alive) continue;
+      if (distancePointToSegment(crate.x, crate.y, p.prevX, p.prevY, p.x, p.y) <= crate.r + p.r) {
+        crate.hp -= p.damage;
+        if (crate.hp <= 0) breakCrate(match, crate);
+        return true;
+      }
+    }
+    for (const bomb of match.world.bombs) {
+      if (!bomb.alive) continue;
+      if (distancePointToSegment(bomb.x, bomb.y, p.prevX, p.prevY, p.x, p.y) <= bomb.r + p.r) {
+        explodeBomb(match, bomb, p.ownerRole);
+        return true;
+      }
+    }
+    for (const enemy of match.world.enemies) {
+      if (enemy.state === 'dead') continue;
+      if (distancePointToSegment(enemy.x, enemy.y, p.prevX, p.prevY, p.x, p.y) <= enemy.r + p.r) {
+        enemy.hp -= p.damage;
+        enemy.discovered = true;
+        if (enemy.state === 'sleep') { enemy.state = 'awake'; enemy.targetRole = p.ownerRole; }
+        if (enemy.hp <= 0) killEnemy(match, enemy, p.ownerRole);
+        else match.events.push({ type: 'enemy-hit', enemyId: enemy.id, role: p.ownerRole });
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function updateWorld(match, dt) {
+    const world = match.world;
+    for (const trap of world.traps) trap.cooldown = Math.max(0, trap.cooldown - dt);
+
+    // Contact joueuses -> pièges / bombes / pickups.
+    for (const role of ['creator', 'opponent']) {
+      const w = match.witches[role];
+      if (w.hearts <= 0) continue;
+      for (const trap of world.traps) {
+        if (trap.cooldown > 0) continue;
+        if (Math.hypot(w.x - trap.x, w.y - trap.y) <= trap.r + HIT_RADIUS) {
+          trap.cooldown = TRAP_COOLDOWN;
+          match.effects.push({ id: ++match.entitySeq, type: 'trap', x: trap.x, y: trap.y, age: 0, maxAge: 0.6, r: TRAP_RADIUS });
+          damageWitch(match, w, 1, 'world', 'trap');
+          markRevealed(match, w, 0.9, 'trap');
+          match.events.push({ type: 'trap-trigger', role, trapId: trap.id });
+        }
+      }
+      for (const bomb of world.bombs) {
+        if (!bomb.alive) continue;
+        if (Math.hypot(w.x - bomb.x, w.y - bomb.y) <= BOMB_TRIGGER_RADIUS + HIT_RADIUS) {
+          explodeBomb(match, bomb, role);
+        }
+      }
+      for (const pickup of world.pickups) {
+        if (pickup.taken) continue;
+        if (Math.hypot(w.x - pickup.x, w.y - pickup.y) <= pickup.r + HIT_RADIUS + 4) {
+          pickup.taken = true;
+          applyBoon(match, w, pickup.boon);
+        }
+      }
+    }
+    world.pickups = world.pickups.filter(pk => !pk.taken && pk.age < pk.maxAge);
+    for (const pk of world.pickups) pk.age += dt;
+
+    // Sentinelles.
+    for (const enemy of world.enemies) {
+      if (enemy.state === 'dead') continue;
+      if (enemy.state === 'sleep') {
+        for (const role of ['creator', 'opponent']) {
+          const w = match.witches[role];
+          if (Math.hypot(w.x - enemy.x, w.y - enemy.y) <= w.stats.haloRadius * 0.9) enemy.discovered = true;
+        }
+        continue;
+      }
+      let target = match.witches[enemy.targetRole];
+      if (!target || target.hearts <= 0) {
+        const otherRole = enemy.targetRole === 'creator' ? 'opponent' : 'creator';
+        target = match.witches[otherRole];
+        enemy.targetRole = otherRole;
+      }
+      const dist = Math.hypot(target.x - enemy.x, target.y - enemy.y);
+      if (dist > 640) {
+        enemy.sleepTimer += dt;
+        if (enemy.sleepTimer >= ENEMY_SLEEP_RETURN) {
+          enemy.state = 'sleep';
+          enemy.targetRole = null;
+          enemy.x = enemy.homeX; enemy.y = enemy.homeY;
+          continue;
+        }
+      } else {
+        enemy.sleepTimer = 0;
+      }
+      enemy.attackCd = Math.max(0, enemy.attackCd - dt);
+      enemy.shootCd = Math.max(0, enemy.shootCd - dt);
+      if (dist > 1) {
+        const step = Math.min(dist, ENEMY_SPEED * dt);
+        enemy.x += ((target.x - enemy.x) / dist) * step;
+        enemy.y += ((target.y - enemy.y) / dist) * step;
+      }
+      // Les sentinelles évitent les obstacles solides.
+      for (const ob of world.obstacles) {
+        if (ob.shape === 'rect') circleRectPush(enemy, ob);
+        else {
+          const dx = enemy.x - ob.x, dy = enemy.y - ob.y;
+          const d = Math.hypot(dx, dy), min = ob.r + enemy.r;
+          if (d < min && d > 1e-4) { enemy.x = ob.x + (dx / d) * min; enemy.y = ob.y + (dy / d) * min; }
+        }
+      }
+      if (dist <= enemy.r + HIT_RADIUS + 8 && enemy.attackCd <= 0) {
+        enemy.attackCd = ENEMY_MELEE_CD;
+        damageWitch(match, target, 1, 'enemy', 'enemy-melee');
+        match.events.push({ type: 'enemy-attack', enemyId: enemy.id, targetRole: target.role });
+      } else if (dist > 140 && dist < 470 && enemy.shootCd <= 0) {
+        enemy.shootCd = ENEMY_SHOOT_CD;
+        const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+        match.projectiles.push({
+          id: ++match.entitySeq, ownerRole: 'enemy', enemyId: enemy.id,
+          x: enemy.x, y: enemy.y, prevX: enemy.x, prevY: enemy.y,
+          vx: Math.cos(angle) * 300, vy: Math.sin(angle) * 300,
+          r: 7, damage: 1, life: 2.4, maxLife: 2.4
+        });
+        match.events.push({ type: 'enemy-shot', enemyId: enemy.id });
+      }
+    }
+
+    for (const alarm of world.alarms) alarm.age += dt;
+    world.alarms = world.alarms.filter(a => a.age < a.maxAge);
+    for (const fx of match.effects) fx.age += dt;
+    match.effects = match.effects.filter(fx => fx.age < fx.maxAge);
+  }
+
   function createWitch(role, perks, cosmeticId) {
     const stats = computeStats(perks);
     const isCreator = role === 'creator';
+    const spawn = isCreator ? SPAWN_CREATOR : SPAWN_OPPONENT;
     return {
       role,
       cosmetic: getHaloCosmetic(cosmeticId).id,
+      baseStats: stats,
       stats,
-      x: ARENA_CENTER.x,
-      y: isCreator ? 730 : 170,
+      boons: emptyBoons(),
+      x: spawn.x,
+      y: spawn.y,
       vx: 0,
       vy: 0,
       aimAngle: isCreator ? -Math.PI / 2 : Math.PI / 2,
@@ -473,8 +1019,8 @@
         moveY: 0,
         focus: false,
         hasTarget: false,
-        targetX: ARENA_CENTER.x,
-        targetY: isCreator ? 730 : 170,
+        targetX: spawn.x,
+        targetY: spawn.y,
         hasAim: false,
         aimX: ARENA_CENTER.x,
         aimY: ARENA_CENTER.y,
@@ -486,15 +1032,20 @@
   }
 
   function resetRoundState(match) {
+    match.rng = mulberry32((match.seed + match.round * 7919) >>> 0);
+    chooseSpawns(match);
     const c = match.witches.creator;
     const o = match.witches.opponent;
     for (const [role, w] of [['creator', c], ['opponent', o]]) {
       const isCreator = role === 'creator';
-      w.x = ARENA_CENTER.x;
-      w.y = isCreator ? 730 : 170;
+      const spawn = match.spawns[role];
+      w.x = spawn.x;
+      w.y = spawn.y;
       w.vx = 0;
       w.vy = 0;
       w.aimAngle = isCreator ? -Math.PI / 2 : Math.PI / 2;
+      w.boons = emptyBoons();
+      w.stats = effectiveStats(w);
       w.hearts = w.stats.maxHearts;
       w.maxHearts = w.stats.maxHearts;
       w.parry = w.stats.initialParry;
@@ -513,12 +1064,18 @@
       w.stepAccum = 0;
       w.activeTrailId = 0;
       w.lastKnownOpponent = null;
+      w.lastAlarmAt = -10;
       w.cmd.moveX = 0;
       w.cmd.moveY = 0;
       w.cmd.hasTarget = false;
+      w.cmd.targetX = spawn.x;
+      w.cmd.targetY = spawn.y;
+      w.cmd.hasAim = false;
       w.cmd.dash = false;
       w.cmd.fire = false;
     }
+    buildWorld(match);
+    match.effects = [];
     match.roundTime = 0;
     match.roundPhase = 'fighting';
     match.intermissionTimer = 0;
@@ -540,12 +1097,18 @@
     if (!cCheck.valid) throw new Error(cCheck.error);
     if (!oCheck.valid) throw new Error(oCheck.error);
 
+    const id = opts.id || 'local-duel';
     const match = {
-      id: opts.id || 'local-duel',
+      id,
+      seed: hashSeed(id),
+      rng: mulberry32(hashSeed(id)),
       mode: opts.mode === 'ranked' ? 'ranked' : 'friendly',
       wager: opts.wager === WAGER_AMOUNT ? WAGER_AMOUNT : 0,
       seq: 0,
       entitySeq: 0,
+      world: null,
+      spawns: null,
+      effects: [],
       totalTime: 0,
       round: 1,
       roundTime: 0,
@@ -753,7 +1316,7 @@
       });
     }
 
-    w.revealTimer = Math.max(w.revealTimer, w.stats.shotRevealDuration);
+    markRevealed(match, w, w.stats.shotRevealDuration, 'shot');
     match.events.push({ type: 'shot', role: w.role, time: match.roundTime });
   }
 
@@ -814,6 +1377,8 @@
       w.dodgeProtectTimer = Math.max(0, w.dodgeProtectTimer - dt);
       w.dodgeSuccessTimer = Math.max(0, w.dodgeSuccessTimer - dt);
       w.revealTimer = Math.max(0, w.revealTimer - dt);
+      for (const key of Object.keys(w.boons)) w.boons[key] = Math.max(0, w.boons[key] - dt);
+      w.stats = effectiveStats(w);
 
       if (w.cmd.dash) {
         w.cmd.dash = false;
@@ -870,6 +1435,8 @@
         }
       }
 
+      clampToArenaAndZone(w, match.zoneRadius);
+      resolveWorldCollisions(match, w);
       clampToArenaAndZone(w, match.zoneRadius);
 
       const moved = Math.hypot(w.x - prevX, w.y - prevY);
@@ -932,45 +1499,27 @@
       p.y += p.vy * dt;
       p.life -= dt;
 
-      const targetRole = p.ownerRole === 'creator' ? 'opponent' : 'creator';
-      const target = match.witches[targetRole];
-      const dist = distancePointToSegment(target.x, target.y, p.prevX, p.prevY, p.x, p.y);
-
-      if (target.dodgeProtectTimer > 0 && !target.dodgeCredited && dist <= p.r + DODGE_PROXIMITY_RADIUS) {
-        target.dodgeCredited = true;
-        target.perfectDodges += 1;
-        target.dodgeSuccessTimer = 0.7;
-        match.events.push({ type: 'perfect-dodge', role: targetRole, time: match.roundTime });
+      if (projectileHitsWorld(match, p)) {
+        p.life = 0;
+        continue;
       }
 
-      if (dist <= p.r + HIT_RADIUS) {
-        p.life = 0;
-        if (target.invTimer > 0 || target.dashTimer > 0) {
-          if (target.dodgeProtectTimer > 0 && !target.dodgeCredited) {
-            target.dodgeCredited = true;
-            target.perfectDodges += 1;
-            target.dodgeSuccessTimer = 0.7;
-            match.events.push({ type: 'perfect-dodge', role: targetRole, time: match.roundTime });
-          }
-        } else {
-          if (match.suddenDeath) {
-            target.parry = 0;
-            target.hearts = 0;
-          } else if (target.parry > 0) {
-            target.parry -= 1;
-            target.hearts = Math.max(0, target.hearts - 1);
-          } else {
-            target.hearts = Math.max(0, target.hearts - p.damage);
-          }
-          target.invTimer = 0.55;
-          target.revealTimer = Math.max(target.revealTimer, HIT_REVEAL_DURATION);
-          match.events.push({
-            type: 'hit',
-            targetRole,
-            attackerRole: p.ownerRole,
-            remainingHearts: target.hearts,
-            time: match.roundTime
-          });
+      const targets = p.ownerRole === 'enemy'
+        ? [['creator', match.witches.creator], ['opponent', match.witches.opponent]]
+        : [[p.ownerRole === 'creator' ? 'opponent' : 'creator', match.witches[p.ownerRole === 'creator' ? 'opponent' : 'creator']]];
+      for (const [targetRole, target] of targets) {
+        if (target.hearts <= 0) continue;
+        const dist = distancePointToSegment(target.x, target.y, p.prevX, p.prevY, p.x, p.y);
+        if (target.dodgeProtectTimer > 0 && !target.dodgeCredited && dist <= p.r + DODGE_PROXIMITY_RADIUS) {
+          target.dodgeCredited = true;
+          target.perfectDodges += 1;
+          target.dodgeSuccessTimer = 0.7;
+          match.events.push({ type: 'perfect-dodge', role: targetRole, time: match.roundTime });
+        }
+        if (dist <= p.r + HIT_RADIUS) {
+          p.life = 0;
+          damageWitch(match, target, p.damage, p.ownerRole, p.ownerRole === 'enemy' ? 'enemy-shot' : 'shot');
+          break;
         }
       }
     }
@@ -985,6 +1534,7 @@
     for (const t of match.dodgeTrails) t.age += dt;
     match.dodgeTrails = match.dodgeTrails.filter(t => t.age < t.maxAge);
 
+    updateWorld(match, dt);
     updateVisibilityMemory(match, 0);
 
     const creatorDead = match.witches.creator.hearts <= 0;
@@ -1139,7 +1689,14 @@
         invulnerable: self.invTimer > 0,
         perfectDodges: self.perfectDodges,
         dodgeSuccess: self.dodgeSuccessTimer > 0,
-        revealed: self.revealTimer > 0 || match.lunarRevealTimer > 0
+        revealed: self.revealTimer > 0 || match.lunarRevealTimer > 0,
+        boons: {
+          swift: Math.round(self.boons.swift * 100) / 100,
+          rapid: Math.round(self.boons.rapid * 100) / 100,
+          power: Math.round(self.boons.power * 100) / 100,
+          ghost: Math.round(self.boons.ghost * 100) / 100,
+          dash: Math.round(self.boons.dash * 100) / 100
+        }
       },
       opponent: {
         role: opp.role,
@@ -1175,7 +1732,39 @@
         damage: p.damage
       })),
       footsteps: visibleFootsteps,
-      dodgeTrails: visibleTrails
+      dodgeTrails: visibleTrails,
+      world: snapshotWorld(match, role),
+      effects: match.effects.map(fx => ({
+        id: fx.id, type: fx.type,
+        x: roundCoord(fx.x), y: roundCoord(fx.y),
+        age: Math.round(fx.age * 100) / 100, maxAge: fx.maxAge, r: fx.r
+      }))
+    };
+  }
+
+  function snapshotWorld(match, viewerRole) {
+    const self = match.witches[viewerRole];
+    const world = match.world;
+    const enemies = [];
+    for (const enemy of world.enemies) {
+      if (enemy.state === 'dead') continue;
+      const near = Math.hypot(enemy.x - self.x, enemy.y - self.y) <= self.stats.haloRadius * 1.15;
+      if (!enemy.discovered && !near && enemy.state === 'sleep') continue;
+      enemies.push({
+        id: enemy.id, x: roundCoord(enemy.x), y: roundCoord(enemy.y), r: enemy.r,
+        hp: enemy.hp, state: enemy.state, targetRole: enemy.targetRole
+      });
+    }
+    return {
+      obstacles: world.obstacles.map(ob => ob.shape === 'rect'
+        ? { id: ob.id, shape: 'rect', x: roundCoord(ob.x), y: roundCoord(ob.y), w: ob.w, h: ob.h }
+        : { id: ob.id, shape: 'circle', x: roundCoord(ob.x), y: roundCoord(ob.y), r: ob.r }),
+      crates: world.crates.filter(c => c.alive).map(c => ({ id: c.id, x: roundCoord(c.x), y: roundCoord(c.y), r: c.r, hp: c.hp })),
+      bombs: world.bombs.filter(b => b.alive).map(b => ({ id: b.id, x: roundCoord(b.x), y: roundCoord(b.y), r: b.r })),
+      traps: world.traps.map(t => ({ id: t.id, x: roundCoord(t.x), y: roundCoord(t.y), r: t.r, cooldown: Math.round(t.cooldown * 100) / 100 })),
+      enemies,
+      pickups: world.pickups.map(pk => ({ id: pk.id, x: roundCoord(pk.x), y: roundCoord(pk.y), r: pk.r, boon: pk.boon, age: Math.round(pk.age * 100) / 100, maxAge: pk.maxAge })),
+      alarms: world.alarms.map(a => ({ id: a.id, x: roundCoord(a.x), y: roundCoord(a.y), role: a.role, kind: a.kind, age: Math.round(a.age * 100) / 100, maxAge: a.maxAge }))
     };
   }
 
@@ -1222,10 +1811,36 @@
       x1: fx(t.x1), y1: fy(t.y1),
       x2: fx(t.x2), y2: fy(t.y2)
     }));
+    if (snapshot.world) {
+      const w = snapshot.world;
+      out.world = {
+        obstacles: (w.obstacles || []).map(ob => ob.shape === 'rect'
+          ? { ...ob, x: ARENA_WIDTH - ob.x - ob.w, y: ARENA_HEIGHT - ob.y - ob.h }
+          : { ...ob, x: fx(ob.x), y: fy(ob.y) }),
+        crates: (w.crates || []).map(c => ({ ...c, x: fx(c.x), y: fy(c.y) })),
+        bombs: (w.bombs || []).map(b => ({ ...b, x: fx(b.x), y: fy(b.y) })),
+        traps: (w.traps || []).map(t => ({ ...t, x: fx(t.x), y: fy(t.y) })),
+        enemies: (w.enemies || []).map(e => ({ ...e, x: fx(e.x), y: fy(e.y) })),
+        pickups: (w.pickups || []).map(pk => ({ ...pk, x: fx(pk.x), y: fy(pk.y) })),
+        alarms: (w.alarms || []).map(a => ({ ...a, x: fx(a.x), y: fy(a.y) }))
+      };
+    }
+    if (snapshot.effects) out.effects = snapshot.effects.map(fx2 => ({ ...fx2, x: fx(fx2.x), y: fy(fx2.y) }));
     return out;
   }
 
   return Object.freeze({
+    WORLD_WIDTH,
+    WORLD_HEIGHT,
+    VIEW_WIDTH,
+    VIEW_HEIGHT,
+    SPAWN_CREATOR,
+    SPAWN_OPPONENT,
+    BOON_TYPES,
+    BOON_LABELS,
+    CRATE_RADIUS,
+    BOMB_BLAST_RADIUS,
+    ENEMY_WAKE_RADIUS,
     ARENA_WIDTH,
     ARENA_HEIGHT,
     ARENA_CENTER,
