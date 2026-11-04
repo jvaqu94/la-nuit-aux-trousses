@@ -3418,6 +3418,153 @@ async function submitCandySprint(value){
  catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
 }
 
+async function rpc(name,body={}){
+ if(!enabled)throw Error('Service en ligne non configuré.');
+ await ensureSession();
+ const fn=String(name||'').trim();
+ if(!/^[a-z0-9_]+$/i.test(fn))throw Error('RPC invalide.');
+ return request('/rest/v1/rpc/'+fn,{method:'POST',auth:true,body:body&&typeof body==='object'?body:{}});
+}
+
+const DUEL_UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function realtimeSocketUrl(){
+ const parsed=new URL(url);
+ const wsProto=parsed.protocol==='https:'?'wss:':'ws:';
+ return `${wsProto}//${parsed.host}/realtime/v1/websocket?apikey=${encodeURIComponent(key)}&vsn=1.0.0`;
+}
+function openDuelChannel(duelId,handlers={}){
+ if(!enabled)throw Error('Service en ligne non configuré.');
+ if(!session)throw Error('Connecte-toi à ton compte en ligne.');
+ const cleanId=String(duelId||'').trim().toLowerCase();
+ if(!DUEL_UUID_RE.test(cleanId))throw Error('Identifiant de duel invalide.');
+ const WS=window.WebSocket||globalThis.WebSocket;
+ if(typeof WS!=='function')throw Error('WebSocket indisponible sur ce navigateur.');
+ const topic='realtime:duel:'+cleanId;
+ let ws=null,closed=false,joined=false,refCounter=0,joinRef='',heartbeatTimer=null,reconnectTimer=null,attempts=0;
+ const pendingQueue=[];
+ let resolveReady=null;
+ const ready=new Promise(resolve=>{resolveReady=resolve});
+ const nextRef=()=>String(++refCounter);
+ const clearHeartbeat=()=>{if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null}};
+ const sendRaw=frame=>{
+  if(ws&&ws.readyState===1){
+   try{ws.send(JSON.stringify(frame));return true}catch{}
+  }
+  return false;
+ };
+ const flushQueue=()=>{
+  while(joined&&pendingQueue.length){
+   const item=pendingQueue.shift();
+   sendBroadcastNow(item.event,item.payload);
+  }
+ };
+ const sendBroadcastNow=(eventName,payload)=>{
+  const envelope={
+   topic,
+   event:'broadcast',
+   payload:{
+    type:'broadcast',
+    event:String(eventName||'message'),
+    payload:{...(payload&&typeof payload==='object'?payload:{value:payload}),_sender:session?.user?.id||''}
+   },
+   ref:nextRef(),
+   join_ref:joinRef
+  };
+  return sendRaw(envelope);
+ };
+ const connect=async()=>{
+  if(closed)return;
+  try{await ensureSession()}catch(error){handlers.onError?.(error);return}
+  if(closed)return;
+  let socket;
+  try{socket=new WS(realtimeSocketUrl())}catch(error){handlers.onError?.(error);return}
+  ws=socket;
+  joined=false;
+  joinRef=nextRef();
+  socket.onopen=()=>{
+   if(closed||ws!==socket)return;
+   attempts=0;
+   sendRaw({
+    topic,
+    event:'phx_join',
+    payload:{
+     config:{broadcast:{ack:false,self:false},presence:{key:session?.user?.id||''},private:false},
+     access_token:session?.access_token||''
+    },
+    ref:joinRef,
+    join_ref:joinRef
+   });
+   clearHeartbeat();
+   heartbeatTimer=setInterval(()=>{
+    sendRaw({topic:'phoenix',event:'heartbeat',payload:{},ref:nextRef()});
+   },25000);
+  };
+  socket.onmessage=evt=>{
+   if(closed||ws!==socket)return;
+   let msg=null;
+   try{msg=JSON.parse(typeof evt.data==='string'?evt.data:String(evt.data||''))}catch{return}
+   if(!msg||typeof msg!=='object')return;
+   if(msg.topic===topic&&msg.event==='phx_reply'&&msg.ref===joinRef){
+    if(msg.payload?.status==='ok'){
+     joined=true;
+     if(resolveReady){resolveReady(true);resolveReady=null}
+     flushQueue();
+     handlers.onStatus?.('SUBSCRIBED');
+    }else{
+     handlers.onError?.(new Error(msg.payload?.response?.reason||'Canal temps réel refusé.'));
+    }
+    return;
+   }
+   if(msg.topic===topic&&msg.event==='broadcast'){
+    const innerEvent=String(msg.payload?.event||'');
+    const innerPayload=msg.payload?.payload||{};
+    if(innerPayload?._sender&&session?.user?.id&&innerPayload._sender===session.user.id)return;
+    handlers.onBroadcast?.(innerEvent,innerPayload);
+    if(innerEvent&&typeof handlers[innerEvent]==='function')handlers[innerEvent](innerPayload);
+   }
+  };
+  socket.onerror=()=>{
+   if(!closed&&ws===socket)handlers.onStatus?.('CHANNEL_ERROR');
+  };
+  socket.onclose=()=>{
+   if(ws===socket)ws=null;
+   joined=false;
+   clearHeartbeat();
+   if(closed)return;
+   handlers.onStatus?.('CLOSED');
+   const delay=Math.min(4000,500*Math.pow(2,attempts++));
+   reconnectTimer=setTimeout(()=>{reconnectTimer=null;connect()},delay);
+  };
+ };
+ connect();
+ return{
+  topic,
+  ready,
+  get connected(){return joined&&!!ws&&ws.readyState===1},
+  send(eventName,payload={}){
+   if(closed)return false;
+   if(joined&&ws&&ws.readyState===1)return sendBroadcastNow(eventName,payload);
+   if(eventName!=='snapshot'&&eventName!=='cmd'){
+    if(pendingQueue.length>=16)pendingQueue.shift();
+    pendingQueue.push({event:eventName,payload});
+   }
+   return false;
+  },
+  close(){
+   if(closed)return;
+   closed=true;
+   clearHeartbeat();
+   if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
+   if(ws){
+    if(ws.readyState===1&&joined)sendRaw({topic,event:'phx_leave',payload:{},ref:nextRef(),join_ref:joinRef});
+    try{ws.close()}catch{}
+    ws=null;
+   }
+   joined=false;
+  }
+ };
+}
+
 function renderPanel(target=mount){
  if(target)mount=target;
  if(!mount||!mount.isConnected)return;
@@ -3608,6 +3755,8 @@ window.MinuitCloud={
  schedule,
  sync:()=>syncNow(),
  restore,
+ rpc,
+ openDuelChannel,
  submitFeedback,
  submitTeamScore,
  finishTeamScore,
@@ -6154,5 +6303,2901 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&state==='
 window.addEventListener('online',()=>{if(state==='league-menu'&&window.MinuitCloud?.connected)onAccount(window.MinuitCloud.user)});
 window.DailyRewards={check:onAccount,claim,odds,roll,nextStreak,rarities:RARITIES,get activeUser(){return activeUser},get opening(){return opening}};
 setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.user)},180);
+})();
+</script><script>/* La Nuit aux Trousses — Cœur déterministe du Duel de la Nuit noire.
+   Partagé entre le navigateur (window.NightDuelCore) et les tests Node (CommonJS).
+   Isolé de la campagne, de l’Arsenal, des compagnons, de l’XP et des highscores. */
+(function(root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.NightDuelCore = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function() {
+  'use strict';
+
+  const ARENA_WIDTH = 800;
+  const ARENA_HEIGHT = 900;
+  const ARENA_CENTER = Object.freeze({ x: 400, y: 450 });
+  const ARENA_PADDING_X = 28;
+  const ARENA_PADDING_Y = 36;
+
+  const BASE_HEARTS = 5;
+  const ROUND_DURATION = 90;
+  const ROUNDS_TO_WIN = 2;
+  const MAX_ROUNDS = 3;
+  const INTERMISSION_DURATION = 2.4;
+
+  const BURST_COUNT = 3;
+  const BURST_INTERVAL = 2.0;
+  const BURST_STEP = 0.12;
+  const INITIAL_BURST_DELAY = 0.85;
+
+  const BASE_HALO_RADIUS = 195;
+  const SHOT_REVEAL_DURATION = 0.55;
+  const HIT_REVEAL_DURATION = 0.45;
+  const LUNAR_PULSE_EARLY_INTERVAL = 15;
+  const LUNAR_PULSE_LATE_AT = 45;
+  const LUNAR_PULSE_LATE_INTERVAL = 7.5;
+  const LUNAR_REVEAL_DURATION = 1.35;
+
+  const ZONE_SHRINK_START = 60;
+  const ZONE_INITIAL_RADIUS = 560;
+  const ZONE_MIN_RADIUS = 185;
+  const ZONE_SUDDEN_DEATH_MIN = 145;
+  const SUDDEN_DEATH_AT = 90;
+
+  const HIT_RADIUS = 16;
+  const DODGE_PROXIMITY_RADIUS = 52;
+  const ACOUSTIC_STEP_RANGE = 350;
+  const ACOUSTIC_TRAIL_RANGE = 380;
+
+  const INITIAL_RATING = 1000;
+  const RATING_DIFF_THRESHOLD = 150;
+  const RATING_DELTA_CLOSE = 20;
+  const RATING_DELTA_UPSET = 30;
+  const RATING_DELTA_FAVORITE = 10;
+  const DAILY_RANKED_PAIR_LIMIT = 2;
+  const WAGER_AMOUNT = 10;
+  const WAGER_POT = 20;
+  const RANKED_WIN_SHARD_BONUS = 2;
+
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+  const EXACT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  const PERK_CATALOG = Object.freeze([
+    Object.freeze({
+      id: 'comet-boots',
+      name: 'Bottes comète',
+      category: 'Vitesse',
+      icon: '☄',
+      short: '+22 % vitesse',
+      desc: 'Accélère le vol libre et le vol précis dans l’obscurité.'
+    }),
+    Object.freeze({
+      id: 'twin-burst',
+      name: 'Rafale jumelle',
+      category: 'Projectile supplémentaire',
+      icon: '✦',
+      short: '+1 tir par rafale',
+      desc: 'Chaque salve automatique passe de 3 à 4 projectiles.'
+    }),
+    Object.freeze({
+      id: 'swift-powder',
+      name: 'Poudre vive',
+      category: 'Cadence',
+      icon: '⚡',
+      short: 'Rafales plus proches',
+      desc: 'Rapproche le rythme des salves automatiques (1,45 s).'
+    }),
+    Object.freeze({
+      id: 'prism-fan',
+      name: 'Éventail prismatique',
+      category: 'Tirs latéraux',
+      icon: '❖',
+      short: '2 éclats latéraux',
+      desc: 'Ajoute deux projectiles obliques à chaque tir de la rafale.'
+    }),
+    Object.freeze({
+      id: 'dawn-halo',
+      name: 'Halo d’aube',
+      category: 'Vision',
+      icon: '◐',
+      short: '+40 % rayon de halo',
+      desc: 'Étend le cercle clair dans lequel l’adversaire devient visible.'
+    }),
+    Object.freeze({
+      id: 'soft-steps',
+      name: 'Pas feutrés',
+      category: 'Discrétion',
+      icon: '☾',
+      short: 'Traces et lueur réduites',
+      desc: 'Réduit les échos de pas, la portée où l’on te repère et l’éclat de tir.'
+    }),
+    Object.freeze({
+      id: 'fleeting-dash',
+      name: 'Bond furtif',
+      category: 'Esquive',
+      icon: '↝',
+      short: 'Esquive vive',
+      desc: 'Recharge l’esquive plus vite et prolonge sa garde immédiate.'
+    }),
+    Object.freeze({
+      id: 'ember-heart',
+      name: 'Cœur de braise',
+      category: 'Cœur / parade',
+      icon: '♥',
+      short: '+1 cœur & parade',
+      desc: 'Ajoute un 6e cœur et amortit le premier impact lourd de chaque manche.'
+    }),
+    Object.freeze({
+      id: 'short-lance',
+      name: 'Lance brève',
+      category: 'Dégâts doubles',
+      icon: '⚔',
+      short: '2 cœurs par coup',
+      desc: 'Inflige des dégâts doubles à portée resserrée.'
+    }),
+    Object.freeze({
+      id: 'wide-wave',
+      name: 'Onde large',
+      category: 'Projectiles élargis',
+      icon: '◎',
+      short: 'Orbes élargis',
+      desc: 'Élargit nettement le rayon des projectiles tirés.'
+    })
+  ]);
+
+  const PERK_MAP = new Map(PERK_CATALOG.map(perk => [perk.id, perk]));
+
+  const COSMETIC_HALOS = Object.freeze([
+    Object.freeze({
+      id: 'halo-violet',
+      name: 'Halo violet',
+      cost: 0,
+      color: 'rgba(176, 132, 255, 0.24)',
+      ring: '#c8a6ff',
+      desc: 'Lueur nocturne originelle, offerte à toutes les sorcières.'
+    }),
+    Object.freeze({
+      id: 'halo-aurora',
+      name: 'Halo d’aurore',
+      cost: 30,
+      color: 'rgba(110, 232, 214, 0.24)',
+      ring: '#7ef3df',
+      desc: 'Reflet boréal purement cosmétique, sans avantage de portée.'
+    }),
+    Object.freeze({
+      id: 'halo-solar',
+      name: 'Halo solaire',
+      cost: 60,
+      color: 'rgba(255, 204, 112, 0.24)',
+      ring: '#ffd27d',
+      desc: 'Couronne ambrée purement cosmétique, sans avantage de combat.'
+    }),
+    Object.freeze({
+      id: 'halo-eclipse',
+      name: 'Halo d’éclipse',
+      cost: 100,
+      color: 'rgba(255, 122, 184, 0.24)',
+      ring: '#ff94c8',
+      desc: 'Anneau pourpre d’éclipse, strictement cosmétique.'
+    })
+  ]);
+
+  const HALO_MAP = new Map(COSMETIC_HALOS.map(item => [item.id, item]));
+
+  function getHaloCosmetic(id) {
+    return HALO_MAP.get(id) || COSMETIC_HALOS[0];
+  }
+
+  function validatePerks(perks) {
+    if (!Array.isArray(perks) || perks.length !== 3) {
+      return { valid: false, error: 'Choisis exactement trois atouts différents.' };
+    }
+    const normalized = perks.map(item => String(item || '').trim());
+    const unique = new Set(normalized);
+    if (unique.size !== 3) {
+      return { valid: false, error: 'Choisis exactement trois atouts différents.' };
+    }
+    for (const id of normalized) {
+      if (!PERK_MAP.has(id)) {
+        return { valid: false, error: 'Atout inconnu dans ce duel.' };
+      }
+    }
+    return { valid: true, perks: normalized };
+  }
+
+  function extractDuelId(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return '';
+    if (EXACT_UUID_RE.test(text)) return text.toLowerCase();
+    try {
+      const url = new URL(text, 'https://minuit.local/');
+      const param = (url.searchParams.get('duel') || '').trim();
+      if (EXACT_UUID_RE.test(param)) return param.toLowerCase();
+    } catch (_) {}
+    const match = text.match(UUID_RE);
+    return match ? match[0].toLowerCase() : '';
+  }
+
+  function buildInviteUrl(baseHref, duelId) {
+    const cleanId = extractDuelId(duelId);
+    if (!cleanId) return '';
+    try {
+      const url = new URL(baseHref || 'https://minuit.local/');
+      url.hash = '';
+      ['team', 'code', 'token_hash', 'type', 'error', 'error_description'].forEach(key => url.searchParams.delete(key));
+      url.searchParams.set('duel', cleanId);
+      return url.toString();
+    } catch (_) {
+      return `?duel=${cleanId}`;
+    }
+  }
+
+  function buildShareLinks(baseHref, duelId, creatorName, mode) {
+    const inviteUrl = buildInviteUrl(baseHref, duelId);
+    const label = mode === 'ranked' ? 'classé' : 'amical';
+    const who = String(creatorName || 'Une sorcière').trim() || 'Une sorcière';
+    const message = `${who} t’invite en Duel de la Nuit noire (${label}) sur La Nuit aux Trousses : ${inviteUrl}`;
+    return {
+      inviteUrl,
+      whatsapp: `https://wa.me/?text=${encodeURIComponent(message)}`,
+      messenger: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(inviteUrl)}&quote=${encodeURIComponent(message)}`
+    };
+  }
+
+  function parisDateKey(input) {
+    const date = input instanceof Date ? input : new Date(input || Date.now());
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(date);
+    const get = type => (parts.find(part => part.type === type) || {}).value || '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  }
+
+  function computeRatingDelta(winnerRating, loserRating, mode) {
+    if (mode !== 'ranked') return 0;
+    const w = Number.isFinite(winnerRating) ? winnerRating : INITIAL_RATING;
+    const l = Number.isFinite(loserRating) ? loserRating : INITIAL_RATING;
+    if (w + RATING_DIFF_THRESHOLD <= l) return RATING_DELTA_UPSET;
+    if (w >= l + RATING_DIFF_THRESHOLD) return RATING_DELTA_FAVORITE;
+    return RATING_DELTA_CLOSE;
+  }
+
+  function canPlayRankedToday(completedPairMatches, now) {
+    const today = parisDateKey(now || new Date());
+    let count = 0;
+    for (const item of completedPairMatches || []) {
+      if (!item || item.mode !== 'ranked' || item.status !== 'completed') continue;
+      if (parisDateKey(item.completedAt || item.completed_at || now) === today) count += 1;
+    }
+    return {
+      allowed: count < DAILY_RANKED_PAIR_LIMIT,
+      count,
+      remaining: Math.max(0, DAILY_RANKED_PAIR_LIMIT - count),
+      parisDate: today
+    };
+  }
+
+  function createDuelProfile(overrides) {
+    const base = {
+      rating: INITIAL_RATING,
+      shards: 20,
+      wins: 0,
+      losses: 0,
+      unlocked: ['halo-violet'],
+      equipped: 'halo-violet'
+    };
+    const merged = Object.assign(base, overrides || {});
+    merged.unlocked = Array.isArray(merged.unlocked) ? [...new Set(merged.unlocked)] : ['halo-violet'];
+    if (!merged.unlocked.includes('halo-violet')) merged.unlocked.unshift('halo-violet');
+    if (!merged.unlocked.includes(merged.equipped)) merged.equipped = 'halo-violet';
+    return merged;
+  }
+
+  function unlockHaloInProfile(profile, haloId) {
+    const p = createDuelProfile(profile);
+    const halo = HALO_MAP.get(haloId);
+    if (!halo || halo.cost <= 0) throw new Error('Halo inconnu');
+    if (p.unlocked.includes(haloId)) throw new Error('Halo déjà débloqué');
+    if (p.shards < halo.cost) throw new Error('Éclats insuffisants');
+    p.shards -= halo.cost;
+    p.unlocked.push(haloId);
+    return p;
+  }
+
+  function equipHaloInProfile(profile, haloId) {
+    const p = createDuelProfile(profile);
+    if (!p.unlocked.includes(haloId)) throw new Error('Débloque ce halo avant de l’équiper');
+    p.equipped = haloId;
+    return p;
+  }
+
+  function createConsensusState(config) {
+    const cfg = config || {};
+    const mode = cfg.mode === 'ranked' ? 'ranked' : 'friendly';
+    const wager = cfg.wager === WAGER_AMOUNT ? WAGER_AMOUNT : 0;
+    const rankedGate = canPlayRankedToday(cfg.pairHistory || [], cfg.now);
+    if (mode === 'ranked' && !rankedGate.allowed) {
+      throw new Error('Deux duels classés déjà joués contre cette sorcière aujourd’hui. Choisis un amical.');
+    }
+    const creator = createDuelProfile(cfg.creatorProfile);
+    const opponent = createDuelProfile(cfg.opponentProfile);
+    if (wager > 0) {
+      if (creator.shards < wager || opponent.shards < wager) {
+        throw new Error('Éclats insuffisants pour cette mise');
+      }
+      creator.shards -= wager;
+      opponent.shards -= wager;
+    }
+    return {
+      id: cfg.id || '00000000-0000-4000-8000-000000000001',
+      creatorId: cfg.creatorId || 'creator',
+      opponentId: cfg.opponentId || 'opponent',
+      mode,
+      wager,
+      status: 'active',
+      creatorReport: null,
+      opponentReport: null,
+      winnerId: null,
+      ratingDelta: 0,
+      profiles: {
+        [cfg.creatorId || 'creator']: creator,
+        [cfg.opponentId || 'opponent']: opponent
+      }
+    };
+  }
+
+  function applyVictoryToState(duelState, winnerId, now) {
+    if (duelState.status === 'completed') return duelState;
+    const loserId = winnerId === duelState.creatorId ? duelState.opponentId : duelState.creatorId;
+    const winner = duelState.profiles[winnerId];
+    const loser = duelState.profiles[loserId];
+    const delta = computeRatingDelta(winner.rating, loser.rating, duelState.mode);
+    if (duelState.mode === 'ranked') {
+      winner.rating = Math.max(0, Math.min(100000, winner.rating + delta));
+      loser.rating = Math.max(0, Math.min(100000, loser.rating - delta));
+      winner.wins += 1;
+      loser.losses += 1;
+      winner.shards += RANKED_WIN_SHARD_BONUS;
+    }
+    if (duelState.wager > 0) {
+      winner.shards += duelState.wager * 2;
+    }
+    duelState.winnerId = winnerId;
+    duelState.ratingDelta = delta;
+    duelState.status = 'completed';
+    duelState.completedAt = (now instanceof Date ? now : new Date(now || Date.now())).toISOString();
+    return duelState;
+  }
+
+  function submitConsensusReport(duelState, reporterId, winnerId, now) {
+    if (!duelState) throw new Error('Duel introuvable');
+    if (duelState.status === 'completed') return duelState;
+    if (duelState.status !== 'active') throw new Error('Ce duel n’est pas en cours');
+    if (reporterId !== duelState.creatorId && reporterId !== duelState.opponentId) {
+      throw new Error('Ce duel est réservé à ses invités');
+    }
+    if (winnerId !== duelState.creatorId && winnerId !== duelState.opponentId) {
+      throw new Error('Vainqueur invalide');
+    }
+    if (reporterId === duelState.creatorId) duelState.creatorReport = winnerId;
+    else duelState.opponentReport = winnerId;
+
+    if (duelState.creatorReport && duelState.opponentReport && duelState.creatorReport === duelState.opponentReport) {
+      applyVictoryToState(duelState, winnerId, now);
+    }
+    return duelState;
+  }
+
+  function forfeitConsensusState(duelState, forfeiterId, now) {
+    if (!duelState) throw new Error('Duel introuvable');
+    if (duelState.status === 'completed' || duelState.status === 'cancelled') return duelState;
+    if (forfeiterId !== duelState.creatorId && forfeiterId !== duelState.opponentId) {
+      throw new Error('Ce duel est réservé à ses invités');
+    }
+    if (duelState.status !== 'active') {
+      if (duelState.wager > 0) {
+        duelState.profiles[duelState.creatorId].shards += duelState.wager;
+        duelState.profiles[duelState.opponentId].shards += duelState.wager;
+      }
+      duelState.status = 'cancelled';
+      return duelState;
+    }
+    const winnerId = forfeiterId === duelState.creatorId ? duelState.opponentId : duelState.creatorId;
+    duelState.creatorReport = winnerId;
+    duelState.opponentReport = winnerId;
+    return applyVictoryToState(duelState, winnerId, now);
+  }
+
+  function computeStats(perks) {
+    const check = validatePerks(perks);
+    const list = check.valid ? check.perks : [];
+    const has = id => list.includes(id);
+    const speedFactor = has('comet-boots') ? 1.22 : 1;
+    return {
+      perks: list,
+      moveSpeed: 330 * speedFactor,
+      focusSpeed: 175 * speedFactor,
+      burstCount: BURST_COUNT + (has('twin-burst') ? 1 : 0),
+      burstInterval: has('swift-powder') ? 1.45 : BURST_INTERVAL,
+      burstStep: has('swift-powder') ? 0.095 : BURST_STEP,
+      sideAngles: has('prism-fan') ? [-0.36, 0, 0.36] : [0],
+      haloRadius: has('dawn-halo') ? 275 : BASE_HALO_RADIUS,
+      stealthFactor: has('soft-steps') ? 0.84 : 1,
+      shotRevealDuration: has('soft-steps') ? 0.28 : SHOT_REVEAL_DURATION,
+      stepInterval: has('soft-steps') ? 0.82 : 0.46,
+      stepMaxAge: has('soft-steps') ? 0.95 : 1.5,
+      dashCooldown: has('fleeting-dash') ? 2.5 : 3.6,
+      dashDuration: has('fleeting-dash') ? 0.38 : 0.32,
+      dashInvDuration: has('fleeting-dash') ? 0.58 : 0.45,
+      dashSpeedMultiplier: has('fleeting-dash') ? 2.45 : 2.25,
+      maxHearts: BASE_HEARTS + (has('ember-heart') ? 1 : 0),
+      initialParry: has('ember-heart') ? 1 : 0,
+      shotDamage: has('short-lance') ? 2 : 1,
+      shotSpeed: 470,
+      shotLife: has('short-lance') ? 1.38 : 2.1,
+      shotRadius: has('wide-wave') ? 15 : 8
+    };
+  }
+
+  function createWitch(role, perks, cosmeticId) {
+    const stats = computeStats(perks);
+    const isCreator = role === 'creator';
+    return {
+      role,
+      cosmetic: getHaloCosmetic(cosmeticId).id,
+      stats,
+      x: ARENA_CENTER.x,
+      y: isCreator ? 730 : 170,
+      vx: 0,
+      vy: 0,
+      aimAngle: isCreator ? -Math.PI / 2 : Math.PI / 2,
+      hearts: stats.maxHearts,
+      maxHearts: stats.maxHearts,
+      parry: stats.initialParry,
+      burstTimer: INITIAL_BURST_DELAY,
+      burstRemaining: 0,
+      burstShotTimer: 0,
+      dashTimer: 0,
+      dashCooldown: 0,
+      dashDirX: 0,
+      dashDirY: isCreator ? -1 : 1,
+      invTimer: 0,
+      dodgeProtectTimer: 0,
+      dodgeCredited: false,
+      perfectDodges: 0,
+      dodgeSuccessTimer: 0,
+      revealTimer: 0,
+      stepAccum: 0,
+      lastDashSeq: 0,
+      activeTrailId: 0,
+      lastKnownOpponent: null,
+      cmd: {
+        moveX: 0,
+        moveY: 0,
+        focus: false,
+        hasTarget: false,
+        targetX: ARENA_CENTER.x,
+        targetY: isCreator ? 730 : 170,
+        hasAim: false,
+        aimX: ARENA_CENTER.x,
+        aimY: ARENA_CENTER.y,
+        dash: false,
+        dashSeq: 0
+      }
+    };
+  }
+
+  function resetRoundState(match) {
+    const c = match.witches.creator;
+    const o = match.witches.opponent;
+    for (const [role, w] of [['creator', c], ['opponent', o]]) {
+      const isCreator = role === 'creator';
+      w.x = ARENA_CENTER.x;
+      w.y = isCreator ? 730 : 170;
+      w.vx = 0;
+      w.vy = 0;
+      w.aimAngle = isCreator ? -Math.PI / 2 : Math.PI / 2;
+      w.hearts = w.stats.maxHearts;
+      w.maxHearts = w.stats.maxHearts;
+      w.parry = w.stats.initialParry;
+      w.burstTimer = INITIAL_BURST_DELAY;
+      w.burstRemaining = 0;
+      w.burstShotTimer = 0;
+      w.dashTimer = 0;
+      w.dashCooldown = 0;
+      w.dashDirX = 0;
+      w.dashDirY = isCreator ? -1 : 1;
+      w.invTimer = 0;
+      w.dodgeProtectTimer = 0;
+      w.dodgeCredited = false;
+      w.dodgeSuccessTimer = 0;
+      w.revealTimer = 0;
+      w.stepAccum = 0;
+      w.activeTrailId = 0;
+      w.lastKnownOpponent = null;
+      w.cmd.moveX = 0;
+      w.cmd.moveY = 0;
+      w.cmd.hasTarget = false;
+      w.cmd.dash = false;
+    }
+    match.roundTime = 0;
+    match.roundPhase = 'fighting';
+    match.intermissionTimer = 0;
+    match.zoneRadius = ZONE_INITIAL_RADIUS;
+    match.suddenDeath = false;
+    match.lunarPulseCount = 0;
+    match.nextLunarPulseAt = LUNAR_PULSE_EARLY_INTERVAL;
+    match.lunarRevealTimer = 0;
+    match.lunarWave = null;
+    match.projectiles = [];
+    match.footsteps = [];
+    match.dodgeTrails = [];
+  }
+
+  function createMatch(options) {
+    const opts = options || {};
+    const cCheck = validatePerks(opts.creatorPerks || ['comet-boots', 'dawn-halo', 'fleeting-dash']);
+    const oCheck = validatePerks(opts.opponentPerks || ['comet-boots', 'dawn-halo', 'fleeting-dash']);
+    if (!cCheck.valid) throw new Error(cCheck.error);
+    if (!oCheck.valid) throw new Error(oCheck.error);
+
+    const match = {
+      id: opts.id || 'local-duel',
+      mode: opts.mode === 'ranked' ? 'ranked' : 'friendly',
+      wager: opts.wager === WAGER_AMOUNT ? WAGER_AMOUNT : 0,
+      seq: 0,
+      entitySeq: 0,
+      totalTime: 0,
+      round: 1,
+      roundTime: 0,
+      roundPhase: 'fighting',
+      intermissionTimer: 0,
+      lastRoundWinner: null,
+      winnerRole: null,
+      scores: { creator: 0, opponent: 0 },
+      roundHistory: [],
+      zoneRadius: ZONE_INITIAL_RADIUS,
+      suddenDeath: false,
+      lunarPulseCount: 0,
+      nextLunarPulseAt: LUNAR_PULSE_EARLY_INTERVAL,
+      lunarRevealTimer: 0,
+      lunarWave: null,
+      witches: {
+        creator: createWitch('creator', cCheck.perks, opts.creatorCosmetic),
+        opponent: createWitch('opponent', oCheck.perks, opts.opponentCosmetic)
+      },
+      projectiles: [],
+      footsteps: [],
+      dodgeTrails: [],
+      events: []
+    };
+    resetRoundState(match);
+    return match;
+  }
+
+  function startNextRound(match) {
+    if (match.roundPhase === 'finished') return match;
+    match.round += 1;
+    resetRoundState(match);
+    match.events.push({ type: 'round-start', round: match.round });
+    return match;
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  function applyCommand(match, role, input) {
+    const w = match && match.witches && match.witches[role];
+    if (!w || !input || typeof input !== 'object') return;
+    if ('moveX' in input) w.cmd.moveX = clampNumber(input.moveX, -1, 1, 0);
+    if ('moveY' in input) w.cmd.moveY = clampNumber(input.moveY, -1, 1, 0);
+    if ('focus' in input) w.cmd.focus = Boolean(input.focus);
+    if ('hasTarget' in input) w.cmd.hasTarget = Boolean(input.hasTarget);
+    if (w.cmd.hasTarget && Number.isFinite(Number(input.targetX)) && Number.isFinite(Number(input.targetY))) {
+      w.cmd.targetX = clampNumber(input.targetX, ARENA_PADDING_X, ARENA_WIDTH - ARENA_PADDING_X, w.x);
+      w.cmd.targetY = clampNumber(input.targetY, ARENA_PADDING_Y, ARENA_HEIGHT - ARENA_PADDING_Y, w.y);
+    }
+    if ('hasAim' in input) w.cmd.hasAim = Boolean(input.hasAim);
+    if (w.cmd.hasAim && Number.isFinite(Number(input.aimX)) && Number.isFinite(Number(input.aimY))) {
+      w.cmd.aimX = clampNumber(input.aimX, 0, ARENA_WIDTH, ARENA_CENTER.x);
+      w.cmd.aimY = clampNumber(input.aimY, 0, ARENA_HEIGHT, ARENA_CENTER.y);
+    }
+    if (input.dash === true) {
+      w.cmd.dash = true;
+    }
+    if (Number.isFinite(Number(input.dashSeq)) && Number(input.dashSeq) > w.lastDashSeq) {
+      w.lastDashSeq = Number(input.dashSeq);
+      w.cmd.dash = true;
+    }
+  }
+
+  function isOpponentVisible(match, viewerRole) {
+    const otherRole = viewerRole === 'creator' ? 'opponent' : 'creator';
+    const viewer = match.witches[viewerRole];
+    const target = match.witches[otherRole];
+    if (!viewer || !target) return false;
+    if (match.lunarRevealTimer > 0) return true;
+    if (target.revealTimer > 0) return true;
+    const dist = Math.hypot(target.x - viewer.x, target.y - viewer.y);
+    const effectiveHalo = viewer.stats.haloRadius * target.stats.stealthFactor;
+    return dist <= effectiveHalo;
+  }
+
+  function updateVisibilityMemory(match, dt) {
+    for (const [viewerRole, otherRole] of [['creator', 'opponent'], ['opponent', 'creator']]) {
+      const viewer = match.witches[viewerRole];
+      const target = match.witches[otherRole];
+      if (isOpponentVisible(match, viewerRole)) {
+        viewer.lastKnownOpponent = {
+          x: Math.round(target.x * 10) / 10,
+          y: Math.round(target.y * 10) / 10,
+          aimAngle: Math.round(target.aimAngle * 100) / 100,
+          age: 0,
+          maxAge: 6.0
+        };
+      } else if (viewer.lastKnownOpponent) {
+        viewer.lastKnownOpponent.age += dt;
+        if (viewer.lastKnownOpponent.age >= viewer.lastKnownOpponent.maxAge) {
+          viewer.lastKnownOpponent = null;
+        }
+      }
+    }
+  }
+
+  function distancePointToSegment(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq <= 1e-6) return Math.hypot(px - x1, py - y1);
+    const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  function clampToArenaAndZone(w, zoneRadius) {
+    w.x = Math.max(ARENA_PADDING_X, Math.min(ARENA_WIDTH - ARENA_PADDING_X, w.x));
+    w.y = Math.max(ARENA_PADDING_Y, Math.min(ARENA_HEIGHT - ARENA_PADDING_Y, w.y));
+    const dx = w.x - ARENA_CENTER.x;
+    const dy = w.y - ARENA_CENTER.y;
+    const dist = Math.hypot(dx, dy);
+    const maxDist = Math.max(48, zoneRadius - 16);
+    if (dist > maxDist && dist > 0) {
+      const ratio = maxDist / dist;
+      w.x = ARENA_CENTER.x + dx * ratio;
+      w.y = ARENA_CENTER.y + dy * ratio;
+    }
+  }
+
+  function triggerDash(match, w) {
+    if (w.dashCooldown > 0) return false;
+    let dx = w.cmd.moveX;
+    let dy = w.cmd.moveY;
+    if (Math.hypot(dx, dy) < 0.08 && w.cmd.hasTarget) {
+      dx = w.cmd.targetX - w.x;
+      dy = w.cmd.targetY - w.y;
+    }
+    const len = Math.hypot(dx, dy);
+    if (len > 0.08) {
+      w.dashDirX = dx / len;
+      w.dashDirY = dy / len;
+    } else {
+      w.dashDirX = Math.cos(w.aimAngle);
+      w.dashDirY = Math.sin(w.aimAngle);
+    }
+    w.dashTimer = w.stats.dashDuration;
+    w.dashCooldown = w.stats.dashCooldown;
+    w.invTimer = Math.max(w.invTimer, w.stats.dashInvDuration);
+    w.dodgeProtectTimer = w.stats.dashInvDuration;
+    w.dodgeCredited = false;
+
+    const trailId = ++match.entitySeq;
+    w.activeTrailId = trailId;
+    match.dodgeTrails.push({
+      id: trailId,
+      ownerRole: w.role,
+      x1: w.x,
+      y1: w.y,
+      x2: w.x,
+      y2: w.y,
+      age: 0,
+      maxAge: 1.15,
+      revealed: w.revealTimer > 0 || match.lunarRevealTimer > 0
+    });
+    match.events.push({ type: 'dash', role: w.role, time: match.roundTime });
+
+    for (const p of match.projectiles) {
+      if (p.ownerRole === w.role || p.life <= 0) continue;
+      const dist = Math.hypot(p.x - w.x, p.y - w.y);
+      if (!w.dodgeCredited && dist <= p.r + DODGE_PROXIMITY_RADIUS) {
+        w.dodgeCredited = true;
+        w.perfectDodges += 1;
+        w.dodgeSuccessTimer = 0.7;
+        match.events.push({ type: 'perfect-dodge', role: w.role, time: match.roundTime });
+      }
+    }
+    return true;
+  }
+
+  function spawnBurstSalvo(match, w) {
+    const otherRole = w.role === 'creator' ? 'opponent' : 'creator';
+    const opp = match.witches[otherRole];
+    if (w.cmd.hasAim) {
+      const dx = w.cmd.aimX - w.x;
+      const dy = w.cmd.aimY - w.y;
+      if (Math.hypot(dx, dy) > 4) w.aimAngle = Math.atan2(dy, dx);
+    } else if (isOpponentVisible(match, w.role)) {
+      w.aimAngle = Math.atan2(opp.y - w.y, opp.x - w.x);
+    } else if (w.lastKnownOpponent && Math.hypot(w.lastKnownOpponent.x - w.x, w.lastKnownOpponent.y - w.y) > 28) {
+      w.aimAngle = Math.atan2(w.lastKnownOpponent.y - w.y, w.lastKnownOpponent.x - w.x);
+    }
+
+    for (const offset of w.stats.sideAngles) {
+      const angle = w.aimAngle + offset;
+      const muzzleX = w.x + Math.cos(angle) * 20;
+      const muzzleY = w.y + Math.sin(angle) * 20;
+      match.projectiles.push({
+        id: ++match.entitySeq,
+        ownerRole: w.role,
+        x: muzzleX,
+        y: muzzleY,
+        prevX: muzzleX,
+        prevY: muzzleY,
+        vx: Math.cos(angle) * w.stats.shotSpeed,
+        vy: Math.sin(angle) * w.stats.shotSpeed,
+        r: w.stats.shotRadius,
+        damage: w.stats.shotDamage,
+        life: w.stats.shotLife,
+        maxLife: w.stats.shotLife
+      });
+    }
+
+    w.revealTimer = Math.max(w.revealTimer, w.stats.shotRevealDuration);
+    match.events.push({ type: 'shot', role: w.role, time: match.roundTime });
+  }
+
+  function stepSingle(match, dt) {
+    match.seq += 1;
+    match.totalTime += dt;
+
+    if (match.roundPhase === 'finished') return;
+    if (match.roundPhase === 'intermission') {
+      match.intermissionTimer -= dt;
+      if (match.intermissionTimer <= 0) startNextRound(match);
+      return;
+    }
+
+    match.roundTime += dt;
+
+    if (match.lunarRevealTimer > 0) {
+      match.lunarRevealTimer = Math.max(0, match.lunarRevealTimer - dt);
+    }
+    if (match.lunarWave) {
+      match.lunarWave.age += dt;
+      if (match.lunarWave.age >= match.lunarWave.maxAge) match.lunarWave = null;
+    }
+
+    while (match.roundTime + 1e-9 >= match.nextLunarPulseAt) {
+      const pulseAt = match.nextLunarPulseAt;
+      match.lunarPulseCount += 1;
+      match.lunarRevealTimer = LUNAR_REVEAL_DURATION;
+      match.lunarWave = { age: 0, maxAge: LUNAR_REVEAL_DURATION };
+      match.events.push({ type: 'lunar-pulse', count: match.lunarPulseCount, time: pulseAt });
+      match.nextLunarPulseAt += pulseAt >= LUNAR_PULSE_LATE_AT ? LUNAR_PULSE_LATE_INTERVAL : LUNAR_PULSE_EARLY_INTERVAL;
+    }
+
+    if (match.roundTime <= ZONE_SHRINK_START) {
+      match.zoneRadius = ZONE_INITIAL_RADIUS;
+    } else if (match.roundTime <= SUDDEN_DEATH_AT) {
+      const progress = Math.min(1, (match.roundTime - ZONE_SHRINK_START) / (SUDDEN_DEATH_AT - ZONE_SHRINK_START));
+      match.zoneRadius = ZONE_INITIAL_RADIUS + (ZONE_MIN_RADIUS - ZONE_INITIAL_RADIUS) * progress;
+    } else {
+      const extra = Math.min(1, (match.roundTime - SUDDEN_DEATH_AT) / 30);
+      match.zoneRadius = ZONE_MIN_RADIUS + (ZONE_SUDDEN_DEATH_MIN - ZONE_MIN_RADIUS) * extra;
+    }
+
+    if (!match.suddenDeath && match.roundTime + 1e-9 >= SUDDEN_DEATH_AT) {
+      match.suddenDeath = true;
+      for (const role of ['creator', 'opponent']) {
+        const w = match.witches[role];
+        w.parry = 0;
+        w.hearts = Math.min(w.hearts, 1);
+      }
+      match.events.push({ type: 'sudden-death', time: match.roundTime });
+    }
+
+    for (const role of ['creator', 'opponent']) {
+      const w = match.witches[role];
+      w.dashCooldown = Math.max(0, w.dashCooldown - dt);
+      w.invTimer = Math.max(0, w.invTimer - dt);
+      w.dodgeProtectTimer = Math.max(0, w.dodgeProtectTimer - dt);
+      w.dodgeSuccessTimer = Math.max(0, w.dodgeSuccessTimer - dt);
+      w.revealTimer = Math.max(0, w.revealTimer - dt);
+
+      if (w.cmd.dash) {
+        w.cmd.dash = false;
+        triggerDash(match, w);
+      }
+
+      const prevX = w.x;
+      const prevY = w.y;
+
+      if (w.dashTimer > 0) {
+        w.dashTimer = Math.max(0, w.dashTimer - dt);
+        const speed = w.stats.moveSpeed * w.stats.dashSpeedMultiplier;
+        w.vx = w.dashDirX * speed;
+        w.vy = w.dashDirY * speed;
+        w.x += w.vx * dt;
+        w.y += w.vy * dt;
+        const activeTrail = match.dodgeTrails.find(item => item.id === w.activeTrailId);
+        if (activeTrail) {
+          activeTrail.x2 = w.x;
+          activeTrail.y2 = w.y;
+          if (w.revealTimer > 0 || match.lunarRevealTimer > 0) activeTrail.revealed = true;
+        }
+      } else {
+        const baseSpeed = w.cmd.focus ? w.stats.focusSpeed : w.stats.moveSpeed;
+        let mx = w.cmd.moveX;
+        let my = w.cmd.moveY;
+        const mLen = Math.hypot(mx, my);
+        if (mLen > 0.04) {
+          if (mLen > 1) {
+            mx /= mLen;
+            my /= mLen;
+          }
+          w.vx = mx * baseSpeed;
+          w.vy = my * baseSpeed;
+          w.x += w.vx * dt;
+          w.y += w.vy * dt;
+        } else if (w.cmd.hasTarget) {
+          const dx = w.cmd.targetX - w.x;
+          const dy = w.cmd.targetY - w.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist > 2) {
+            const step = Math.min(dist, baseSpeed * dt);
+            w.vx = (dx / dist) * (step / dt);
+            w.vy = (dy / dist) * (step / dt);
+            w.x += (dx / dist) * step;
+            w.y += (dy / dist) * step;
+          } else {
+            w.vx = 0;
+            w.vy = 0;
+          }
+        } else {
+          w.vx = 0;
+          w.vy = 0;
+        }
+      }
+
+      clampToArenaAndZone(w, match.zoneRadius);
+
+      const moved = Math.hypot(w.x - prevX, w.y - prevY);
+      if (moved > 0.35 && w.dashTimer <= 0) {
+        w.stepAccum += dt;
+        if (w.stepAccum >= w.stats.stepInterval) {
+          w.stepAccum = 0;
+          const id = ++match.entitySeq;
+          const jitterX = ((id % 3) - 1) * 6;
+          const jitterY = (((id >> 1) % 3) - 1) * 6;
+          match.footsteps.push({
+            id,
+            ownerRole: w.role,
+            x: Math.round(w.x / 20) * 20 + jitterX,
+            y: Math.round(w.y / 20) * 20 + jitterY,
+            age: 0,
+            maxAge: w.stats.stepMaxAge
+          });
+        }
+      }
+
+      if (w.cmd.hasAim) {
+        const dx = w.cmd.aimX - w.x;
+        const dy = w.cmd.aimY - w.y;
+        if (Math.hypot(dx, dy) > 4) w.aimAngle = Math.atan2(dy, dx);
+      } else if (Math.hypot(w.vx, w.vy) > 25 && !isOpponentVisible(match, role)) {
+        w.aimAngle = Math.atan2(w.vy, w.vx);
+      }
+    }
+
+    updateVisibilityMemory(match, dt);
+
+    for (const role of ['creator', 'opponent']) {
+      const w = match.witches[role];
+      w.burstTimer -= dt;
+      if (w.burstTimer <= 0 && w.burstRemaining <= 0) {
+        w.burstRemaining = w.stats.burstCount;
+        w.burstShotTimer = 0;
+        w.burstTimer = w.stats.burstInterval;
+      }
+      if (w.burstRemaining > 0) {
+        w.burstShotTimer -= dt;
+        while (w.burstRemaining > 0 && w.burstShotTimer <= 1e-9) {
+          spawnBurstSalvo(match, w);
+          w.burstRemaining -= 1;
+          if (w.burstRemaining > 0) w.burstShotTimer += w.stats.burstStep;
+        }
+      }
+    }
+
+    updateVisibilityMemory(match, 0);
+
+    for (const p of match.projectiles) {
+      if (p.life <= 0) continue;
+      p.prevX = p.x;
+      p.prevY = p.y;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+
+      const targetRole = p.ownerRole === 'creator' ? 'opponent' : 'creator';
+      const target = match.witches[targetRole];
+      const dist = distancePointToSegment(target.x, target.y, p.prevX, p.prevY, p.x, p.y);
+
+      if (target.dodgeProtectTimer > 0 && !target.dodgeCredited && dist <= p.r + DODGE_PROXIMITY_RADIUS) {
+        target.dodgeCredited = true;
+        target.perfectDodges += 1;
+        target.dodgeSuccessTimer = 0.7;
+        match.events.push({ type: 'perfect-dodge', role: targetRole, time: match.roundTime });
+      }
+
+      if (dist <= p.r + HIT_RADIUS) {
+        p.life = 0;
+        if (target.invTimer > 0 || target.dashTimer > 0) {
+          if (target.dodgeProtectTimer > 0 && !target.dodgeCredited) {
+            target.dodgeCredited = true;
+            target.perfectDodges += 1;
+            target.dodgeSuccessTimer = 0.7;
+            match.events.push({ type: 'perfect-dodge', role: targetRole, time: match.roundTime });
+          }
+        } else {
+          if (match.suddenDeath) {
+            target.parry = 0;
+            target.hearts = 0;
+          } else if (target.parry > 0) {
+            target.parry -= 1;
+            target.hearts = Math.max(0, target.hearts - 1);
+          } else {
+            target.hearts = Math.max(0, target.hearts - p.damage);
+          }
+          target.invTimer = 0.55;
+          target.revealTimer = Math.max(target.revealTimer, HIT_REVEAL_DURATION);
+          match.events.push({
+            type: 'hit',
+            targetRole,
+            attackerRole: p.ownerRole,
+            remainingHearts: target.hearts,
+            time: match.roundTime
+          });
+        }
+      }
+    }
+
+    match.projectiles = match.projectiles.filter(
+      p => p.life > 0 && p.x >= -40 && p.x <= ARENA_WIDTH + 40 && p.y >= -40 && p.y <= ARENA_HEIGHT + 40
+    );
+
+    for (const s of match.footsteps) s.age += dt;
+    match.footsteps = match.footsteps.filter(s => s.age < s.maxAge);
+
+    for (const t of match.dodgeTrails) t.age += dt;
+    match.dodgeTrails = match.dodgeTrails.filter(t => t.age < t.maxAge);
+
+    updateVisibilityMemory(match, 0);
+
+    const creatorDead = match.witches.creator.hearts <= 0;
+    const opponentDead = match.witches.opponent.hearts <= 0;
+    if (creatorDead || opponentDead) {
+      let roundWinner = creatorDead && !opponentDead ? 'opponent' : 'creator';
+      if (creatorDead && opponentDead) {
+        roundWinner = match.witches.creator.hearts >= match.witches.opponent.hearts ? 'creator' : 'opponent';
+      }
+      match.scores[roundWinner] += 1;
+      match.lastRoundWinner = roundWinner;
+      match.roundHistory.push({
+        round: match.round,
+        winnerRole: roundWinner,
+        duration: Math.round(match.roundTime * 100) / 100,
+        suddenDeath: match.suddenDeath
+      });
+      if (match.scores[roundWinner] >= ROUNDS_TO_WIN) {
+        match.roundPhase = 'finished';
+        match.winnerRole = roundWinner;
+        match.events.push({
+          type: 'match-end',
+          winnerRole: roundWinner,
+          scores: { creator: match.scores.creator, opponent: match.scores.opponent }
+        });
+      } else {
+        match.roundPhase = 'intermission';
+        match.intermissionTimer = INTERMISSION_DURATION;
+        match.events.push({
+          type: 'round-end',
+          round: match.round,
+          winnerRole: roundWinner,
+          scores: { creator: match.scores.creator, opponent: match.scores.opponent }
+        });
+      }
+    }
+  }
+
+  function stepMatch(match, dt) {
+    if (!match) return match;
+    match.events = [];
+    const total = Math.max(0, Math.min(180, Number(dt) || 0));
+    if (total <= 0) return match;
+    const maxStep = 1 / 60;
+    let remaining = total;
+    while (remaining > 1e-9) {
+      const h = Math.min(maxStep, remaining);
+      stepSingle(match, h);
+      remaining -= h;
+      if (match.roundPhase === 'finished') break;
+    }
+    return match;
+  }
+
+  function roundCoord(value) {
+    return Math.round(value * 10) / 10;
+  }
+
+  function createSnapshotFor(match, viewerRole) {
+    const role = viewerRole === 'opponent' ? 'opponent' : 'creator';
+    const otherRole = role === 'creator' ? 'opponent' : 'creator';
+    const self = match.witches[role];
+    const opp = match.witches[otherRole];
+    const oppVisible = isOpponentVisible(match, role);
+
+    const visibleFootsteps = [];
+    for (const s of match.footsteps) {
+      if (s.ownerRole === role) {
+        visibleFootsteps.push({
+          id: s.id,
+          ownerRole: s.ownerRole,
+          x: s.x,
+          y: s.y,
+          age: Math.round(s.age * 100) / 100,
+          maxAge: s.maxAge
+        });
+      } else if (s.age >= 0.12 && Math.hypot(s.x - self.x, s.y - self.y) <= ACOUSTIC_STEP_RANGE) {
+        visibleFootsteps.push({
+          id: s.id,
+          ownerRole: s.ownerRole,
+          x: s.x,
+          y: s.y,
+          age: Math.round(s.age * 100) / 100,
+          maxAge: s.maxAge
+        });
+      }
+    }
+
+    const visibleTrails = [];
+    for (const t of match.dodgeTrails) {
+      const midX = (t.x1 + t.x2) * 0.5;
+      const midY = (t.y1 + t.y2) * 0.5;
+      const canSee =
+        t.ownerRole === role ||
+        oppVisible ||
+        t.revealed ||
+        Math.hypot(midX - self.x, midY - self.y) <= ACOUSTIC_TRAIL_RANGE;
+      if (canSee) {
+        visibleTrails.push({
+          id: t.id,
+          ownerRole: t.ownerRole,
+          x1: roundCoord(t.x1),
+          y1: roundCoord(t.y1),
+          x2: roundCoord(t.x2),
+          y2: roundCoord(t.y2),
+          age: Math.round(t.age * 100) / 100,
+          maxAge: t.maxAge
+        });
+      }
+    }
+
+    return {
+      seq: match.seq,
+      viewerRole: role,
+      round: match.round,
+      roundTime: Math.round(match.roundTime * 100) / 100,
+      roundPhase: match.roundPhase,
+      intermissionTimer: Math.round(match.intermissionTimer * 100) / 100,
+      lastRoundWinner: match.lastRoundWinner,
+      winnerRole: match.winnerRole,
+      scores: {
+        creator: match.scores.creator,
+        opponent: match.scores.opponent
+      },
+      zoneRadius: roundCoord(match.zoneRadius),
+      suddenDeath: match.suddenDeath,
+      lunarPulseCount: match.lunarPulseCount,
+      lunarRevealTimer: Math.round(match.lunarRevealTimer * 100) / 100,
+      lunarWave: match.lunarWave
+        ? {
+            age: Math.round(match.lunarWave.age * 100) / 100,
+            maxAge: match.lunarWave.maxAge
+          }
+        : null,
+      self: {
+        role: self.role,
+        cosmetic: self.cosmetic,
+        perks: self.stats.perks.slice(),
+        x: roundCoord(self.x),
+        y: roundCoord(self.y),
+        aimAngle: Math.round(self.aimAngle * 100) / 100,
+        hearts: self.hearts,
+        maxHearts: self.maxHearts,
+        parry: self.parry,
+        haloRadius: self.stats.haloRadius,
+        dashCooldown: Math.round(self.dashCooldown * 100) / 100,
+        dashMaxCooldown: self.stats.dashCooldown,
+        dashActive: self.dashTimer > 0,
+        invulnerable: self.invTimer > 0,
+        perfectDodges: self.perfectDodges,
+        dodgeSuccess: self.dodgeSuccessTimer > 0,
+        revealed: self.revealTimer > 0 || match.lunarRevealTimer > 0
+      },
+      opponent: {
+        role: opp.role,
+        cosmetic: opp.cosmetic,
+        perks: opp.stats.perks.slice(),
+        visible: oppVisible,
+        x: oppVisible ? roundCoord(opp.x) : null,
+        y: oppVisible ? roundCoord(opp.y) : null,
+        aimAngle: oppVisible ? Math.round(opp.aimAngle * 100) / 100 : null,
+        hearts: opp.hearts,
+        maxHearts: opp.maxHearts,
+        parry: opp.parry,
+        dashActive: oppVisible ? opp.dashTimer > 0 : false,
+        revealedByShot: opp.revealTimer > 0
+      },
+      lastKnownOpponent: self.lastKnownOpponent
+        ? {
+            x: self.lastKnownOpponent.x,
+            y: self.lastKnownOpponent.y,
+            aimAngle: self.lastKnownOpponent.aimAngle,
+            age: Math.round(self.lastKnownOpponent.age * 100) / 100,
+            maxAge: self.lastKnownOpponent.maxAge
+          }
+        : null,
+      projectiles: match.projectiles.map(p => ({
+        id: p.id,
+        ownerRole: p.ownerRole,
+        x: roundCoord(p.x),
+        y: roundCoord(p.y),
+        vx: roundCoord(p.vx),
+        vy: roundCoord(p.vy),
+        r: p.r,
+        damage: p.damage
+      })),
+      footsteps: visibleFootsteps,
+      dodgeTrails: visibleTrails
+    };
+  }
+
+  return Object.freeze({
+    ARENA_WIDTH,
+    ARENA_HEIGHT,
+    ARENA_CENTER,
+    BASE_HEARTS,
+    ROUND_DURATION,
+    ROUNDS_TO_WIN,
+    MAX_ROUNDS,
+    BURST_COUNT,
+    BURST_INTERVAL,
+    BASE_HALO_RADIUS,
+    LUNAR_PULSE_EARLY_INTERVAL,
+    LUNAR_PULSE_LATE_AT,
+    LUNAR_PULSE_LATE_INTERVAL,
+    ZONE_SHRINK_START,
+    ZONE_INITIAL_RADIUS,
+    ZONE_MIN_RADIUS,
+    SUDDEN_DEATH_AT,
+    HIT_RADIUS,
+    DODGE_PROXIMITY_RADIUS,
+    INITIAL_RATING,
+    RATING_DIFF_THRESHOLD,
+    DAILY_RANKED_PAIR_LIMIT,
+    WAGER_AMOUNT,
+    WAGER_POT,
+    PERK_CATALOG,
+    COSMETIC_HALOS,
+    getHaloCosmetic,
+    validatePerks,
+    extractDuelId,
+    buildInviteUrl,
+    buildShareLinks,
+    parisDateKey,
+    computeRatingDelta,
+    canPlayRankedToday,
+    createDuelProfile,
+    unlockHaloInProfile,
+    equipHaloInProfile,
+    createConsensusState,
+    submitConsensusReport,
+    forfeitConsensusState,
+    computeStats,
+    createMatch,
+    startNextRound,
+    applyCommand,
+    isOpponentVisible,
+    stepMatch,
+    createSnapshotFor
+  });
+});
+</script><script>/* La Nuit aux Trousses — Duel de la Nuit noire (1 contre 1 en temps réel).
+   Simulation arbitrée par le client créateur, commandes seules côté invitée,
+   snapshots filtrés sans coordonnées cachées, draft 3/10 indépendant de la campagne. */
+(() => {
+  'use strict';
+
+  const Core = window.NightDuelCore;
+  if (!Core) return;
+
+  const PENDING_INVITE_KEY = 'minuit-night-duel-invite-v1';
+  const SNAPSHOT_INTERVAL = 0.05;
+  const CMD_INTERVAL = 0.033;
+
+  const el = id => document.getElementById(id);
+  const esc = value =>
+    String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  let screenOpen = false;
+  let combatActive = false;
+  let combatPaused = false;
+  let pendingInviteId = '';
+  let profile = null;
+  let duel = null;
+  let players = [null, null];
+  let createMode = 'ranked';
+  let createWager = 0;
+  let selectedPerks = ['comet-boots', 'dawn-halo', 'fleeting-dash'];
+  let statusNotice = '';
+  let statusError = false;
+  let busy = false;
+
+  let channel = null;
+  let pollTimer = null;
+  let hostMatch = null;
+  let renderSnap = null;
+  let snapshotAccum = 0;
+  let cmdAccum = 0;
+  let dashSeq = 0;
+  let finishSubmitting = false;
+  let lastReportedDuelId = '';
+
+  const pointerState = {
+    mouseAimActive: false,
+    mouseDown: false,
+    aimX: Core.ARENA_CENTER.x,
+    aimY: Core.ARENA_CENTER.y,
+    moveTouchId: null,
+    moveOriginX: 0,
+    moveOriginY: 0,
+    touchMoveX: 0,
+    touchMoveY: 0,
+    aimTouchId: null
+  };
+
+  const baseOverlay = typeof overlay === 'function' ? overlay : null;
+  const baseGrantDailyReward = window.Journey?.grantDailyReward
+    ? window.Journey.grantDailyReward.bind(window.Journey)
+    : null;
+
+  function readInitialInvite() {
+    let found = Core.extractDuelId(window.location?.href || '');
+    if (found) {
+      try {
+        sessionStorage.setItem(PENDING_INVITE_KEY, found);
+      } catch (_) {}
+      cleanDuelParamFromUrl();
+      return found;
+    }
+    try {
+      found = Core.extractDuelId(sessionStorage.getItem(PENDING_INVITE_KEY) || '');
+    } catch (_) {}
+    return found;
+  }
+
+  function clearPendingInvite() {
+    pendingInviteId = '';
+    try {
+      sessionStorage.removeItem(PENDING_INVITE_KEY);
+    } catch (_) {}
+    cleanDuelParamFromUrl();
+  }
+
+  function cleanDuelParamFromUrl() {
+    try {
+      const current = new URL(window.location.href);
+      if (!current.searchParams.has('duel')) return;
+      current.searchParams.delete('duel');
+      const next = current.pathname + (current.searchParams.toString() ? '?' + current.searchParams.toString() : '') + current.hash;
+      window.history?.replaceState?.(null, '', next);
+    } catch (_) {}
+  }
+
+  function isNightDuelBlockingOverlay() {
+    return Boolean(screenOpen || combatActive || pendingInviteId);
+  }
+
+  if (baseOverlay) {
+    overlay = function(html) {
+      if (isNightDuelBlockingOverlay() && typeof html === 'string' && html.includes('daily-reward-screen')) {
+        return;
+      }
+      return baseOverlay(html);
+    };
+  }
+
+  if (window.Journey && baseGrantDailyReward) {
+    window.Journey.grantDailyReward = function(...args) {
+      if (isNightDuelBlockingOverlay()) return null;
+      return baseGrantDailyReward(...args);
+    };
+  }
+
+  function setGameState(next) {
+    try {
+      state = next;
+    } catch (_) {}
+  }
+
+  function getGameState() {
+    try {
+      return state;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function myUserId() {
+    return window.MinuitCloud?.user?.id || profile?.id || '';
+  }
+
+  function myRole() {
+    if (!duel) return 'creator';
+    return duel.creatorId === myUserId() ? 'creator' : 'opponent';
+  }
+
+  function setStatus(message, isError = false) {
+    statusNotice = String(message || '');
+    statusError = Boolean(isError);
+    const node = el('duelStatusMsg');
+    if (node) {
+      node.textContent = statusNotice;
+      node.classList.toggle('is-error', statusError);
+    }
+  }
+
+  function applyTouchLayoutPreference() {
+    const layout = (typeof prefs === 'object' && prefs?.touchLayout === 'right') ? 'right' : 'left';
+    if (document.body) document.body.dataset.touchLayout = layout;
+    const stick = el('touchStick');
+    if (stick) stick.dataset.touchLayout = layout;
+    const bar = document.querySelector('.touchbar');
+    if (bar) bar.dataset.touchLayout = layout;
+  }
+
+  function isolateFromCampaign() {
+    window.SandboxMode = true;
+    if (window.Journey) {
+      window.Journey.run = null;
+    }
+    const special = el('specialCast');
+    if (special) special.style.display = 'none';
+    const runner = el('runnerControls');
+    if (runner) runner.style.display = 'none';
+    const mission = el('runnerMission');
+    if (mission) mission.style.display = 'none';
+    applyTouchLayoutPreference();
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function closeChannel() {
+    if (channel) {
+      try {
+        channel.close();
+      } catch (_) {}
+      channel = null;
+    }
+  }
+
+  function hideTopHud() {
+    const hud = el('duelTopHud');
+    if (hud) hud.style.display = 'none';
+    document.body?.classList.remove('night-duel-combat');
+  }
+
+  function teardownDuelRuntime() {
+    stopPolling();
+    closeChannel();
+    combatActive = false;
+    combatPaused = false;
+    hostMatch = null;
+    renderSnap = null;
+    finishSubmitting = false;
+    pointerState.moveTouchId = null;
+    pointerState.aimTouchId = null;
+    pointerState.touchMoveX = 0;
+    pointerState.touchMoveY = 0;
+    hideTopHud();
+  }
+
+  function leaveToHome() {
+    teardownDuelRuntime();
+    screenOpen = false;
+    duel = null;
+    players = [null, null];
+    clearPendingInvite();
+    window.SandboxMode = false;
+    if (window.LocalLeague?.menu) window.LocalLeague.menu();
+    else if (window.Journey?.menu) window.Journey.menu();
+    else if (typeof menu === 'function') menu();
+  }
+
+  async function refreshProfile() {
+    if (!window.MinuitCloud?.connected) return null;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_profile', {});
+      if (data && typeof data === 'object') profile = data;
+      return profile;
+    } catch (err) {
+      setStatus(err?.message || 'Profil de duel indisponible.', true);
+      return null;
+    }
+  }
+
+  function ingestDuelPayload(payload) {
+    if (!payload || !payload.duel) return;
+    duel = payload.duel;
+    players = Array.isArray(payload.players) ? payload.players : [null, null];
+    const uid = myUserId();
+    if (players[0]?.id === uid) profile = players[0];
+    else if (players[1]?.id === uid) profile = players[1];
+  }
+
+  function ensureRealtimeChannel(duelId) {
+    if (!window.MinuitCloud?.connected || !duelId) return;
+    const expectedTopic = 'realtime:duel:' + duelId;
+    if (channel && channel.topic === expectedTopic) return;
+    closeChannel();
+    try {
+      channel = window.MinuitCloud.openDuelChannel(duelId, {
+        onStatus(st) {
+          if (st === 'SUBSCRIBED' && combatActive && myRole() === 'creator' && hostMatch) {
+            sendGuestSnapshotNow();
+          }
+        },
+        onBroadcast(eventName, data) {
+          handleRealtimeEvent(eventName, data || {});
+        }
+      });
+    } catch (err) {
+      setStatus(err?.message || 'Canal temps réel indisponible.', true);
+    }
+  }
+
+  function sendGuestSnapshotNow() {
+    if (!channel || !hostMatch || myRole() !== 'creator') return;
+    const guestSnap = Core.createSnapshotFor(hostMatch, 'opponent');
+    channel.send('snapshot', guestSnap);
+  }
+
+  function handleRealtimeEvent(eventName, data) {
+    if (!duel) return;
+    if (eventName === 'state-sync' || eventName === 'joined' || eventName === 'draft-ready' || eventName === 'forfeit' || eventName === 'report-submitted') {
+      syncDuelStatus(false);
+      return;
+    }
+    if (eventName === 'cmd' && combatActive && myRole() === 'creator' && hostMatch) {
+      Core.applyCommand(hostMatch, 'opponent', {
+        moveX: data.moveX,
+        moveY: data.moveY,
+        focus: data.focus,
+        hasTarget: data.hasTarget,
+        targetX: data.targetX,
+        targetY: data.targetY,
+        hasAim: data.hasAim,
+        aimX: data.aimX,
+        aimY: data.aimY,
+        dash: data.dash,
+        dashSeq: data.dashSeq
+      });
+      return;
+    }
+    if (eventName === 'snapshot' && combatActive && myRole() === 'opponent') {
+      if (!renderSnap || Number(data.seq) >= Number(renderSnap.seq || 0)) {
+        renderSnap = data;
+        updateTopHud();
+        if (renderSnap.roundPhase === 'finished' && renderSnap.winnerRole) {
+          submitMatchReport(renderSnap.winnerRole);
+        }
+      }
+      return;
+    }
+    if (eventName === 'match-finished' && data.winnerRole) {
+      submitMatchReport(data.winnerRole);
+    }
+  }
+
+  async function syncDuelStatus(showErrors = false) {
+    if (!duel?.id || !window.MinuitCloud?.connected) return;
+    try {
+      const prevStatus = duel.status;
+      const data = await window.MinuitCloud.rpc('minuit_duel_status', { p_duel: duel.id });
+      ingestDuelPayload(data);
+      transitionForDuelStatus(prevStatus);
+    } catch (err) {
+      if (showErrors) setStatus(err?.message || 'Impossible d’actualiser le duel.', true);
+    }
+  }
+
+  function startPolling(intervalMs) {
+    stopPolling();
+    pollTimer = setInterval(() => {
+      syncDuelStatus(false);
+    }, intervalMs);
+  }
+
+  function transitionForDuelStatus(prevStatus) {
+    if (!duel) return;
+    ensureRealtimeChannel(duel.id);
+
+    if (duel.status === 'waiting') {
+      combatActive = false;
+      hideTopHud();
+      startPolling(2200);
+      renderScreen();
+      return;
+    }
+
+    if (duel.status === 'draft') {
+      combatActive = false;
+      hideTopHud();
+      startPolling(1600);
+      if (prevStatus !== 'draft' || !document.querySelector('#overlay .duel-draft-grid')) {
+        renderScreen();
+      } else {
+        updateDraftIndicators();
+      }
+      return;
+    }
+
+    if (duel.status === 'active') {
+      if (!combatActive) {
+        beginActiveCombat();
+      }
+      return;
+    }
+
+    if (duel.status === 'completed' || duel.status === 'cancelled') {
+      const wasCompleted = duel.status === 'completed';
+      teardownDuelRuntime();
+      screenOpen = true;
+      setGameState('night-duel');
+      if (wasCompleted) {
+        renderResultScreen();
+      } else {
+        const cancelledMsg = 'Ce duel a été annulé.';
+        duel = null;
+        players = [null, null];
+        renderScreen();
+        setStatus(cancelledMsg, false);
+      }
+    }
+  }
+
+  function beginActiveCombat() {
+    if (!duel) return;
+    isolateFromCampaign();
+    combatActive = true;
+    combatPaused = false;
+    screenOpen = false;
+    lastReportedDuelId = '';
+    dashSeq = 0;
+    snapshotAccum = 0;
+    cmdAccum = 0;
+
+    const creatorEquip = players[0]?.equipped || 'halo-violet';
+    const opponentEquip = players[1]?.equipped || 'halo-violet';
+
+    if (myRole() === 'creator') {
+      hostMatch = Core.createMatch({
+        id: duel.id,
+        mode: duel.mode,
+        wager: duel.wager,
+        creatorPerks: duel.creatorPerks,
+        opponentPerks: duel.opponentPerks,
+        creatorCosmetic: creatorEquip,
+        opponentCosmetic: opponentEquip
+      });
+      renderSnap = Core.createSnapshotFor(hostMatch, 'creator');
+      sendGuestSnapshotNow();
+    } else {
+      hostMatch = null;
+      const preview = Core.createMatch({
+        id: duel.id,
+        mode: duel.mode,
+        wager: duel.wager,
+        creatorPerks: duel.creatorPerks,
+        opponentPerks: duel.opponentPerks,
+        creatorCosmetic: creatorEquip,
+        opponentCosmetic: opponentEquip
+      });
+      renderSnap = Core.createSnapshotFor(preview, 'opponent');
+    }
+
+    if (typeof hideOverlay === 'function') hideOverlay();
+    document.body?.classList.remove('menu-open');
+    document.body?.classList.add('night-duel-combat');
+    setGameState('playing');
+    if (typeof syncPauseIcon === 'function') syncPauseIcon();
+    ensureTopHud();
+    updateTopHud();
+    startPolling(2500);
+  }
+
+  async function submitMatchReport(winnerRole) {
+    if (!duel || duel.status === 'completed' || finishSubmitting) return;
+    const winnerId = winnerRole === 'creator' ? duel.creatorId : duel.opponentId;
+    if (!winnerId) return;
+    if (lastReportedDuelId === duel.id + ':' + winnerId && duel.status === 'completed') return;
+
+    finishSubmitting = true;
+    try {
+      if (myRole() === 'creator' && channel) {
+        channel.send('match-finished', { winnerRole });
+      }
+      const data = await window.MinuitCloud.rpc('minuit_duel_finish', {
+        p_duel: duel.id,
+        p_winner: winnerId
+      });
+      lastReportedDuelId = duel.id + ':' + winnerId;
+      if (channel) channel.send('report-submitted', { winnerRole });
+      ingestDuelPayload(data);
+      if (duel.status === 'completed') {
+        transitionForDuelStatus('active');
+      } else {
+        startPolling(900);
+      }
+    } catch (err) {
+      startPolling(1200);
+    } finally {
+      finishSubmitting = false;
+    }
+  }
+
+  async function createInvitation() {
+    if (busy || !window.MinuitCloud?.connected) return;
+    busy = true;
+    setStatus('Création de l’invitation privée…');
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_create', {
+        p_mode: createMode,
+        p_wager: createWager
+      });
+      ingestDuelPayload(data);
+      busy = false;
+      transitionForDuelStatus('');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Création du duel impossible.', true);
+    }
+  }
+
+  async function joinInvitation(rawInput) {
+    if (busy || !window.MinuitCloud?.connected) return;
+    const id = Core.extractDuelId(rawInput);
+    if (!id) {
+      setStatus('Saisis un lien d’invitation valide ou l’UUID du duel.', true);
+      return;
+    }
+    busy = true;
+    setStatus('Connexion au duel privé…');
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_join', { p_duel: id });
+      clearPendingInvite();
+      ingestDuelPayload(data);
+      ensureRealtimeChannel(id);
+      channel?.send('joined', { duelId: id });
+      busy = false;
+      transitionForDuelStatus('');
+    } catch (err) {
+      busy = false;
+      const msg = String(err?.message || 'Impossible de rejoindre ce duel.');
+      if (msg.includes('Deux duels classés')) {
+        createMode = 'friendly';
+      }
+      clearPendingInvite();
+      renderScreen();
+      setStatus(msg, true);
+    }
+  }
+
+  async function submitDraftReady() {
+    if (busy || !duel) return;
+    const check = Core.validatePerks(selectedPerks);
+    if (!check.valid) {
+      setStatus(check.error, true);
+      return;
+    }
+    busy = true;
+    setStatus('Validation de tes 3 atouts…');
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_ready', {
+        p_duel: duel.id,
+        p_perks: check.perks
+      });
+      ingestDuelPayload(data);
+      channel?.send('draft-ready', { role: myRole() });
+      busy = false;
+      transitionForDuelStatus('draft');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Validation du draft refusée.', true);
+    }
+  }
+
+  async function cancelOrForfeitDuel(forfeit = false) {
+    if (busy || !duel) return;
+    busy = true;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_cancel', {
+        p_duel: duel.id,
+        p_forfeit: Boolean(forfeit)
+      });
+      channel?.send(forfeit ? 'forfeit' : 'state-sync', {});
+      ingestDuelPayload(data);
+      busy = false;
+      transitionForDuelStatus('active');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Action impossible.', true);
+    }
+  }
+
+  async function handleCosmeticAction(haloId, unlock) {
+    if (busy || !window.MinuitCloud?.connected) return;
+    busy = true;
+    try {
+      const fn = unlock ? 'minuit_duel_unlock' : 'minuit_duel_equip';
+      const data = await window.MinuitCloud.rpc(fn, { p_item: haloId });
+      if (data && typeof data === 'object') profile = data;
+      busy = false;
+      renderScreen();
+      setStatus(unlock ? 'Halo cosmétique débloqué !' : 'Halo cosmétique équipé.');
+    } catch (err) {
+      busy = false;
+      setStatus(err?.message || 'Action sur le halo impossible.', true);
+    }
+  }
+
+  function updateDraftIndicators() {
+    const cBadge = el('duelCreatorReadyBadge');
+    const oBadge = el('duelOpponentReadyBadge');
+    if (cBadge && duel) {
+      cBadge.textContent = duel.creatorReady ? 'Prête ✓' : 'En choix…';
+      cBadge.classList.toggle('is-ready', Boolean(duel.creatorReady));
+    }
+    if (oBadge && duel) {
+      oBadge.textContent = duel.opponentReady ? 'Prête ✓' : 'En choix…';
+      oBadge.classList.toggle('is-ready', Boolean(duel.opponentReady));
+    }
+  }
+
+  function renderAuthRequiredScreen() {
+    const inviteBanner = pendingInviteId
+      ? `<div class="duel-invite-banner"><span>INVITATION REÇUE</span><b>${esc(pendingInviteId)}</b><small>Connecte-toi ou crée ton pseudo pour rejoindre immédiatement ce duel.</small></div>`
+      : '';
+    overlay(`<section class="night-duel-screen" aria-label="Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ DUEL DE SORCIÈRES · 1 CONTRE 1 EN DIRECT</div>
+        <h2>DUEL DE LA NUIT NOIRE</h2>
+        <p>Affronte une autre sorcière dans l’obscurité avec ton accès existant (pseudo ou e-mail). Aucun bonus de campagne ni highscore de team n’est utilisé.</p>
+      </div>
+      ${inviteBanner}
+      <div id="duelAuthMount" class="duel-auth-mount"></div>
+      <div class="duel-status" id="duelStatusMsg" role="status">${esc(statusNotice)}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="secondary" id="duelBackHome">Retour à l’accueil</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+    const mount = el('duelAuthMount');
+    if (mount && window.MinuitCloud?.renderPanel) {
+      window.MinuitCloud.renderPanel(mount);
+    }
+    const back = el('duelBackHome');
+    if (back) back.onclick = leaveToHome;
+  }
+
+  function renderWaitingScreen() {
+    const creatorName = players[0]?.name || window.MinuitCloud?.user?.displayName || 'Sorcière';
+    const links = Core.buildShareLinks(window.location?.href || 'https://minuit.local/', duel.id, creatorName, duel.mode);
+    const modeLabel = duel.mode === 'ranked' ? 'Classé' : 'Amical';
+    const wagerLabel = duel.wager > 0 ? `Mise : ${duel.wager} éclats chacune (pot de ${duel.wager * 2})` : 'Sans mise d’éclats';
+
+    overlay(`<section class="night-duel-screen" aria-label="Invitation Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ INVITATION PRIVÉE EN ATTENTE · ${esc(modeLabel.toUpperCase())}</div>
+        <h2>INVITE TON ADVERSAIRE</h2>
+        <p>${esc(wagerLabel)} · Le draft de 3 atouts s’ouvrira dès que l’autre sorcière rejoint.</p>
+      </div>
+      <div class="duel-card duel-share-card">
+        <label class="duel-field-label" for="duelInviteLink">Lien d’invitation privée</label>
+        <div class="duel-copy-row">
+          <input id="duelInviteLink" type="text" readonly value="${esc(links.inviteUrl)}">
+          <button type="button" class="primary" id="duelCopyLink">Copier le lien</button>
+        </div>
+        <div class="duel-uuid-line">
+          <span>UUID du duel : <code id="duelUuidCode">${esc(duel.id)}</code></span>
+          <button type="button" class="secondary" id="duelCopyUuid">Copier l’UUID</button>
+        </div>
+        <div class="duel-share-buttons">
+          <a class="secondary duel-share-link" id="duelShareWhatsapp" href="${esc(links.whatsapp)}" target="_blank" rel="noopener noreferrer">Partager sur WhatsApp</a>
+          <a class="secondary duel-share-link" id="duelShareMessenger" href="${esc(links.messenger)}" target="_blank" rel="noopener noreferrer">Partager sur Messenger</a>
+        </div>
+      </div>
+      <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(statusNotice || 'En attente de la seconde sorcière…')}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="secondary" id="duelRefreshWait">Actualiser</button>
+        <button type="button" class="secondary team-danger" id="duelCancelInvite">Annuler l’invitation</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+
+    const copyText = async (value, label) => {
+      try {
+        await navigator.clipboard.writeText(value);
+        setStatus(`${label} copié dans le presse-papiers.`);
+      } catch (_) {
+        const input = el('duelInviteLink');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+        setStatus(`Sélectionne et copie : ${value}`);
+      }
+    };
+    el('duelCopyLink').onclick = () => copyText(links.inviteUrl, 'Lien d’invitation');
+    el('duelCopyUuid').onclick = () => copyText(duel.id, 'UUID du duel');
+    el('duelRefreshWait').onclick = () => syncDuelStatus(true);
+    el('duelCancelInvite').onclick = () => cancelOrForfeitDuel(false);
+  }
+
+  function renderDraftScreen() {
+    const role = myRole();
+    const alreadyReady = role === 'creator' ? duel.creatorReady : duel.opponentReady;
+    const savedPerks = role === 'creator' ? duel.creatorPerks : duel.opponentPerks;
+    if (alreadyReady && Array.isArray(savedPerks) && savedPerks.length === 3) {
+      selectedPerks = savedPerks.slice();
+    }
+    const pCreator = players[0] || { name: 'Créatrice', rating: 1000 };
+    const pOpponent = players[1] || { name: 'Invitée', rating: 1000 };
+    const modeLabel = duel.mode === 'ranked' ? 'Duel classé' : 'Duel amical';
+    const wagerLabel = duel.wager > 0 ? ` · Pot de ${duel.wager * 2} éclats` : '';
+
+    overlay(`<section class="night-duel-screen" aria-label="Draft du Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ ${esc(modeLabel.toUpperCase())}${esc(wagerLabel.toUpperCase())} · BEST OF 3</div>
+        <h2>CHOISIS 3 ATOUTS DE NUIT</h2>
+        <p>Catalogue commun de 10 atouts · Aucun équipement de campagne, compagnon ou bonus quotidien ne s’applique.</p>
+      </div>
+      <div class="duel-versus-strip">
+        <div class="duel-fighter-pill">
+          <b>${esc(pCreator.name || 'Créatrice')}</b>
+          <small>Cote ${Number(pCreator.rating) || 1000}</small>
+          <span class="duel-ready-badge${duel.creatorReady ? ' is-ready' : ''}" id="duelCreatorReadyBadge">${duel.creatorReady ? 'Prête ✓' : 'En choix…'}</span>
+        </div>
+        <span class="duel-vs-mark">VS</span>
+        <div class="duel-fighter-pill">
+          <b>${esc(pOpponent.name || 'Invitée')}</b>
+          <small>Cote ${Number(pOpponent.rating) || 1000}</small>
+          <span class="duel-ready-badge${duel.opponentReady ? ' is-ready' : ''}" id="duelOpponentReadyBadge">${duel.opponentReady ? 'Prête ✓' : 'En choix…'}</span>
+        </div>
+      </div>
+      <div class="duel-draft-counter" id="duelDraftCounter">${selectedPerks.length} / 3 atouts sélectionnés</div>
+      <div class="duel-draft-grid" role="group" aria-label="Catalogue de 10 atouts">
+        ${Core.PERK_CATALOG.map(perk => {
+          const picked = selectedPerks.includes(perk.id);
+          return `<button type="button" class="duel-perk-card${picked ? ' is-picked' : ''}" data-perk-id="${esc(perk.id)}" aria-pressed="${picked}" ${alreadyReady ? 'disabled' : ''}>
+            <div class="duel-perk-top"><span class="duel-perk-icon">${esc(perk.icon)}</span><small>${esc(perk.category)}</small></div>
+            <b>${esc(perk.name)}</b>
+            <span>${esc(perk.desc)}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(alreadyReady ? 'Atouts verrouillés. En attente de l’autre sorcière…' : statusNotice)}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="primary" id="duelReadyBtn" ${alreadyReady || selectedPerks.length !== 3 ? 'disabled' : ''}>${alreadyReady ? 'Prête pour la nuit ✓' : 'Valider mes 3 atouts'}</button>
+        <button type="button" class="secondary team-danger" id="duelCancelDraft">Quitter le draft</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+
+    document.querySelectorAll('.duel-perk-card').forEach(btn => {
+      btn.onclick = () => {
+        if (alreadyReady) return;
+        const id = btn.dataset.perkId;
+        if (!id) return;
+        if (selectedPerks.includes(id)) {
+          selectedPerks = selectedPerks.filter(item => item !== id);
+        } else if (selectedPerks.length < 3) {
+          selectedPerks = [...selectedPerks, id];
+        } else {
+          setStatus('Trois atouts maximum : retire un atout avant d’en choisir un autre.', false);
+          return;
+        }
+        renderDraftScreen();
+      };
+    });
+
+    const readyBtn = el('duelReadyBtn');
+    if (readyBtn) readyBtn.onclick = submitDraftReady;
+    const cancelBtn = el('duelCancelDraft');
+    if (cancelBtn) cancelBtn.onclick = () => cancelOrForfeitDuel(false);
+  }
+
+  function renderResultScreen() {
+    const uid = myUserId();
+    const won = duel?.winnerId === uid;
+    const pMe = (players[0]?.id === uid ? players[0] : players[1]) || profile || Core.createDuelProfile();
+    const pOther = (players[0]?.id === uid ? players[1] : players[0]) || { name: 'Adversaire', rating: 1000 };
+    const delta = Number(duel?.ratingDelta) || 0;
+    const signedDelta = duel?.mode === 'ranked' ? (won ? `+${delta}` : `-${delta}`) : '±0 (amical)';
+    const wagerNote = duel?.wager > 0
+      ? (won ? `Pot remporté : +${duel.wager * 2} éclats de lune` : `Mise engagée : ${duel.wager} éclats de lune`)
+      : 'Duel sans mise d’éclats';
+
+    overlay(`<section class="night-duel-screen duel-result-screen" aria-label="Résultat du Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ ${duel?.mode === 'ranked' ? 'DUEL CLASSÉ TERMINÉ' : 'DUEL AMICAL TERMINÉ'}</div>
+        <h2>${won ? 'VICTOIRE NOCTURNE' : 'DÉFAITE DANS LA BRUME'}</h2>
+        <p>Face à <b>${esc(pOther.name || 'Adversaire')}</b> · Résultat validé par consensus des deux clients.</p>
+      </div>
+      <div class="duel-summary-grid">
+        <div class="duel-stat-box"><small>VARIATION DE COTE</small><b>${esc(signedDelta)}</b></div>
+        <div class="duel-stat-box"><small>NOUVELLE COTE DUEL</small><b>${Number(pMe.rating) || 1000}</b></div>
+        <div class="duel-stat-box"><small>BILAN CLASSÉ</small><b>${Number(pMe.wins) || 0} V · ${Number(pMe.losses) || 0} D</b></div>
+        <div class="duel-stat-box"><small>ÉCLATS DE LUNE</small><b>${Number(pMe.shards) || 0} ☾</b></div>
+      </div>
+      <p class="duel-wager-note">${esc(wagerNote)} · Les highscores de campagne et de team restent intacts.</p>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="primary" id="duelAgainBtn">Nouveau duel</button>
+        <button type="button" class="secondary" id="duelHomeBtn">Retour à l’accueil</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+    el('duelAgainBtn').onclick = () => {
+      duel = null;
+      players = [null, null];
+      statusNotice = '';
+      openHub();
+    };
+    el('duelHomeBtn').onclick = leaveToHome;
+  }
+
+  function renderHubScreen() {
+    const p = profile || Core.createDuelProfile();
+    const pseudo = p.name || window.MinuitCloud?.user?.displayName || window.MinuitCloud?.user?.email || 'Sorcière';
+    const unlocked = Array.isArray(p.unlocked) ? p.unlocked : ['halo-violet'];
+
+    overlay(`<section class="night-duel-screen" aria-label="Salon Duel de la Nuit noire">
+      <div class="duel-header">
+        <div class="eyebrow">☾ DUEL DE LA NUIT NOIRE · 1 CONTRE 1 EN DIRECT</div>
+        <h2>SALON DES OMBRES</h2>
+        <p> Sorcière : <b>${esc(pseudo)}</b> · Manches de 90 s en 2 manches gagnantes · Visibilité limitée au halo et aux éclats.</p>
+      </div>
+      <div class="duel-summary-grid">
+        <div class="duel-stat-box"><small>COTE DUEL</small><b>${Number(p.rating) || 1000}</b></div>
+        <div class="duel-stat-box"><small>BILAN CLASSÉ</small><b>${Number(p.wins) || 0} V · ${Number(p.losses) || 0} D</b></div>
+        <div class="duel-stat-box"><small>ÉCLATS DE LUNE</small><b>${Number(p.shards) || 0} ☾</b></div>
+        <div class="duel-stat-box"><small>HALO ÉQUIPÉ</small><b>${esc(Core.getHaloCosmetic(p.equipped).name)}</b></div>
+      </div>
+      <div class="duel-hub-columns">
+        <div class="duel-card">
+          <h3>CRÉER UNE INVITATION PRIVÉE</h3>
+          <div class="duel-toggle-row" role="group" aria-label="Mode de duel">
+            <button type="button" class="secondary${createMode === 'ranked' ? ' is-selected' : ''}" id="duelModeRanked">Classé (max 2/jour/paire)</button>
+            <button type="button" class="secondary${createMode === 'friendly' ? ' is-selected' : ''}" id="duelModeFriendly">Amical (libre)</button>
+          </div>
+          <div class="duel-toggle-row" role="group" aria-label="Mise d’éclats de lune">
+            <button type="button" class="secondary${createWager === 0 ? ' is-selected' : ''}" id="duelWagerZero">Sans mise</button>
+            <button type="button" class="secondary${createWager === 10 ? ' is-selected' : ''}" id="duelWagerTen" ${(Number(p.shards) || 0) < 10 ? 'disabled' : ''}>Mise 10 ☾ (pot 20)</button>
+          </div>
+          <button type="button" class="primary duel-full-btn" id="duelCreateBtn">Créer le duel & obtenir le lien</button>
+        </div>
+        <div class="duel-card">
+          <h3>REJOINDRE UN DUEL</h3>
+          <label class="duel-field-label" for="duelJoinInput">Colle un lien d’invitation ou l’UUID du duel</label>
+          <input id="duelJoinInput" type="text" spellcheck="false" autocomplete="off" placeholder="https://…/?duel=… ou UUID" value="${esc(pendingInviteId)}">
+          <button type="button" class="primary duel-full-btn" id="duelJoinBtn">Rejoindre ce duel</button>
+        </div>
+      </div>
+      <div class="duel-card duel-halos-card">
+        <h3>HALOS COSMÉTIQUES (ÉCLATS DE LUNE · AUCUN AVANTAGE EN JEU)</h3>
+        <div class="duel-halo-grid">
+          ${Core.COSMETIC_HALOS.map(item => {
+            const isUnlocked = unlocked.includes(item.id);
+            const isEquipped = p.equipped === item.id;
+            return `<div class="duel-halo-item${isEquipped ? ' is-equipped' : ''}">
+              <div><i class="duel-halo-swatch" style="background:${esc(item.ring)}"></i><b>${esc(item.name)}</b><small>${item.cost > 0 ? `${item.cost} ☾` : 'Inclus'}</small></div>
+              ${isEquipped
+                ? '<span class="duel-equipped-tag">Équipé</span>'
+                : isUnlocked
+                  ? `<button type="button" class="secondary" data-equip-halo="${esc(item.id)}">Équiper</button>`
+                  : `<button type="button" class="secondary" data-unlock-halo="${esc(item.id)}" ${(Number(p.shards) || 0) < item.cost ? 'disabled' : ''}>Débloquer (${item.cost} ☾)</button>`}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(statusNotice)}</div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="secondary" id="duelBackHome">Retour à l’accueil</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+
+    el('duelModeRanked').onclick = () => {
+      createMode = 'ranked';
+      renderHubScreen();
+    };
+    el('duelModeFriendly').onclick = () => {
+      createMode = 'friendly';
+      renderHubScreen();
+    };
+    el('duelWagerZero').onclick = () => {
+      createWager = 0;
+      renderHubScreen();
+    };
+    el('duelWagerTen').onclick = () => {
+      createWager = 10;
+      renderHubScreen();
+    };
+    el('duelCreateBtn').onclick = createInvitation;
+    el('duelJoinBtn').onclick = () => joinInvitation(el('duelJoinInput')?.value || '');
+    el('duelJoinInput').addEventListener('keydown', evt => {
+      if (evt.key === 'Enter') {
+        evt.preventDefault();
+        joinInvitation(el('duelJoinInput')?.value || '');
+      }
+    });
+    document.querySelectorAll('[data-unlock-halo]').forEach(btn => {
+      btn.onclick = () => handleCosmeticAction(btn.dataset.unlockHalo, true);
+    });
+    document.querySelectorAll('[data-equip-halo]').forEach(btn => {
+      btn.onclick = () => handleCosmeticAction(btn.dataset.equipHalo, false);
+    });
+    el('duelBackHome').onclick = leaveToHome;
+  }
+
+  function renderScreen() {
+    if (!screenOpen) return;
+    setGameState('night-duel');
+    isolateFromCampaign();
+    if (!window.MinuitCloud?.connected) {
+      renderAuthRequiredScreen();
+      return;
+    }
+    if (duel?.status === 'waiting') {
+      renderWaitingScreen();
+      return;
+    }
+    if (duel?.status === 'draft') {
+      renderDraftScreen();
+      return;
+    }
+    if (duel?.status === 'completed') {
+      renderResultScreen();
+      return;
+    }
+    renderHubScreen();
+  }
+
+  async function openHub(options = {}) {
+    if (options.inviteId) pendingInviteId = Core.extractDuelId(options.inviteId) || pendingInviteId;
+    teardownDuelRuntime();
+    screenOpen = true;
+    statusNotice = '';
+    statusError = false;
+    isolateFromCampaign();
+    renderScreen();
+    if (window.MinuitCloud?.connected) {
+      await refreshProfile();
+      if (pendingInviteId) {
+        await joinInvitation(pendingInviteId);
+        return;
+      }
+      renderScreen();
+    }
+  }
+
+  function ensureTopHud() {
+    let hud = el('duelTopHud');
+    if (!hud) {
+      const holder = el('canvas')?.parentElement || document.body;
+      hud = document.createElement('div');
+      hud.id = 'duelTopHud';
+      hud.className = 'duel-top-hud';
+      hud.setAttribute('aria-live', 'polite');
+      hud.innerHTML = `
+        <div class="duel-hud-side duel-hud-self">
+          <small id="duelHudSelfName">TOI</small>
+          <b id="duelHudSelfHearts">♥♥♥♥♥</b>
+          <span id="duelHudDashState">Esquive prête</span>
+        </div>
+        <div class="duel-hud-center">
+          <div class="duel-hud-scoreline"><span id="duelHudRound">M1/3</span> · <strong id="duelHudScore">0 — 0</strong> · <b id="duelHudClock">01:30</b></div>
+          <div class="duel-hud-banner" id="duelHudBanner">Chasse dans la brume</div>
+        </div>
+        <div class="duel-hud-side duel-hud-opp">
+          <div class="duel-hud-opp-top">
+            <small id="duelHudOppName">ADVERSAIRE</small>
+            <button type="button" class="duel-hud-exit" id="duelForfeitBtn">Abandon</button>
+          </div>
+          <b id="duelHudOppHearts">♥♥♥♥♥</b>
+          <span id="duelHudOppVis">Hors du halo</span>
+        </div>
+      `;
+      holder.appendChild(hud);
+      const forfeitBtn = el('duelForfeitBtn');
+      if (forfeitBtn) {
+        forfeitBtn.onclick = evt => {
+          evt.stopPropagation();
+          openCombatPauseOverlay();
+        };
+      }
+    }
+    hud.style.display = 'grid';
+  }
+
+  function heartsText(count, maxCount, parry) {
+    const full = Math.max(0, Math.round(count || 0));
+    const empty = Math.max(0, Math.round((maxCount || 5) - full));
+    return '♥'.repeat(full) + '♡'.repeat(empty) + (parry > 0 ? ' 🛡' : '');
+  }
+
+  function formatClock(roundTime) {
+    const rem = Math.max(0, Math.ceil(Core.ROUND_DURATION - (Number(roundTime) || 0)));
+    const m = String(Math.floor(rem / 60)).padStart(2, '0');
+    const s = String(rem % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  function updateTopHud() {
+    if (!combatActive || !renderSnap) return;
+    ensureTopHud();
+    const role = myRole();
+    const myScore = role === 'creator' ? renderSnap.scores.creator : renderSnap.scores.opponent;
+    const oppScore = role === 'creator' ? renderSnap.scores.opponent : renderSnap.scores.creator;
+    const meInfo = role === 'creator' ? players[0] : players[1];
+    const oppInfo = role === 'creator' ? players[1] : players[0];
+
+    const selfName = el('duelHudSelfName');
+    const oppName = el('duelHudOppName');
+    const selfHearts = el('duelHudSelfHearts');
+    const oppHearts = el('duelHudOppHearts');
+    const dashState = el('duelHudDashState');
+    const roundEl = el('duelHudRound');
+    const scoreEl = el('duelHudScore');
+    const clockEl = el('duelHudClock');
+    const bannerEl = el('duelHudBanner');
+    const oppVisEl = el('duelHudOppVis');
+
+    if (selfName) selfName.textContent = (meInfo?.name || 'TOI').slice(0, 16);
+    if (oppName) oppName.textContent = (oppInfo?.name || 'ADVERSAIRE').slice(0, 16);
+    if (selfHearts) selfHearts.textContent = heartsText(renderSnap.self.hearts, renderSnap.self.maxHearts, renderSnap.self.parry);
+    if (oppHearts) oppHearts.textContent = heartsText(renderSnap.opponent.hearts, renderSnap.opponent.maxHearts, renderSnap.opponent.parry);
+    if (dashState) {
+      dashState.textContent = renderSnap.self.dodgeSuccess
+        ? 'Esquive parfaite !'
+        : renderSnap.self.dashCooldown > 0
+          ? `Esquive ${renderSnap.self.dashCooldown.toFixed(1)} s`
+          : 'Esquive prête';
+    }
+    if (roundEl) roundEl.textContent = `M${renderSnap.round}/3`;
+    if (scoreEl) scoreEl.textContent = `${myScore} — ${oppScore}`;
+    if (clockEl) clockEl.textContent = renderSnap.suddenDeath ? 'MORT SUBITE' : formatClock(renderSnap.roundTime);
+
+    if (bannerEl) {
+      if (renderSnap.roundPhase === 'intermission') {
+        const wonRound = renderSnap.lastRoundWinner === role;
+        bannerEl.textContent = wonRound ? 'Manche remportée · préparation…' : 'Manche perdue · nouvelle manche…';
+      } else if (renderSnap.suddenDeath) {
+        bannerEl.textContent = 'MORT SUBITE · Le prochain coup gagne la manche !';
+      } else if (renderSnap.lunarRevealTimer > 0) {
+        bannerEl.textContent = '☾ Pulsation lunaire · positions révélées !';
+      } else if (renderSnap.roundTime >= Core.ZONE_SHRINK_START) {
+        bannerEl.textContent = 'La brume se resserre vers le centre !';
+      } else {
+        bannerEl.textContent = duel?.mode === 'ranked' ? 'Duel classé en direct' : 'Duel amical en direct';
+      }
+    }
+
+    if (oppVisEl) {
+      oppVisEl.textContent = renderSnap.opponent.visible
+        ? 'Révélée !'
+        : renderSnap.lastKnownOpponent
+          ? 'Silhouette connue'
+          : 'Hors du halo';
+    }
+
+    const statusBar = el('gameStatus');
+    if (statusBar) {
+      statusBar.textContent = `DUEL ${duel?.mode === 'ranked' ? 'CLASSÉ' : 'AMICAL'} · M${renderSnap.round}/3 · ${myScore}-${oppScore}`;
+    }
+  }
+
+  function openCombatPauseOverlay() {
+    if (!combatActive || !duel) return;
+    combatPaused = true;
+    const isRanked = duel.mode === 'ranked';
+    overlay(`<section class="night-duel-screen duel-pause-modal" aria-label="Menu du duel en cours">
+      <div class="duel-header">
+        <div class="eyebrow">☾ DUEL EN DIRECT · LE TEMPS CONTINUE</div>
+        <h2>ABANDONNER LE COMBAT ?</h2>
+        <p>${isRanked
+          ? 'Attention : abandonner un duel classé commencé compte immédiatement comme une défaite classée.'
+          : 'Abandonner ce duel amical donnera la victoire à ton adversaire sans modifier ta cote.'}</p>
+      </div>
+      <div class="menu-actions duel-footer-actions">
+        <button type="button" class="primary" id="duelResumeCombat">Reprendre le combat</button>
+        <button type="button" class="secondary team-danger" id="duelConfirmForfeit">${isRanked ? 'Abandonner (défaite classée)' : 'Abandonner le duel'}</button>
+      </div>
+    </section>`);
+    document.body?.classList.add('menu-open');
+    el('duelResumeCombat').onclick = () => {
+      combatPaused = false;
+      if (typeof hideOverlay === 'function') hideOverlay();
+      document.body?.classList.remove('menu-open');
+    };
+    el('duelConfirmForfeit').onclick = () => {
+      combatPaused = false;
+      cancelOrForfeitDuel(true);
+    };
+  }
+
+  function readLocalCommand() {
+    let kx = 0;
+    let ky = 0;
+    const k = typeof keys === 'object' && keys ? keys : {};
+    if (k.ArrowLeft || k.a || k.q) kx -= 1;
+    if (k.ArrowRight || k.d) kx += 1;
+    if (k.ArrowUp || k.w || k.z) ky -= 1;
+    if (k.ArrowDown || k.s) ky += 1;
+
+    let moveX = kx;
+    let moveY = ky;
+    if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
+      moveX = pointerState.touchMoveX;
+      moveY = pointerState.touchMoveY;
+    }
+    const len = Math.hypot(moveX, moveY);
+    if (len > 1) {
+      moveX /= len;
+      moveY /= len;
+    }
+
+    const useMouseFollow = len < 0.05 && pointerState.mouseDown;
+    return {
+      moveX: Math.round(moveX * 1000) / 1000,
+      moveY: Math.round(moveY * 1000) / 1000,
+      focus: Boolean(k.Shift),
+      hasTarget: useMouseFollow,
+      targetX: Math.round(pointerState.aimX * 10) / 10,
+      targetY: Math.round(pointerState.aimY * 10) / 10,
+      hasAim: Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null),
+      aimX: Math.round(pointerState.aimX * 10) / 10,
+      aimY: Math.round(pointerState.aimY * 10) / 10,
+      dashSeq
+    };
+  }
+
+  function triggerLocalDodge() {
+    if (!combatActive) return false;
+    dashSeq += 1;
+    const cmd = readLocalCommand();
+    cmd.dash = true;
+    if (myRole() === 'creator' && hostMatch) {
+      Core.applyCommand(hostMatch, 'creator', cmd);
+    } else if (channel) {
+      channel.send('cmd', cmd);
+    }
+    if (typeof sfx === 'function') {
+      try {
+        sfx(540, 0.09, 'triangle', 0.05, 860);
+      } catch (_) {}
+    }
+    return true;
+  }
+
+  function stepDuelFrame(dt) {
+    if (!combatActive || !duel) return;
+    applyTouchLayoutPreference();
+    const cmd = readLocalCommand();
+
+    if (myRole() === 'creator' && hostMatch) {
+      Core.applyCommand(hostMatch, 'creator', cmd);
+      Core.stepMatch(hostMatch, dt);
+      renderSnap = Core.createSnapshotFor(hostMatch, 'creator');
+
+      snapshotAccum += dt;
+      const mustFlush =
+        snapshotAccum >= SNAPSHOT_INTERVAL ||
+        hostMatch.events.some(ev => ev.type === 'round-end' || ev.type === 'match-end' || ev.type === 'lunar-pulse' || ev.type === 'sudden-death');
+      if (mustFlush) {
+        snapshotAccum = 0;
+        sendGuestSnapshotNow();
+      }
+      if (renderSnap.roundPhase === 'finished' && renderSnap.winnerRole) {
+        submitMatchReport(renderSnap.winnerRole);
+      }
+    } else if (myRole() === 'opponent') {
+      cmdAccum += dt;
+      if (cmdAccum >= CMD_INTERVAL && channel) {
+        cmdAccum = 0;
+        channel.send('cmd', cmd);
+      }
+      if (renderSnap && renderSnap.roundPhase === 'fighting') {
+        for (const p of renderSnap.projectiles || []) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+        }
+      }
+    }
+
+    updateTopHud();
+  }
+
+  function drawWitchFigure(c, x, y, aimAngle, ringColor, options = {}) {
+    c.save();
+    c.translate(x, y);
+
+    if (options.ghost) {
+      c.globalAlpha = Math.max(0.14, 0.55 * (1 - (options.age || 0) / (options.maxAge || 6)));
+      c.strokeStyle = '#c8b6e6';
+      c.lineWidth = 1.6;
+      c.setLineDash([5, 4]);
+      c.beginPath();
+      c.arc(0, 0, 20, 0, Math.PI * 2);
+      c.stroke();
+      c.setLineDash([]);
+    } else {
+      c.strokeStyle = ringColor;
+      c.lineWidth = options.isSelf ? 2.4 : 2.0;
+      c.beginPath();
+      c.arc(0, 0, 20, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    if (options.invulnerable) {
+      c.strokeStyle = '#9ef7e8';
+      c.lineWidth = 2.5;
+      c.beginPath();
+      c.arc(0, 0, 27, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    if (options.revealedByShot) {
+      c.strokeStyle = '#ffd27d';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(0, 0, 25, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    if (typeof aimAngle === 'number' && !options.ghost) {
+      c.strokeStyle = options.isSelf ? '#e7d7ff99' : '#ff9ca899';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(Math.cos(aimAngle) * 18, Math.sin(aimAngle) * 18);
+      c.lineTo(Math.cos(aimAngle) * 30, Math.sin(aimAngle) * 30);
+      c.stroke();
+    }
+
+    c.rotate((typeof aimAngle === 'number' ? aimAngle : -Math.PI / 2) + Math.PI / 2);
+    c.fillStyle = options.ghost ? '#9e8cb8' : options.isSelf ? '#f5e8ff' : '#ffb8c9';
+    c.beginPath();
+    c.moveTo(0, -17);
+    c.lineTo(12, 13);
+    c.lineTo(0, 7);
+    c.lineTo(-12, 13);
+    c.closePath();
+    c.fill();
+
+    c.fillStyle = options.ghost ? '#6d5c88' : ringColor;
+    c.beginPath();
+    c.arc(0, -2, 5, 0, Math.PI * 2);
+    c.fill();
+    c.restore();
+  }
+
+  function drawDuelArena() {
+    if (!combatActive || !renderSnap || typeof ctx === 'undefined' || !ctx) return;
+    const c = ctx;
+    const width = Core.ARENA_WIDTH;
+    const height = Core.ARENA_HEIGHT;
+    const cx = Core.ARENA_CENTER.x;
+    const cy = Core.ARENA_CENTER.y;
+
+    c.save();
+    const bg = c.createLinearGradient(0, 0, 0, height);
+    bg.addColorStop(0, '#070510');
+    bg.addColorStop(0.5, '#0d091b');
+    bg.addColorStop(1, '#06040d');
+    c.fillStyle = bg;
+    c.fillRect(0, 0, width, height);
+
+    // Repères géométriques discrets au sol pour lire les déplacements dans l'obscurité.
+    c.strokeStyle = 'rgba(155, 130, 196, 0.08)';
+    c.lineWidth = 1;
+    for (const r of [140, 280, 420]) {
+      c.beginPath();
+      c.arc(cx, cy, r, 0, Math.PI * 2);
+      c.stroke();
+    }
+    c.beginPath();
+    c.moveTo(cx, 40);
+    c.lineTo(cx, height - 40);
+    c.moveTo(40, cy);
+    c.lineTo(width - 40, cy);
+    c.stroke();
+
+    // Halo de vision de la joueuse locale.
+    const self = renderSnap.self;
+    const selfCosmetic = Core.getHaloCosmetic(self.cosmetic);
+    const haloGrad = c.createRadialGradient(self.x, self.y, 18, self.x, self.y, self.haloRadius);
+    haloGrad.addColorStop(0, selfCosmetic.color);
+    haloGrad.addColorStop(0.72, 'rgba(92, 68, 138, 0.09)');
+    haloGrad.addColorStop(1, 'rgba(10, 7, 20, 0)');
+    c.fillStyle = haloGrad;
+    c.beginPath();
+    c.arc(self.x, self.y, self.haloRadius, 0, Math.PI * 2);
+    c.fill();
+
+    c.strokeStyle = selfCosmetic.ring + '55';
+    c.lineWidth = 1.5;
+    c.setLineDash([7, 6]);
+    c.beginPath();
+    c.arc(self.x, self.y, self.haloRadius, 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+
+    // Onde de pulsation lunaire.
+    if (renderSnap.lunarWave) {
+      const p = Math.min(1, renderSnap.lunarWave.age / Math.max(0.1, renderSnap.lunarWave.maxAge));
+      c.strokeStyle = `rgba(198, 226, 255, ${(1 - p) * 0.7})`;
+      c.lineWidth = 4;
+      c.beginPath();
+      c.arc(cx, cy, 40 + p * 620, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // Indices de pas (cercles acoustiques).
+    for (const step of renderSnap.footsteps || []) {
+      const ratio = Math.min(1, step.age / Math.max(0.1, step.maxAge));
+      const isMine = step.ownerRole === self.role;
+      c.strokeStyle = isMine
+        ? `rgba(166, 214, 255, ${(1 - ratio) * 0.28})`
+        : `rgba(255, 196, 132, ${(1 - ratio) * 0.58})`;
+      c.lineWidth = isMine ? 1.2 : 2;
+      c.beginPath();
+      c.arc(step.x, step.y, 6 + ratio * 22, 0, Math.PI * 2);
+      c.stroke();
+    }
+
+    // Traînées d'esquive.
+    for (const trail of renderSnap.dodgeTrails || []) {
+      const ratio = Math.min(1, trail.age / Math.max(0.1, trail.maxAge));
+      const isMine = trail.ownerRole === self.role;
+      c.strokeStyle = isMine
+        ? `rgba(142, 245, 226, ${(1 - ratio) * 0.7})`
+        : `rgba(255, 148, 200, ${(1 - ratio) * 0.75})`;
+      c.lineWidth = 5 * (1 - ratio * 0.5);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(trail.x1, trail.y1);
+      c.lineTo(trail.x2, trail.y2);
+      c.stroke();
+    }
+
+    // Silhouette figée à la dernière position connue lorsque l'adversaire est cachée.
+    const opp = renderSnap.opponent;
+    if (!opp.visible && renderSnap.lastKnownOpponent) {
+      const lk = renderSnap.lastKnownOpponent;
+      drawWitchFigure(c, lk.x, lk.y, lk.aimAngle, '#b8a4d6', {
+        ghost: true,
+        age: lk.age,
+        maxAge: lk.maxAge
+      });
+    }
+
+    // Adversaire uniquement lorsqu'elle est réellement visible.
+    if (opp.visible && typeof opp.x === 'number' && typeof opp.y === 'number') {
+      const oppCosmetic = Core.getHaloCosmetic(opp.cosmetic);
+      drawWitchFigure(c, opp.x, opp.y, opp.aimAngle, oppCosmetic.ring, {
+        isSelf: false,
+        revealedByShot: opp.revealedByShot
+      });
+    }
+
+    // Projectiles dangereux : TOUJOURS visibles même hors du halo !
+    for (const proj of renderSnap.projectiles || []) {
+      const isDanger = proj.ownerRole !== self.role;
+      const speed = Math.hypot(proj.vx, proj.vy) || 1;
+      const tailX = proj.x - (proj.vx / speed) * (proj.r * 2.4);
+      const tailY = proj.y - (proj.vy / speed) * (proj.r * 2.4);
+
+      c.strokeStyle = isDanger ? 'rgba(255, 112, 96, 0.75)' : 'rgba(165, 225, 255, 0.65)';
+      c.lineWidth = Math.max(3, proj.r * 0.85);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(tailX, tailY);
+      c.lineTo(proj.x, proj.y);
+      c.stroke();
+
+      c.fillStyle = isDanger ? '#ff5d6c' : '#9ee7ff';
+      c.beginPath();
+      c.arc(proj.x, proj.y, proj.r, 0, Math.PI * 2);
+      c.fill();
+
+      c.fillStyle = '#fff8ea';
+      c.beginPath();
+      c.arc(proj.x, proj.y, Math.max(2.5, proj.r * 0.44), 0, Math.PI * 2);
+      c.fill();
+    }
+
+    // Sorcière locale.
+    drawWitchFigure(c, self.x, self.y, self.aimAngle, selfCosmetic.ring, {
+      isSelf: true,
+      invulnerable: self.invulnerable
+    });
+
+    if (self.dodgeSuccess) {
+      c.fillStyle = '#9ef7e8';
+      c.font = 'bold 13px Arial';
+      c.textAlign = 'center';
+      c.fillText('ESQUIVE !', self.x, self.y - 32);
+    }
+
+    // Brume extérieure au rayon de zone (rétrécissement progressif après 60 s).
+    if (renderSnap.zoneRadius < 680) {
+      c.save();
+      c.beginPath();
+      c.rect(0, 0, width, height);
+      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2, true);
+      c.fillStyle = renderSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
+      c.fill('evenodd');
+
+      c.strokeStyle = renderSnap.suddenDeath
+        ? '#ff6b88'
+        : renderSnap.roundTime >= Core.ZONE_SHRINK_START
+          ? '#ffb86c'
+          : 'rgba(182, 152, 224, 0.35)';
+      c.lineWidth = renderSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
+      c.beginPath();
+      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
+
+    c.restore();
+  }
+
+  function canvasCoordsFromEvent(evt) {
+    const node = el('canvas');
+    if (!node) return { x: Core.ARENA_CENTER.x, y: Core.ARENA_CENTER.y };
+    const rect = node.getBoundingClientRect();
+    const rx = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0.5;
+    const ry = rect.height > 0 ? (evt.clientY - rect.top) / rect.height : 0.5;
+    return {
+      x: Math.max(0, Math.min(Core.ARENA_WIDTH, rx * Core.ARENA_WIDTH)),
+      y: Math.max(0, Math.min(Core.ARENA_HEIGHT, ry * Core.ARENA_HEIGHT))
+    };
+  }
+
+  function wireCombatInputs() {
+    const node = el('canvas');
+    if (node) {
+      node.addEventListener('pointerdown', evt => {
+        if (!combatActive) return;
+        const pt = canvasCoordsFromEvent(evt);
+        if (evt.pointerType === 'touch') {
+          if (pointerState.moveTouchId === null) {
+            pointerState.moveTouchId = evt.pointerId;
+            pointerState.moveOriginX = pt.x;
+            pointerState.moveOriginY = pt.y;
+            pointerState.touchMoveX = 0;
+            pointerState.touchMoveY = 0;
+          } else if (pointerState.aimTouchId === null) {
+            pointerState.aimTouchId = evt.pointerId;
+            pointerState.aimX = pt.x;
+            pointerState.aimY = pt.y;
+          }
+          return;
+        }
+        if (evt.button === 2) {
+          evt.preventDefault();
+          triggerLocalDodge();
+          return;
+        }
+        pointerState.mouseDown = true;
+        pointerState.mouseAimActive = true;
+        pointerState.aimX = pt.x;
+        pointerState.aimY = pt.y;
+      });
+
+      node.addEventListener('pointermove', evt => {
+        if (!combatActive) return;
+        const pt = canvasCoordsFromEvent(evt);
+        if (evt.pointerType === 'touch') {
+          if (evt.pointerId === pointerState.moveTouchId) {
+            const dx = pt.x - pointerState.moveOriginX;
+            const dy = pt.y - pointerState.moveOriginY;
+            const maxDrag = 46;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 4) {
+              const scale = Math.min(1, dist / maxDrag) / dist;
+              pointerState.touchMoveX = dx * scale;
+              pointerState.touchMoveY = dy * scale;
+            } else {
+              pointerState.touchMoveX = 0;
+              pointerState.touchMoveY = 0;
+            }
+          } else if (evt.pointerId === pointerState.aimTouchId) {
+            pointerState.aimX = pt.x;
+            pointerState.aimY = pt.y;
+          }
+          return;
+        }
+        pointerState.mouseAimActive = true;
+        pointerState.aimX = pt.x;
+        pointerState.aimY = pt.y;
+      });
+
+      const releasePointer = evt => {
+        if (evt.pointerId === pointerState.moveTouchId) {
+          pointerState.moveTouchId = null;
+          pointerState.touchMoveX = 0;
+          pointerState.touchMoveY = 0;
+        } else if (evt.pointerId === pointerState.aimTouchId) {
+          pointerState.aimTouchId = null;
+        } else if (evt.pointerType !== 'touch') {
+          pointerState.mouseDown = false;
+        }
+      };
+      node.addEventListener('pointerup', releasePointer);
+      node.addEventListener('pointercancel', releasePointer);
+      node.addEventListener('contextmenu', evt => {
+        if (combatActive) evt.preventDefault();
+      });
+    }
+
+    window.addEventListener('keydown', evt => {
+      if (!combatActive) return;
+      if (evt.code === 'Space' || evt.key === 'e' || evt.key === 'E') {
+        evt.preventDefault();
+        triggerLocalDodge();
+      } else if (evt.key === 'Escape') {
+        evt.preventDefault();
+        if (combatPaused) {
+          combatPaused = false;
+          if (typeof hideOverlay === 'function') hideOverlay();
+          document.body?.classList.remove('menu-open');
+        } else {
+          openCombatPauseOverlay();
+        }
+      }
+    });
+  }
+
+  // Hooks sur la boucle principale de game.js.
+  if (typeof update === 'function') {
+    const baseUpdate = update;
+    update = function(dt) {
+      if (combatActive) {
+        stepDuelFrame(dt);
+        return;
+      }
+      return baseUpdate(dt);
+    };
+  }
+
+  if (typeof drawGame === 'function') {
+    const baseDrawGame = drawGame;
+    drawGame = function() {
+      if (combatActive) {
+        drawDuelArena();
+        return;
+      }
+      return baseDrawGame();
+    };
+  }
+
+  if (typeof dodge === 'function') {
+    const baseDodge = dodge;
+    dodge = function(...args) {
+      if (combatActive) return triggerLocalDodge();
+      return baseDodge(...args);
+    };
+  }
+
+  if (typeof togglePause === 'function') {
+    const baseTogglePause = togglePause;
+    togglePause = function(...args) {
+      if (combatActive) {
+        openCombatPauseOverlay();
+        return;
+      }
+      return baseTogglePause(...args);
+    };
+  }
+
+  function installMenuButton() {
+    if (getGameState() !== 'league-menu' || document.querySelector('#overlay .training-mode')) return;
+    if (el('nightDuelEntry')) return;
+    const lab = el('labMenu');
+    const grid = lab?.closest('.menu-grid');
+    if (!grid) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = 'nightDuelEntry';
+    button.className = 'secondary menu-card-button';
+    button.innerHTML =
+      '<span class="menu-card-icon">☾</span><span>Duel de la Nuit noire<small>1v1 en direct · brouillard & éclats</small></span>';
+    button.onclick = () => openHub();
+    grid.insertBefore(button, grid.firstChild);
+  }
+
+  if (window.Journey?.menu) {
+    const baseJourneyMenu = window.Journey.menu;
+    window.Journey.menu = function(...args) {
+      const result = baseJourneyMenu.apply(this, args);
+      installMenuButton();
+      return result;
+    };
+  }
+
+  window.addEventListener('minuit:account-connected', async () => {
+    if (!screenOpen && !pendingInviteId) return;
+    screenOpen = true;
+    await refreshProfile();
+    if (pendingInviteId) {
+      await joinInvitation(pendingInviteId);
+      return;
+    }
+    renderScreen();
+  });
+
+  window.addEventListener('minuit:account-disconnected', () => {
+    profile = null;
+    if (screenOpen || combatActive) {
+      teardownDuelRuntime();
+      duel = null;
+      screenOpen = true;
+      renderScreen();
+    }
+  });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .overlay:has(.night-duel-screen){justify-content:flex-start}
+    .night-duel-screen{width:min(860px,100%);min-width:0;margin:0 auto;display:flex;flex-direction:column;gap:12px;text-align:left;color:#efe5f7}
+    .duel-header{text-align:center}
+    .duel-header h2{margin:4px 0 6px;font-size:clamp(22px,3.6vw,34px);color:#f7e9ff}
+    .duel-header p{margin:0 auto;max-width:660px;font-size:11px;line-height:1.55;color:#c3b2d4}
+    .duel-invite-banner{padding:10px 12px;border:1px dashed #d8b574aa;border-radius:10px;background:#2e233cdd;text-align:center}
+    .duel-invite-banner span{display:block;font-size:9px;letter-spacing:1.1px;color:#ffd28e}
+    .duel-invite-banner b{display:block;margin:4px 0;font:700 13px ui-monospace,monospace;color:#fff2d6;overflow-wrap:anywhere}
+    .duel-invite-banner small{font-size:10px;color:#cbbad9}
+    .duel-auth-mount{display:flex;justify-content:center;width:100%}
+    .duel-summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;width:100%}
+    .duel-stat-box{padding:10px;border:1px solid #78608b66;border-radius:10px;background:#1c152acc;text-align:center}
+    .duel-stat-box small{display:block;font-size:8px;letter-spacing:.9px;color:#b8a5ca}
+    .duel-stat-box b{display:block;margin-top:4px;font-size:16px;color:#ffd596;overflow-wrap:anywhere}
+    .duel-hub-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;width:100%}
+    .duel-card{padding:13px;border:1px solid #78608b66;border-radius:11px;background:#1a1327d8;display:flex;flex-direction:column;gap:9px}
+    .duel-card h3{margin:0;font-size:11px;letter-spacing:.9px;color:#e8c99b}
+    .duel-field-label{font-size:10px;color:#cbbad9}
+    .duel-card input{width:100%;min-width:0;padding:9px 10px;border:1px solid #755e8a;border-radius:7px;background:#251c36;color:#f5ecff;font-size:11px}
+    .duel-toggle-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+    .duel-toggle-row button.is-selected{border-color:#ffd08e;background:#3a2849;color:#ffe6bd;box-shadow:0 0 0 1px #ffd08e88}
+    .duel-full-btn{width:100%;min-height:42px}
+    .duel-copy-row{display:flex;gap:7px;align-items:stretch}
+    .duel-copy-row input{flex:1}
+    .duel-uuid-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:10px;color:#c7b6d8}
+    .duel-uuid-line code{padding:4px 7px;border-radius:5px;background:#291f3b;color:#ffe0a6;overflow-wrap:anywhere}
+    .duel-share-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .duel-share-link{display:flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:1px solid #7b648f;border-radius:8px;background:#261d38;color:#f2e7ff;text-decoration:none;font-size:11px;text-align:center}
+    .duel-halo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .duel-halo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
+    .duel-halo-item.is-equipped{border-color:#ffd08e99}
+    .duel-halo-item b{font-size:11px;color:#f3e7ff}
+    .duel-halo-item small{display:block;font-size:9px;color:#bba8cd}
+    .duel-halo-swatch{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:50%;vertical-align:middle}
+    .duel-equipped-tag{font-size:10px;color:#a9e5c8;font-weight:700}
+    .duel-versus-strip{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:10px;border:1px solid #78608b66;border-radius:10px;background:#1b1429cc}
+    .duel-fighter-pill{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-fighter-pill:last-child{text-align:right;align-items:flex-end}
+    .duel-fighter-pill b{font-size:12px;color:#f7ebff;overflow-wrap:anywhere}
+    .duel-fighter-pill small{font-size:9px;color:#bca9ce}
+    .duel-vs-mark{font-weight:700;font-size:12px;color:#ffd08e;padding:0 6px}
+    .duel-ready-badge{display:inline-block;margin-top:2px;padding:2px 7px;border-radius:999px;background:#312544;color:#cbb9dc;font-size:9px}
+    .duel-ready-badge.is-ready{background:#1f4438;color:#b6f2d4}
+    .duel-draft-counter{text-align:center;font-size:11px;font-weight:700;color:#ffd596}
+    .duel-draft-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .duel-perk-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:10px;border:1px solid #755d8888;border-radius:9px;background:#221933;color:#efe5f7;text-align:left;cursor:pointer}
+    .duel-perk-card.is-picked{border-color:#ffd08e;background:#36264b;box-shadow:0 0 0 1px #ffd08e99}
+    .duel-perk-top{display:flex;align-items:center;justify-content:space-between;width:100%;font-size:9px;color:#cbb7dd}
+    .duel-perk-icon{font-size:14px;color:#ffd596}
+    .duel-perk-card b{font-size:11px;color:#fff0d4}
+    .duel-perk-card span{font-size:10px;line-height:1.4;color:#c7b5d8}
+    .duel-status{min-height:18px;font-size:11px;text-align:center;color:#a9e0c7}
+    .duel-status.is-error{color:#f5aba4}
+    .duel-wager-note{margin:0;text-align:center;font-size:10px;color:#c5b3d6}
+    .duel-footer-actions{justify-content:center;flex-wrap:wrap}
+    .duel-top-hud{position:absolute;top:8px;left:8px;right:8px;z-index:5;display:none;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:7px 10px;border:1px solid #8a6fa166;border-radius:10px;background:rgba(16,11,28,0.86);backdrop-filter:blur(4px);color:#f4ebff;pointer-events:none}
+    .duel-hud-side{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-hud-opp{align-items:flex-end;text-align:right}
+    .duel-hud-opp-top{display:flex;align-items:center;gap:6px}
+    .duel-hud-exit{pointer-events:auto;padding:3px 7px;border:1px solid #b46b7888;border-radius:6px;background:#351c2acc;color:#ffd6dc;font-size:9px;cursor:pointer}
+    .duel-hud-side small{font-size:8px;letter-spacing:.8px;color:#c3b0d7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+    .duel-hud-side b{font-size:13px;color:#ff8fa3;letter-spacing:1px}
+    .duel-hud-self b{color:#9ef7e8}
+    .duel-hud-side span{font-size:9px;color:#cbb9dc}
+    .duel-hud-center{text-align:center;padding:0 6px}
+    .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
+    .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
+    .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
+    body.night-duel-combat .touchbar[data-touch-layout="left"]{justify-content:flex-end}
+    body.night-duel-combat .touchbar[data-touch-layout="right"]{justify-content:flex-start}
+    @media(max-width:720px){
+      .duel-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .duel-hub-columns,.duel-draft-grid,.duel-halo-grid,.duel-share-buttons{grid-template-columns:1fr}
+      .duel-copy-row{flex-direction:column}
+      .duel-top-hud{top:4px;left:4px;right:4px;padding:5px 7px;gap:4px}
+      .duel-hud-scoreline{font-size:10px}
+      .duel-hud-side b{font-size:11px}
+    }
+  `;
+  document.head?.appendChild(style);
+
+  wireCombatInputs();
+  installMenuButton();
+
+  pendingInviteId = readInitialInvite();
+  if (pendingInviteId) {
+    setTimeout(() => {
+      openHub({ inviteId: pendingInviteId });
+    }, 0);
+  }
+
+  window.NightDuel = {
+    open: openHub,
+    leave: leaveToHome,
+    triggerDodge: triggerLocalDodge,
+    get isOpen() {
+      return screenOpen;
+    },
+    get isCombatActive() {
+      return combatActive;
+    },
+    get snapshot() {
+      return renderSnap;
+    },
+    get currentDuel() {
+      return duel;
+    }
+  };
 })();
 </script></body></html>

@@ -990,6 +990,153 @@ async function submitCandySprint(value){
  catch(error){if(String(error?.message||'').includes('NOT_IN_TEAM'))return{skipped:true,team:null,scores:[]};throw Error(teamErrorMessage(error))}
 }
 
+async function rpc(name,body={}){
+ if(!enabled)throw Error('Service en ligne non configuré.');
+ await ensureSession();
+ const fn=String(name||'').trim();
+ if(!/^[a-z0-9_]+$/i.test(fn))throw Error('RPC invalide.');
+ return request('/rest/v1/rpc/'+fn,{method:'POST',auth:true,body:body&&typeof body==='object'?body:{}});
+}
+
+const DUEL_UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function realtimeSocketUrl(){
+ const parsed=new URL(url);
+ const wsProto=parsed.protocol==='https:'?'wss:':'ws:';
+ return `${wsProto}//${parsed.host}/realtime/v1/websocket?apikey=${encodeURIComponent(key)}&vsn=1.0.0`;
+}
+function openDuelChannel(duelId,handlers={}){
+ if(!enabled)throw Error('Service en ligne non configuré.');
+ if(!session)throw Error('Connecte-toi à ton compte en ligne.');
+ const cleanId=String(duelId||'').trim().toLowerCase();
+ if(!DUEL_UUID_RE.test(cleanId))throw Error('Identifiant de duel invalide.');
+ const WS=window.WebSocket||globalThis.WebSocket;
+ if(typeof WS!=='function')throw Error('WebSocket indisponible sur ce navigateur.');
+ const topic='realtime:duel:'+cleanId;
+ let ws=null,closed=false,joined=false,refCounter=0,joinRef='',heartbeatTimer=null,reconnectTimer=null,attempts=0;
+ const pendingQueue=[];
+ let resolveReady=null;
+ const ready=new Promise(resolve=>{resolveReady=resolve});
+ const nextRef=()=>String(++refCounter);
+ const clearHeartbeat=()=>{if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null}};
+ const sendRaw=frame=>{
+  if(ws&&ws.readyState===1){
+   try{ws.send(JSON.stringify(frame));return true}catch{}
+  }
+  return false;
+ };
+ const flushQueue=()=>{
+  while(joined&&pendingQueue.length){
+   const item=pendingQueue.shift();
+   sendBroadcastNow(item.event,item.payload);
+  }
+ };
+ const sendBroadcastNow=(eventName,payload)=>{
+  const envelope={
+   topic,
+   event:'broadcast',
+   payload:{
+    type:'broadcast',
+    event:String(eventName||'message'),
+    payload:{...(payload&&typeof payload==='object'?payload:{value:payload}),_sender:session?.user?.id||''}
+   },
+   ref:nextRef(),
+   join_ref:joinRef
+  };
+  return sendRaw(envelope);
+ };
+ const connect=async()=>{
+  if(closed)return;
+  try{await ensureSession()}catch(error){handlers.onError?.(error);return}
+  if(closed)return;
+  let socket;
+  try{socket=new WS(realtimeSocketUrl())}catch(error){handlers.onError?.(error);return}
+  ws=socket;
+  joined=false;
+  joinRef=nextRef();
+  socket.onopen=()=>{
+   if(closed||ws!==socket)return;
+   attempts=0;
+   sendRaw({
+    topic,
+    event:'phx_join',
+    payload:{
+     config:{broadcast:{ack:false,self:false},presence:{key:session?.user?.id||''},private:false},
+     access_token:session?.access_token||''
+    },
+    ref:joinRef,
+    join_ref:joinRef
+   });
+   clearHeartbeat();
+   heartbeatTimer=setInterval(()=>{
+    sendRaw({topic:'phoenix',event:'heartbeat',payload:{},ref:nextRef()});
+   },25000);
+  };
+  socket.onmessage=evt=>{
+   if(closed||ws!==socket)return;
+   let msg=null;
+   try{msg=JSON.parse(typeof evt.data==='string'?evt.data:String(evt.data||''))}catch{return}
+   if(!msg||typeof msg!=='object')return;
+   if(msg.topic===topic&&msg.event==='phx_reply'&&msg.ref===joinRef){
+    if(msg.payload?.status==='ok'){
+     joined=true;
+     if(resolveReady){resolveReady(true);resolveReady=null}
+     flushQueue();
+     handlers.onStatus?.('SUBSCRIBED');
+    }else{
+     handlers.onError?.(new Error(msg.payload?.response?.reason||'Canal temps réel refusé.'));
+    }
+    return;
+   }
+   if(msg.topic===topic&&msg.event==='broadcast'){
+    const innerEvent=String(msg.payload?.event||'');
+    const innerPayload=msg.payload?.payload||{};
+    if(innerPayload?._sender&&session?.user?.id&&innerPayload._sender===session.user.id)return;
+    handlers.onBroadcast?.(innerEvent,innerPayload);
+    if(innerEvent&&typeof handlers[innerEvent]==='function')handlers[innerEvent](innerPayload);
+   }
+  };
+  socket.onerror=()=>{
+   if(!closed&&ws===socket)handlers.onStatus?.('CHANNEL_ERROR');
+  };
+  socket.onclose=()=>{
+   if(ws===socket)ws=null;
+   joined=false;
+   clearHeartbeat();
+   if(closed)return;
+   handlers.onStatus?.('CLOSED');
+   const delay=Math.min(4000,500*Math.pow(2,attempts++));
+   reconnectTimer=setTimeout(()=>{reconnectTimer=null;connect()},delay);
+  };
+ };
+ connect();
+ return{
+  topic,
+  ready,
+  get connected(){return joined&&!!ws&&ws.readyState===1},
+  send(eventName,payload={}){
+   if(closed)return false;
+   if(joined&&ws&&ws.readyState===1)return sendBroadcastNow(eventName,payload);
+   if(eventName!=='snapshot'&&eventName!=='cmd'){
+    if(pendingQueue.length>=16)pendingQueue.shift();
+    pendingQueue.push({event:eventName,payload});
+   }
+   return false;
+  },
+  close(){
+   if(closed)return;
+   closed=true;
+   clearHeartbeat();
+   if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}
+   if(ws){
+    if(ws.readyState===1&&joined)sendRaw({topic,event:'phx_leave',payload:{},ref:nextRef(),join_ref:joinRef});
+    try{ws.close()}catch{}
+    ws=null;
+   }
+   joined=false;
+  }
+ };
+}
+
 function renderPanel(target=mount){
  if(target)mount=target;
  if(!mount||!mount.isConnected)return;
@@ -1180,6 +1327,8 @@ window.MinuitCloud={
  schedule,
  sync:()=>syncNow(),
  restore,
+ rpc,
+ openDuelChannel,
  submitFeedback,
  submitTeamScore,
  finishTeamScore,
