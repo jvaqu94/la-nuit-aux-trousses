@@ -12,6 +12,7 @@
   const CMD_INTERVAL = 0.033;
 
   const el = id => document.getElementById(id);
+  const getCanvas = () => el('game') || el('canvas');
   const esc = value =>
     String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
@@ -57,6 +58,12 @@
   let dashSeq = 0;
   let finishSubmitting = false;
   let lastReportedDuelId = '';
+  let reportedMatchKey = '';
+  let basePauseLabel = '';
+  let baseHintLabel = '';
+  const duelKeys = new Set();
+  let padDashHeld = false;
+  let padPauseHeld = false;
 
   const pointerState = {
     mouseAimActive: false,
@@ -215,10 +222,12 @@
     hostMatch = null;
     renderSnap = null;
     finishSubmitting = false;
-    pointerState.moveTouchId = null;
-    pointerState.aimTouchId = null;
-    pointerState.touchMoveX = 0;
-    pointerState.touchMoveY = 0;
+    resetCombatInput();
+    reportedMatchKey = '';
+    const pauseBtn = el('pause');
+    if (pauseBtn && basePauseLabel) pauseBtn.textContent = basePauseLabel;
+    const hint = el('hint');
+    if (hint && baseHintLabel) hint.textContent = baseHintLabel;
     hideTopHud();
   }
 
@@ -431,7 +440,11 @@
     if (typeof hideOverlay === 'function') hideOverlay();
     document.body?.classList.remove('menu-open');
     document.body?.classList.add('night-duel-combat');
-    setGameState('playing');
+    // La boucle principale de game.js ne simule que lorsque state === 'play'.
+    // 'playing' laissait le duel figé : aucune mise à jour, aucun déplacement.
+    setGameState('play');
+    resetCombatInput();
+    wireCombatButtons();
     if (typeof syncPauseIcon === 'function') syncPauseIcon();
     ensureTopHud();
     updateTopHud();
@@ -442,7 +455,8 @@
     if (!duel || duel.status === 'completed' || finishSubmitting) return;
     const winnerId = winnerRole === 'creator' ? duel.creatorId : duel.opponentId;
     if (!winnerId) return;
-    if (lastReportedDuelId === duel.id + ':' + winnerId && duel.status === 'completed') return;
+    const matchKey = duel.id + ':' + winnerId;
+    if (reportedMatchKey === matchKey || lastReportedDuelId === matchKey) return;
 
     finishSubmitting = true;
     try {
@@ -453,7 +467,8 @@
         p_duel: duel.id,
         p_winner: winnerId
       });
-      lastReportedDuelId = duel.id + ':' + winnerId;
+      lastReportedDuelId = matchKey;
+      reportedMatchKey = matchKey;
       if (channel) channel.send('report-submitted', { winnerRole });
       ingestDuelPayload(data);
       if (duel.status === 'completed') {
@@ -462,6 +477,7 @@
         startPolling(900);
       }
     } catch (err) {
+      reportedMatchKey = '';
       startPolling(1200);
     } finally {
       finishSubmitting = false;
@@ -1334,7 +1350,7 @@
   function ensureTopHud() {
     let hud = el('duelTopHud');
     if (!hud) {
-      const holder = el('canvas')?.parentElement || document.body;
+      const holder = getCanvas()?.parentElement || document.body;
       hud = document.createElement('div');
       hud.id = 'duelTopHud';
       hud.className = 'duel-top-hud';
@@ -1441,10 +1457,23 @@
           : 'Hors du halo';
     }
 
-    const statusBar = el('gameStatus');
+    const statusBar = el('gameStatus') || el('status');
     if (statusBar) {
       statusBar.textContent = `DUEL ${duel?.mode === 'ranked' ? 'CLASSÉ' : 'AMICAL'} · M${renderSnap.round}/3 · ${myScore}-${oppScore}`;
     }
+    const dashBtn = el('dash');
+    if (dashBtn) {
+      const cd = Number(renderSnap.self.dashCooldown) || 0;
+      dashBtn.textContent = cd > 0 ? `✦ Esquive ${cd.toFixed(1)} s` : '✦ Esquive';
+      dashBtn.classList.toggle('dash-ready', cd <= 0);
+      dashBtn.classList.toggle('dash-cooldown', cd > 0);
+    }
+  }
+
+  function resumeCombat() {
+    combatPaused = false;
+    if (typeof hideOverlay === 'function') hideOverlay();
+    document.body?.classList.remove('menu-open');
   }
 
   function openCombatPauseOverlay() {
@@ -1465,28 +1494,82 @@
       </div>
     </section>`);
     document.body?.classList.add('menu-open');
-    el('duelResumeCombat').onclick = () => {
-      combatPaused = false;
-      if (typeof hideOverlay === 'function') hideOverlay();
-      document.body?.classList.remove('menu-open');
-    };
+    el('duelResumeCombat').onclick = resumeCombat;
     el('duelConfirmForfeit').onclick = () => {
       combatPaused = false;
       cancelOrForfeitDuel(true);
     };
   }
 
+  function resetCombatInput() {
+    duelKeys.clear();
+    padDashHeld = false;
+    padPauseHeld = false;
+    pointerState.mouseAimActive = false;
+    pointerState.mouseDown = false;
+    pointerState.moveTouchId = null;
+    pointerState.aimTouchId = null;
+    pointerState.touchMoveX = 0;
+    pointerState.touchMoveY = 0;
+    pointerState.aimX = Core.ARENA_CENTER.x;
+    pointerState.aimY = Core.ARENA_CENTER.y;
+    if (typeof moveInput === 'object' && moveInput) {
+      for (const key of Object.keys(moveInput)) delete moveInput[key];
+    }
+  }
+
+  function keyIsDown(name) {
+    const raw = String(name || '');
+    const lower = raw.toLowerCase();
+    if (!lower) return false;
+    if (duelKeys.has(lower)) return true;
+    if (typeof moveInput === 'object' && moveInput && moveInput[lower]) return true;
+    // Compatibilité avec les anciens harness qui exposaient un objet `keys`.
+    if (typeof keys === 'object' && keys && (keys[raw] || keys[lower])) return true;
+    return false;
+  }
+
+  function bindingFor(action, fallback) {
+    const custom = typeof prefs === 'object' && prefs?.keys ? prefs.keys[action] : '';
+    return String(custom || fallback || '');
+  }
+
   function readLocalCommand() {
+    if (combatPaused) {
+      return {
+        moveX: 0, moveY: 0, focus: false,
+        hasTarget: false, targetX: pointerState.aimX, targetY: pointerState.aimY,
+        hasAim: false, aimX: pointerState.aimX, aimY: pointerState.aimY,
+        dashSeq
+      };
+    }
+
     let kx = 0;
     let ky = 0;
-    const k = typeof keys === 'object' && keys ? keys : {};
-    if (k.ArrowLeft || k.a || k.q) kx -= 1;
-    if (k.ArrowRight || k.d) kx += 1;
-    if (k.ArrowUp || k.w || k.z) ky -= 1;
-    if (k.ArrowDown || k.s) ky += 1;
+    const left = bindingFor('left', 'ArrowLeft');
+    const right = bindingFor('right', 'ArrowRight');
+    const up = bindingFor('up', 'ArrowUp');
+    const down = bindingFor('down', 'ArrowDown');
+    if (keyIsDown(left) || keyIsDown('a') || keyIsDown('q')) kx -= 1;
+    if (keyIsDown(right) || keyIsDown('d')) kx += 1;
+    if (keyIsDown(up) || keyIsDown('w') || keyIsDown('z')) ky -= 1;
+    if (keyIsDown(down) || keyIsDown('s')) ky += 1;
 
     let moveX = kx;
     let moveY = ky;
+    let focus = keyIsDown(bindingFor('focus', 'Shift'));
+
+    const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
+    if (gp) {
+      const ax = Number(gp.axes?.[0]) || 0;
+      const ay = Number(gp.axes?.[1]) || 0;
+      if (Math.hypot(ax, ay) > 0.18) {
+        moveX = ax;
+        moveY = ay;
+      }
+      focus = focus || Boolean(gp.buttons?.[6]?.pressed || gp.buttons?.[7]?.pressed);
+    }
+
     if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
       moveX = pointerState.touchMoveX;
       moveY = pointerState.touchMoveY;
@@ -1501,7 +1584,7 @@
     return {
       moveX: Math.round(moveX * 1000) / 1000,
       moveY: Math.round(moveY * 1000) / 1000,
-      focus: Boolean(k.Shift),
+      focus: Boolean(focus),
       hasTarget: useMouseFollow,
       targetX: Math.round(pointerState.aimX * 10) / 10,
       targetY: Math.round(pointerState.aimY * 10) / 10,
@@ -1512,8 +1595,26 @@
     };
   }
 
+  function pollDuelGamepadActions() {
+    const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
+    if (!gp) {
+      padDashHeld = false;
+      padPauseHeld = false;
+      return;
+    }
+    const dashPressed = Boolean(gp.buttons?.[0]?.pressed);
+    if (dashPressed && !padDashHeld) triggerLocalDodge();
+    padDashHeld = dashPressed;
+    const pausePressed = Boolean(gp.buttons?.[9]?.pressed);
+    if (pausePressed && !padPauseHeld) {
+      if (combatPaused) resumeCombat();
+      else openCombatPauseOverlay();
+    }
+    padPauseHeld = pausePressed;
+  }
+
   function triggerLocalDodge() {
-    if (!combatActive) return false;
+    if (!combatActive || combatPaused) return false;
     dashSeq += 1;
     const cmd = readLocalCommand();
     cmd.dash = true;
@@ -1533,6 +1634,7 @@
   function stepDuelFrame(dt) {
     if (!combatActive || !duel) return;
     applyTouchLayoutPreference();
+    pollDuelGamepadActions();
     const cmd = readLocalCommand();
 
     if (myRole() === 'creator' && hostMatch) {
@@ -1804,7 +1906,7 @@
   }
 
   function canvasCoordsFromEvent(evt) {
-    const node = el('canvas');
+    const node = getCanvas();
     if (!node) return { x: Core.ARENA_CENTER.x, y: Core.ARENA_CENTER.y };
     const rect = node.getBoundingClientRect();
     const rx = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0.5;
@@ -1816,10 +1918,12 @@
   }
 
   function wireCombatInputs() {
-    const node = el('canvas');
+    const node = getCanvas();
     if (node) {
       node.addEventListener('pointerdown', evt => {
         if (!combatActive) return;
+        evt.preventDefault();
+        try { node.setPointerCapture?.(evt.pointerId); } catch (_) {}
         const pt = canvasCoordsFromEvent(evt);
         if (evt.pointerType === 'touch') {
           if (pointerState.moveTouchId === null) {
@@ -1848,6 +1952,7 @@
 
       node.addEventListener('pointermove', evt => {
         if (!combatActive) return;
+        if (evt.pointerType === 'touch') evt.preventDefault();
         const pt = canvasCoordsFromEvent(evt);
         if (evt.pointerType === 'touch') {
           if (evt.pointerId === pointerState.moveTouchId) {
@@ -1894,20 +1999,60 @@
 
     window.addEventListener('keydown', evt => {
       if (!combatActive) return;
-      if (evt.code === 'Space' || evt.key === 'e' || evt.key === 'E') {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      const lower = String(evt.key || '').toLowerCase();
+      duelKeys.add(lower);
+      const dashKey = bindingFor('dash', ' ').toLowerCase();
+      const pauseKey = bindingFor('pause', 'p').toLowerCase();
+      if (evt.code === 'Space' || lower === 'e' || lower === dashKey) {
         evt.preventDefault();
-        triggerLocalDodge();
-      } else if (evt.key === 'Escape') {
+        if (!evt.repeat) triggerLocalDodge();
+      } else if (lower === 'escape' || lower === pauseKey) {
         evt.preventDefault();
-        if (combatPaused) {
-          combatPaused = false;
-          if (typeof hideOverlay === 'function') hideOverlay();
-          document.body?.classList.remove('menu-open');
-        } else {
-          openCombatPauseOverlay();
-        }
+        if (evt.repeat) return;
+        if (combatPaused) resumeCombat();
+        else openCombatPauseOverlay();
       }
     });
+    window.addEventListener('keyup', evt => {
+      duelKeys.delete(String(evt.key || '').toLowerCase());
+    });
+    window.addEventListener('blur', () => {
+      duelKeys.clear();
+      pointerState.mouseDown = false;
+      pointerState.moveTouchId = null;
+      pointerState.aimTouchId = null;
+      pointerState.touchMoveX = 0;
+      pointerState.touchMoveY = 0;
+    });
+  }
+
+  function wireCombatButtons() {
+    const dashBtn = el('dash');
+    if (dashBtn) {
+      if (!basePauseLabel) basePauseLabel = el('pause')?.textContent || '';
+      if (!baseHintLabel) baseHintLabel = el('hint')?.textContent || '';
+      dashBtn.onclick = evt => {
+        evt?.preventDefault?.();
+        if (combatActive) triggerLocalDodge();
+        else if (typeof dodge === 'function') dodge();
+      };
+    }
+    const pauseBtn = el('pause');
+    if (pauseBtn) {
+      pauseBtn.textContent = 'Ⅱ Abandon';
+      pauseBtn.onclick = evt => {
+        evt?.preventDefault?.();
+        if (combatActive) {
+          if (combatPaused) resumeCombat();
+          else openCombatPauseOverlay();
+        } else if (typeof togglePause === 'function') togglePause();
+      };
+    }
+    const hint = el('hint');
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · clic/droit viser · Espace/E esquive · Maj précision';
+    const bar = document.querySelector('.touchbar');
+    if (bar) bar.style.display = 'flex';
   }
 
   // Hooks sur la boucle principale de game.js.
@@ -1945,7 +2090,8 @@
     const baseTogglePause = togglePause;
     togglePause = function(...args) {
       if (combatActive) {
-        openCombatPauseOverlay();
+        if (combatPaused) resumeCombat();
+        else openCombatPauseOverlay();
         return;
       }
       return baseTogglePause(...args);
@@ -2103,6 +2249,9 @@
     .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
     .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
     .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
+    body.night-duel-combat .hud,
+    body.night-duel-combat .bossbar,
+    body.night-duel-combat .game-details{display:none!important}
     body.night-duel-combat .touchbar[data-touch-layout="left"]{justify-content:flex-end}
     body.night-duel-combat .touchbar[data-touch-layout="right"]{justify-content:flex-start}
     @media(max-width:720px){

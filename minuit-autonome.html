@@ -717,19 +717,21 @@ if(state==='play'&&transition<=0&&spawnIndex>=schedule.length&&waveTime>16&&!ene
 function updateHUD(){trackHighScore();$('score').textContent=String(Math.floor(score)).padStart(6,'0');$('combo').textContent='COMBO ×'+combo;$('dailyBonusHUD').textContent=mode==='daily'?'BONUS DÉFI +'+dailyBonus:'';$('wave').textContent=String(wave).padStart(2,'0')+' / 05';$('realmHUD').textContent=world.short;$('lives').textContent='♥ '.repeat(Math.max(0,lives));$('graze').textContent=player.slow>0?'TOILE −'+Math.round((1-WEB_SPEED_FACTOR)*100)+' %':graze+' FRÔLEMENTS';if(Math.ceil(player.missileTime||0)!==player.lastMissileUI){player.lastMissileUI=Math.ceil(player.missileTime||0);updateLoadout()}const dash=$('dash'),touch=(typeof matchMedia==='function'&&matchMedia('(pointer:coarse)').matches)||(typeof innerWidth==='number'&&innerWidth<=850),dashActive=state==='play'&&window.CombatFeel?.dashVisual?.life>0,dashSeconds=dashActive?window.CombatFeel.dashVisual.life.toFixed(1):'0.0',dashKey=(touch?'touch':'key')+'-'+(dashActive?'active-'+dashSeconds:player.dashCD>0?player.dashCD.toFixed(1):'ready');if(dash?.dataset){if(dash.dataset.labelKey!==dashKey){dash.dataset.labelKey=dashKey;if(touch)dash.innerHTML='<span>'+(dashActive?'✦ PROTÉGÉE':player.dashCD>0?'✦ '+player.dashCD.toFixed(1)+'s':'✦ ESQUIVE')+'</span><small>'+(dashActive?'Esquive active · '+dashSeconds+' s':player.dashCD>0?'Recharge':'Bond + protection')+'</small>';else dash.textContent=dashActive?'✦ Protégée · '+dashSeconds+' s':player.dashCD>0?'✦ '+player.dashCD.toFixed(1)+'s':'✦ Esquive'}}const boss=enemies.find(e=>e.boss);$('bossbar').classList.add('hidden');if(boss){$('bossname').textContent=world.boss;$('bosshp').style.width=Math.max(0,boss.hp/boss.max*100)+'%';$('bossphase').textContent='PHASE '+boss.phase+' / 3'+(boss.kind==='demon'&&enemies.some(e=>e.lantern)?' · DÉTRUIS LES LANTERNES':'')}$('status').textContent=world.name+' · '+Math.floor(gameTime/60)+' min '+String(Math.floor(gameTime%60)).padStart(2,'0')+' s · VOL '+Math.round(scrollSpeed()/58*100)+' %'}
 function broomMuzzle(){let a=player.lean||0;return{x:Math.max(8,Math.min(W-8,player.x+Math.sin(a)*67)),y:player.y-Math.cos(a)*67}}
 function held(k){return !!moveInput[k.toLowerCase()]}
-window.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();moveInput[e.key.toLowerCase()]=true;pointer=null;if(e.repeat)return;if(e.key.toLowerCase()===prefs.keys.pause.toLowerCase()||e.key==='Escape')togglePause();if(e.key.toLowerCase()===prefs.keys.dash.toLowerCase())dodge();if(state==='menu'&&e.key==='Enter')start('story')});window.addEventListener('keyup',e=>delete moveInput[e.key.toLowerCase()]);window.addEventListener('blur',()=>{moveInput={};pointer=null;if(state==='play')pauseScreen()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='play')pauseScreen()});
+window.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(document.activeElement?.tagName))return;if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key))e.preventDefault();moveInput[e.key.toLowerCase()]=true;pointer=null;if(window.NightDuel?.isCombatActive)return;if(e.repeat)return;if(e.key.toLowerCase()===prefs.keys.pause.toLowerCase()||e.key==='Escape')togglePause();if(e.key.toLowerCase()===prefs.keys.dash.toLowerCase())dodge();if(state==='menu'&&e.key==='Enter')start('story')});window.addEventListener('keyup',e=>delete moveInput[e.key.toLowerCase()]);window.addEventListener('blur',()=>{moveInput={};pointer=null;if(state==='play'&&!window.NightDuel?.isCombatActive)pauseScreen()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&state==='play'&&!window.NightDuel?.isCombatActive)pauseScreen()});
 function coords(e){let r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}}
 let drag=null;
 function hideTouchStick(){const el=$('touchStick');if(el){el.classList.add('hidden');if(el.firstElementChild)el.firstElementChild.style.transform='translate(0,0)'}}
 function showTouchStick(){const el=$('touchStick');if(!el||!drag?.touch)return;const r=c.getBoundingClientRect();el.style.left=(drag.cx-r.left)+'px';el.style.top=(drag.cy-r.top)+'px';el.classList.remove('hidden')}
 function moveTouchStick(e){const el=$('touchStick');if(!el||!drag?.touch||!el.firstElementChild)return;const dx=Math.max(-26,Math.min(26,e.clientX-drag.cx)),dy=Math.max(-26,Math.min(26,e.clientY-drag.cy));el.firstElementChild.style.transform=`translate(${dx}px,${dy}px)`}
 c.addEventListener('pointerdown',e=>{
+ if(window.NightDuel?.isCombatActive)return;
  if(state!=='play'||drag?.touch)return;
  e.preventDefault();try{c.setPointerCapture(e.pointerId)}catch{}
  const p=coords(e);drag={...p,px:player.x,py:player.y,touch:e.pointerType!=='mouse',id:e.pointerId,cx:e.clientX,cy:e.clientY};
  if(!drag.touch)pointer=p;else showTouchStick();
 });
 c.addEventListener('pointermove',e=>{
+ if(window.NightDuel?.isCombatActive)return;
  if(state!=='play')return;
  const p=coords(e);
  if(e.pointerType==='mouse')pointer=p;
@@ -739,7 +741,7 @@ c.addEventListener('pointermove',e=>{
   const sensitivity=1.15;pointer={x:drag.px+(p.x-drag.x)*sensitivity,y:drag.py+(p.y-drag.y)*sensitivity};moveTouchStick(e);
  }
 });
-function release(e){if(e&&drag?.touch&&e.pointerId!==drag.id)return;drag=null;pointer=null;hideTouchStick()}
+function release(e){if(window.NightDuel?.isCombatActive){drag=null;pointer=null;hideTouchStick();return}if(e&&drag?.touch&&e.pointerId!==drag.id)return;drag=null;pointer=null;hideTouchStick()}
 c.addEventListener('pointerup',release);c.addEventListener('pointercancel',release);c.addEventListener('contextmenu',e=>e.preventDefault());
 function menuPad(){const gp=navigator.getGamepads?.()[0];if(!gp)return;const press=gp.buttons[0]?.pressed;if(state==='pause'&&press&&!padDash){state='play';hideOverlay()}else if(['menu','league-menu'].includes(state)&&press&&!padDash)start('story');padDash=press;if(gp.buttons[9]?.pressed&&!padPause&&state==='pause'){state='play';hideOverlay()}padPause=gp.buttons[9]?.pressed}
 function safeText(s){return String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
@@ -10290,6 +10292,7 @@ var qrcode = function() {
   const CMD_INTERVAL = 0.033;
 
   const el = id => document.getElementById(id);
+  const getCanvas = () => el('game') || el('canvas');
   const esc = value =>
     String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 
@@ -10335,6 +10338,12 @@ var qrcode = function() {
   let dashSeq = 0;
   let finishSubmitting = false;
   let lastReportedDuelId = '';
+  let reportedMatchKey = '';
+  let basePauseLabel = '';
+  let baseHintLabel = '';
+  const duelKeys = new Set();
+  let padDashHeld = false;
+  let padPauseHeld = false;
 
   const pointerState = {
     mouseAimActive: false,
@@ -10493,10 +10502,12 @@ var qrcode = function() {
     hostMatch = null;
     renderSnap = null;
     finishSubmitting = false;
-    pointerState.moveTouchId = null;
-    pointerState.aimTouchId = null;
-    pointerState.touchMoveX = 0;
-    pointerState.touchMoveY = 0;
+    resetCombatInput();
+    reportedMatchKey = '';
+    const pauseBtn = el('pause');
+    if (pauseBtn && basePauseLabel) pauseBtn.textContent = basePauseLabel;
+    const hint = el('hint');
+    if (hint && baseHintLabel) hint.textContent = baseHintLabel;
     hideTopHud();
   }
 
@@ -10709,7 +10720,11 @@ var qrcode = function() {
     if (typeof hideOverlay === 'function') hideOverlay();
     document.body?.classList.remove('menu-open');
     document.body?.classList.add('night-duel-combat');
-    setGameState('playing');
+    // La boucle principale de game.js ne simule que lorsque state === 'play'.
+    // 'playing' laissait le duel figé : aucune mise à jour, aucun déplacement.
+    setGameState('play');
+    resetCombatInput();
+    wireCombatButtons();
     if (typeof syncPauseIcon === 'function') syncPauseIcon();
     ensureTopHud();
     updateTopHud();
@@ -10720,7 +10735,8 @@ var qrcode = function() {
     if (!duel || duel.status === 'completed' || finishSubmitting) return;
     const winnerId = winnerRole === 'creator' ? duel.creatorId : duel.opponentId;
     if (!winnerId) return;
-    if (lastReportedDuelId === duel.id + ':' + winnerId && duel.status === 'completed') return;
+    const matchKey = duel.id + ':' + winnerId;
+    if (reportedMatchKey === matchKey || lastReportedDuelId === matchKey) return;
 
     finishSubmitting = true;
     try {
@@ -10731,7 +10747,8 @@ var qrcode = function() {
         p_duel: duel.id,
         p_winner: winnerId
       });
-      lastReportedDuelId = duel.id + ':' + winnerId;
+      lastReportedDuelId = matchKey;
+      reportedMatchKey = matchKey;
       if (channel) channel.send('report-submitted', { winnerRole });
       ingestDuelPayload(data);
       if (duel.status === 'completed') {
@@ -10740,6 +10757,7 @@ var qrcode = function() {
         startPolling(900);
       }
     } catch (err) {
+      reportedMatchKey = '';
       startPolling(1200);
     } finally {
       finishSubmitting = false;
@@ -11612,7 +11630,7 @@ var qrcode = function() {
   function ensureTopHud() {
     let hud = el('duelTopHud');
     if (!hud) {
-      const holder = el('canvas')?.parentElement || document.body;
+      const holder = getCanvas()?.parentElement || document.body;
       hud = document.createElement('div');
       hud.id = 'duelTopHud';
       hud.className = 'duel-top-hud';
@@ -11719,10 +11737,23 @@ var qrcode = function() {
           : 'Hors du halo';
     }
 
-    const statusBar = el('gameStatus');
+    const statusBar = el('gameStatus') || el('status');
     if (statusBar) {
       statusBar.textContent = `DUEL ${duel?.mode === 'ranked' ? 'CLASSÉ' : 'AMICAL'} · M${renderSnap.round}/3 · ${myScore}-${oppScore}`;
     }
+    const dashBtn = el('dash');
+    if (dashBtn) {
+      const cd = Number(renderSnap.self.dashCooldown) || 0;
+      dashBtn.textContent = cd > 0 ? `✦ Esquive ${cd.toFixed(1)} s` : '✦ Esquive';
+      dashBtn.classList.toggle('dash-ready', cd <= 0);
+      dashBtn.classList.toggle('dash-cooldown', cd > 0);
+    }
+  }
+
+  function resumeCombat() {
+    combatPaused = false;
+    if (typeof hideOverlay === 'function') hideOverlay();
+    document.body?.classList.remove('menu-open');
   }
 
   function openCombatPauseOverlay() {
@@ -11743,28 +11774,82 @@ var qrcode = function() {
       </div>
     </section>`);
     document.body?.classList.add('menu-open');
-    el('duelResumeCombat').onclick = () => {
-      combatPaused = false;
-      if (typeof hideOverlay === 'function') hideOverlay();
-      document.body?.classList.remove('menu-open');
-    };
+    el('duelResumeCombat').onclick = resumeCombat;
     el('duelConfirmForfeit').onclick = () => {
       combatPaused = false;
       cancelOrForfeitDuel(true);
     };
   }
 
+  function resetCombatInput() {
+    duelKeys.clear();
+    padDashHeld = false;
+    padPauseHeld = false;
+    pointerState.mouseAimActive = false;
+    pointerState.mouseDown = false;
+    pointerState.moveTouchId = null;
+    pointerState.aimTouchId = null;
+    pointerState.touchMoveX = 0;
+    pointerState.touchMoveY = 0;
+    pointerState.aimX = Core.ARENA_CENTER.x;
+    pointerState.aimY = Core.ARENA_CENTER.y;
+    if (typeof moveInput === 'object' && moveInput) {
+      for (const key of Object.keys(moveInput)) delete moveInput[key];
+    }
+  }
+
+  function keyIsDown(name) {
+    const raw = String(name || '');
+    const lower = raw.toLowerCase();
+    if (!lower) return false;
+    if (duelKeys.has(lower)) return true;
+    if (typeof moveInput === 'object' && moveInput && moveInput[lower]) return true;
+    // Compatibilité avec les anciens harness qui exposaient un objet `keys`.
+    if (typeof keys === 'object' && keys && (keys[raw] || keys[lower])) return true;
+    return false;
+  }
+
+  function bindingFor(action, fallback) {
+    const custom = typeof prefs === 'object' && prefs?.keys ? prefs.keys[action] : '';
+    return String(custom || fallback || '');
+  }
+
   function readLocalCommand() {
+    if (combatPaused) {
+      return {
+        moveX: 0, moveY: 0, focus: false,
+        hasTarget: false, targetX: pointerState.aimX, targetY: pointerState.aimY,
+        hasAim: false, aimX: pointerState.aimX, aimY: pointerState.aimY,
+        dashSeq
+      };
+    }
+
     let kx = 0;
     let ky = 0;
-    const k = typeof keys === 'object' && keys ? keys : {};
-    if (k.ArrowLeft || k.a || k.q) kx -= 1;
-    if (k.ArrowRight || k.d) kx += 1;
-    if (k.ArrowUp || k.w || k.z) ky -= 1;
-    if (k.ArrowDown || k.s) ky += 1;
+    const left = bindingFor('left', 'ArrowLeft');
+    const right = bindingFor('right', 'ArrowRight');
+    const up = bindingFor('up', 'ArrowUp');
+    const down = bindingFor('down', 'ArrowDown');
+    if (keyIsDown(left) || keyIsDown('a') || keyIsDown('q')) kx -= 1;
+    if (keyIsDown(right) || keyIsDown('d')) kx += 1;
+    if (keyIsDown(up) || keyIsDown('w') || keyIsDown('z')) ky -= 1;
+    if (keyIsDown(down) || keyIsDown('s')) ky += 1;
 
     let moveX = kx;
     let moveY = ky;
+    let focus = keyIsDown(bindingFor('focus', 'Shift'));
+
+    const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
+    if (gp) {
+      const ax = Number(gp.axes?.[0]) || 0;
+      const ay = Number(gp.axes?.[1]) || 0;
+      if (Math.hypot(ax, ay) > 0.18) {
+        moveX = ax;
+        moveY = ay;
+      }
+      focus = focus || Boolean(gp.buttons?.[6]?.pressed || gp.buttons?.[7]?.pressed);
+    }
+
     if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
       moveX = pointerState.touchMoveX;
       moveY = pointerState.touchMoveY;
@@ -11779,7 +11864,7 @@ var qrcode = function() {
     return {
       moveX: Math.round(moveX * 1000) / 1000,
       moveY: Math.round(moveY * 1000) / 1000,
-      focus: Boolean(k.Shift),
+      focus: Boolean(focus),
       hasTarget: useMouseFollow,
       targetX: Math.round(pointerState.aimX * 10) / 10,
       targetY: Math.round(pointerState.aimY * 10) / 10,
@@ -11790,8 +11875,26 @@ var qrcode = function() {
     };
   }
 
+  function pollDuelGamepadActions() {
+    const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
+    if (!gp) {
+      padDashHeld = false;
+      padPauseHeld = false;
+      return;
+    }
+    const dashPressed = Boolean(gp.buttons?.[0]?.pressed);
+    if (dashPressed && !padDashHeld) triggerLocalDodge();
+    padDashHeld = dashPressed;
+    const pausePressed = Boolean(gp.buttons?.[9]?.pressed);
+    if (pausePressed && !padPauseHeld) {
+      if (combatPaused) resumeCombat();
+      else openCombatPauseOverlay();
+    }
+    padPauseHeld = pausePressed;
+  }
+
   function triggerLocalDodge() {
-    if (!combatActive) return false;
+    if (!combatActive || combatPaused) return false;
     dashSeq += 1;
     const cmd = readLocalCommand();
     cmd.dash = true;
@@ -11811,6 +11914,7 @@ var qrcode = function() {
   function stepDuelFrame(dt) {
     if (!combatActive || !duel) return;
     applyTouchLayoutPreference();
+    pollDuelGamepadActions();
     const cmd = readLocalCommand();
 
     if (myRole() === 'creator' && hostMatch) {
@@ -12082,7 +12186,7 @@ var qrcode = function() {
   }
 
   function canvasCoordsFromEvent(evt) {
-    const node = el('canvas');
+    const node = getCanvas();
     if (!node) return { x: Core.ARENA_CENTER.x, y: Core.ARENA_CENTER.y };
     const rect = node.getBoundingClientRect();
     const rx = rect.width > 0 ? (evt.clientX - rect.left) / rect.width : 0.5;
@@ -12094,10 +12198,12 @@ var qrcode = function() {
   }
 
   function wireCombatInputs() {
-    const node = el('canvas');
+    const node = getCanvas();
     if (node) {
       node.addEventListener('pointerdown', evt => {
         if (!combatActive) return;
+        evt.preventDefault();
+        try { node.setPointerCapture?.(evt.pointerId); } catch (_) {}
         const pt = canvasCoordsFromEvent(evt);
         if (evt.pointerType === 'touch') {
           if (pointerState.moveTouchId === null) {
@@ -12126,6 +12232,7 @@ var qrcode = function() {
 
       node.addEventListener('pointermove', evt => {
         if (!combatActive) return;
+        if (evt.pointerType === 'touch') evt.preventDefault();
         const pt = canvasCoordsFromEvent(evt);
         if (evt.pointerType === 'touch') {
           if (evt.pointerId === pointerState.moveTouchId) {
@@ -12172,20 +12279,60 @@ var qrcode = function() {
 
     window.addEventListener('keydown', evt => {
       if (!combatActive) return;
-      if (evt.code === 'Space' || evt.key === 'e' || evt.key === 'E') {
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      const lower = String(evt.key || '').toLowerCase();
+      duelKeys.add(lower);
+      const dashKey = bindingFor('dash', ' ').toLowerCase();
+      const pauseKey = bindingFor('pause', 'p').toLowerCase();
+      if (evt.code === 'Space' || lower === 'e' || lower === dashKey) {
         evt.preventDefault();
-        triggerLocalDodge();
-      } else if (evt.key === 'Escape') {
+        if (!evt.repeat) triggerLocalDodge();
+      } else if (lower === 'escape' || lower === pauseKey) {
         evt.preventDefault();
-        if (combatPaused) {
-          combatPaused = false;
-          if (typeof hideOverlay === 'function') hideOverlay();
-          document.body?.classList.remove('menu-open');
-        } else {
-          openCombatPauseOverlay();
-        }
+        if (evt.repeat) return;
+        if (combatPaused) resumeCombat();
+        else openCombatPauseOverlay();
       }
     });
+    window.addEventListener('keyup', evt => {
+      duelKeys.delete(String(evt.key || '').toLowerCase());
+    });
+    window.addEventListener('blur', () => {
+      duelKeys.clear();
+      pointerState.mouseDown = false;
+      pointerState.moveTouchId = null;
+      pointerState.aimTouchId = null;
+      pointerState.touchMoveX = 0;
+      pointerState.touchMoveY = 0;
+    });
+  }
+
+  function wireCombatButtons() {
+    const dashBtn = el('dash');
+    if (dashBtn) {
+      if (!basePauseLabel) basePauseLabel = el('pause')?.textContent || '';
+      if (!baseHintLabel) baseHintLabel = el('hint')?.textContent || '';
+      dashBtn.onclick = evt => {
+        evt?.preventDefault?.();
+        if (combatActive) triggerLocalDodge();
+        else if (typeof dodge === 'function') dodge();
+      };
+    }
+    const pauseBtn = el('pause');
+    if (pauseBtn) {
+      pauseBtn.textContent = 'Ⅱ Abandon';
+      pauseBtn.onclick = evt => {
+        evt?.preventDefault?.();
+        if (combatActive) {
+          if (combatPaused) resumeCombat();
+          else openCombatPauseOverlay();
+        } else if (typeof togglePause === 'function') togglePause();
+      };
+    }
+    const hint = el('hint');
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · clic/droit viser · Espace/E esquive · Maj précision';
+    const bar = document.querySelector('.touchbar');
+    if (bar) bar.style.display = 'flex';
   }
 
   // Hooks sur la boucle principale de game.js.
@@ -12223,7 +12370,8 @@ var qrcode = function() {
     const baseTogglePause = togglePause;
     togglePause = function(...args) {
       if (combatActive) {
-        openCombatPauseOverlay();
+        if (combatPaused) resumeCombat();
+        else openCombatPauseOverlay();
         return;
       }
       return baseTogglePause(...args);
@@ -12381,6 +12529,9 @@ var qrcode = function() {
     .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
     .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
     .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
+    body.night-duel-combat .hud,
+    body.night-duel-combat .bossbar,
+    body.night-duel-combat .game-details{display:none!important}
     body.night-duel-combat .touchbar[data-touch-layout="left"]{justify-content:flex-end}
     body.night-duel-combat .touchbar[data-touch-layout="right"]{justify-content:flex-start}
     @media(max-width:720px){
