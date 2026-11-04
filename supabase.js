@@ -15,6 +15,18 @@ const confirmationUrl=enabled?url+'/functions/v1/email-confirmation':'';
 const SESSION_KEY='minuit-supabase-session-v1';
 const AUTO_KEY='minuit-supabase-auto-v1';
 const INVITE_KEY='minuit-team-invite-v1';
+/* Horodatage local de la dernière modification de la progression, et état de la
+ * dernière synchronisation réussie (envoi ou restauration). Ils permettent de
+ * retrouver automatiquement la sauvegarde cloud sur un nouvel appareil et
+ * d’éviter d’écraser une sauvegarde plus récente venue d’un autre appareil. */
+const TOUCH_KEY='minuit-cloud-touched-v1';
+const SYNC_KEY='minuit-cloud-sync-v1';
+/* Vols classés/activité dont l’envoi à la team a échoué (réseau, délai dépassé) :
+ * ils sont conservés ici puis renvoyés automatiquement, sans double comptage
+ * grâce au run_id unique côté serveur. */
+const PENDING_KEY='minuit-team-pending-v1';
+const PENDING_MAX_AGE=3*86400000;
+const PENDING_MAX_ITEMS=30;
 const GAME_VERSION='2026.10.26-10';
 const EMPTY_TEAM=()=>({team:null,scores:[]});
 
@@ -39,6 +51,8 @@ let teamStatsEpoch=0;
 let teamHistoryEpoch=0;
 let pendingTeamCode='';
 let teamInviteRecipient='';
+let reconciling=null;
+let flushingPending=false;
 try{
  const fromUrl=normalizeTeamCode(new URLSearchParams(location.search).get('team'));
  let value=fromUrl;
@@ -70,6 +84,52 @@ function setAuto(value){
   if(auto&&session)localStorage.setItem(AUTO_KEY,session.user.id);
   else localStorage.removeItem(AUTO_KEY);
  }catch{}
+}
+function readTime(key){
+ try{const value=Number(localStorage.getItem(key));return Number.isFinite(value)&&value>0?value:0}catch{return 0}
+}
+function markLocalChange(){
+ try{localStorage.setItem(TOUCH_KEY,String(Date.now()))}catch{}
+}
+function readSyncState(){
+ try{
+  const value=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');
+  if(value&&typeof value==='object'&&Number.isFinite(value.at))return{at:value.at,stamp:String(value.stamp||''),userId:String(value.userId||'')};
+ }catch{}
+ return null;
+}
+function recordSyncState(stamp){
+ try{localStorage.setItem(SYNC_KEY,JSON.stringify({at:Date.now(),stamp:String(stamp||''),userId:session?.user?.id||''}))}catch{}
+}
+function clearSyncState(){
+ try{localStorage.removeItem(SYNC_KEY);localStorage.removeItem(TOUCH_KEY)}catch{}
+}
+/* Un envoi réussi ou une restauration aligne le local sur le cloud : on efface
+ * le marqueur de modification locale pour ne pas re-déclencher un envoi inutile. */
+function alignLocalToCloud(stamp){
+ recordSyncState(stamp);
+ try{localStorage.removeItem(TOUCH_KEY)}catch{}
+}
+function cloudRowStamp(row){return String(row?.updated_at||row?.client_updated_at||'')}
+async function fetchCloudSave(){
+ const rows=await request('/rest/v1/game_saves?select=payload,client_updated_at,updated_at&limit=1');
+ return Array.isArray(rows)&&rows[0]&&rows[0].payload?rows[0]:null;
+}
+function localHasProgress(){
+ try{
+  const j=window.Journey?.state;
+  if(j&&(Number(j.xp)>0||j.trainingDone||j.tutorialDone||(Array.isArray(j.recent)&&j.recent.length)||(Array.isArray(j.activeDates)&&j.activeDates.length)||Object.keys(j.seen||{}).length))return true;
+  const high=JSON.parse(localStorage.getItem('minuit-highscores')||'null');
+  if(high&&typeof high==='object'&&Object.values(high).some(value=>Number(value)>0))return true;
+  const league=JSON.parse(localStorage.getItem('minuit-local-league-v1')||'null');
+  if(league&&typeof league==='object'&&Object.keys(league.days||{}).length)return true;
+  const scores=JSON.parse(localStorage.getItem('minuit-v2-scores')||'null');
+  if(Array.isArray(scores)&&scores.length)return true;
+ }catch{}
+ return false;
+}
+function inActiveFlight(){
+ try{return !!(window.Journey?.run||window.LocalLeague?.current)}catch{return false}
 }
 function status(text,error=false){
  const element=document.getElementById('cloudStatus');
@@ -220,7 +280,11 @@ async function authenticatePseudo(signup){
    const joined=await joinPendingTeam(body.username);
    if(joined)returnHomeAfterInvite(signup);
   }
-  notifyAccount('account-connected');
+  // Retrouve automatiquement la sauvegarde cloud (entraînement, scores, team)
+  // au lieu de laisser l’appareil sur un profil vierge.
+  const outcome=await reconcileCloud();
+  if(outcome!=='restored')notifyAccount('account-connected');
+  flushPendingTeamScores();
  }catch(error){status(pseudoErrorMessage(error),true)}
  finally{busy=false}
 }
@@ -234,8 +298,10 @@ async function authenticate(signup){
   const data=await request(signup?'/auth/v1/signup'+redirect:'/auth/v1/token?grant_type=password',{method:'POST',auth:false,body});
   if(setSession(data)){
    renderPanel();
-   status('Compte connecté. La première synchronisation se fait manuellement.');
-   notifyAccount('account-connected');
+   status('Compte connecté. Synchronisation de la sauvegarde…');
+   const outcome=await reconcileCloud();
+   if(outcome!=='restored')notifyAccount('account-connected');
+   flushPendingTeamScores();
   }else status('Compte créé. Ouvre le lien reçu, puis reviens ici te connecter.');
  }catch(error){
   const message=/email.*not.*confirmed/i.test(error.message)?'Adresse pas encore confirmée. Ouvre le lien reçu ou choisis « Renvoyer la confirmation ».':error.message;
@@ -269,6 +335,118 @@ async function logout(){
  }
 }
 
+function cloudDateLabel(row){
+ const value=Date.parse(row?.client_updated_at||row?.updated_at||'');
+ return Number.isFinite(value)?new Date(value).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'}):'date inconnue';
+}
+function armSyncTimer(){
+ if(timer)return;
+ const delay=Math.max(5000,30000-(Date.now()-lastSync));
+ timer=setTimeout(()=>{timer=null;syncNow(true)},delay);
+}
+/* Envoi brut de la sauvegarde locale, puis alignement de l’état de synchro. */
+async function pushSave(){
+ bundling=true;
+ let payload;
+ try{payload=Journey.bundle()}finally{bundling=false}
+ const rows=await request('/rest/v1/game_saves?on_conflict=user_id',{
+  method:'POST',
+  body:{user_id:session.user.id,payload,client_updated_at:new Date().toISOString()},
+  headers:{Prefer:'resolution=merge-duplicates,return=representation'}
+ });
+ let stamp=Array.isArray(rows)&&rows[0]?cloudRowStamp(rows[0]):'';
+ if(!stamp){const row=await fetchCloudSave().catch(()=>null);stamp=cloudRowStamp(row)}
+ alignLocalToCloud(stamp);
+ lastSync=Date.now();
+ setAuto(true);
+ return stamp;
+}
+/* Restauration d’une ligne cloud. L’état de synchro est aligné avant l’import,
+ * car Journey.importSave recharge la page en cas de succès. */
+async function restoreCloud(row,options={}){
+ const payload=row?.payload;
+ if(!payload)throw Error('Aucune sauvegarde cloud pour ce compte.');
+ Journey.validate(payload);
+ const stamp=cloudRowStamp(row);
+ let prevSync=null,prevTouch=null;
+ try{prevSync=localStorage.getItem(SYNC_KEY);prevTouch=localStorage.getItem(TOUCH_KEY)}catch{}
+ const savedAuto=auto;
+ alignLocalToCloud(stamp);
+ setAuto(true);
+ const file=new File([JSON.stringify(payload)],'sauvegarde-en-ligne.json',{type:'application/json'});
+ const statusNode={textContent:''};
+ const restored=await Journey.importSave(file,statusNode,options.skipConfirm?{skipConfirm:true}:undefined);
+ if(!restored){
+  setAuto(savedAuto);
+  try{
+   if(prevSync==null)localStorage.removeItem(SYNC_KEY);else localStorage.setItem(SYNC_KEY,prevSync);
+   if(prevTouch==null)localStorage.removeItem(TOUCH_KEY);else localStorage.setItem(TOUCH_KEY,prevTouch);
+  }catch{}
+  status(statusNode.textContent||'Restauration annulée : ta progression locale est inchangée.',!!statusNode.textContent);
+ }
+ return restored;
+}
+/* Décide quoi faire entre le local et le cloud à la connexion / au démarrage.
+ * options.automatic=true (synchro périodique) ne demande jamais de confirmation
+ * et n’écrase pas un cloud divergent : il diffère la décision à l’utilisateur.
+ * Renvoie 'restored', 'pushed', 'enabled', 'deferred', 'error' ou 'noop'. */
+async function reconcileCloud(options={}){
+ if(!enabled||!session)return 'noop';
+ if(reconciling)return reconciling;
+ const automatic=!!options.automatic;
+ reconciling=(async()=>{
+  try{
+   await ensureSession();
+   const row=await fetchCloudSave();
+   const sync=readSyncState();
+   const sameAccount=!!sync&&sync.userId===(session?.user?.id||'');
+   const localDirty=sameAccount?readTime(TOUCH_KEY)>sync.at:localHasProgress();
+   if(!row){
+    if(localHasProgress()){
+     await pushSave();
+     status('Sauvegarde cloud créée · synchronisation automatique activée.');
+     return 'pushed';
+    }
+    setAuto(true);
+    status('Compte connecté · synchronisation automatique activée.');
+    return 'enabled';
+   }
+   const cloudDirty=!sameAccount||cloudRowStamp(row)!==sync.stamp;
+   if(cloudDirty&&!localDirty){
+    // Le cloud a des changements que cet appareil n’a pas : rien à perdre, on récupère.
+    if(inActiveFlight())return 'deferred';
+    status('Récupération de ta sauvegarde cloud…');
+    return await restoreCloud(row,{skipConfirm:true})?'restored':'noop';
+   }
+   if(cloudDirty&&localDirty){
+    // Les deux côtés ont changé depuis la dernière synchro : le joueur choisit.
+    // En synchro automatique, on ne décide jamais à sa place : on diffère.
+    if(inActiveFlight()||automatic)return 'deferred';
+    const takeCloud=confirm('Une sauvegarde cloud modifiée sur un autre appareil existe ('+cloudDateLabel(row)+').\n\nOK : récupérer la sauvegarde cloud.\nAnnuler : garder la progression de cet appareil et l’envoyer.');
+    if(takeCloud){
+     status('Récupération de ta sauvegarde cloud…');
+     return await restoreCloud(row,{skipConfirm:true})?'restored':'noop';
+    }
+    await pushSave();
+    status('Progression de cet appareil envoyée · synchronisation automatique activée.');
+    return 'pushed';
+   }
+   // Le cloud n’a pas changé depuis la dernière synchro : le local fait foi.
+   setAuto(true);
+   if(localDirty){
+    await pushSave();
+    status('Sauvegarde cloud envoyée · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    return 'pushed';
+   }
+   armSyncTimer();
+   return 'enabled';
+  }catch(error){
+   status('Cloud indisponible : '+error.message+' La copie locale est conservée.',true);
+   return 'error';
+  }finally{reconciling=null}
+ })();
+ return reconciling;
+}
 async function syncNow(automatic=false){
  if(!enabled||!session||syncing||(automatic&&!auto)){if(syncing)pending=true;return false}
  syncing=true;
@@ -276,16 +454,17 @@ async function syncNow(automatic=false){
  status('Envoi de la sauvegarde…');
  try{
   await ensureSession();
-  bundling=true;
-  let payload;
-  try{payload=Journey.bundle()}finally{bundling=false}
-  await request('/rest/v1/game_saves?on_conflict=user_id',{
-   method:'POST',
-   body:{user_id:session.user.id,payload,client_updated_at:new Date().toISOString()},
-   headers:{Prefer:'resolution=merge-duplicates,return=minimal'}
-  });
-  lastSync=Date.now();
-  setAuto(true);
+  // Protection contre l’écrasement : si le cloud a changé depuis notre dernière
+  // synchro, on réconcilie au lieu de le remplacer aveuglément.
+  let row=null;
+  try{row=await fetchCloudSave()}catch{row=null}
+  const sync=readSyncState();
+  const sameAccount=!!sync&&sync.userId===(session?.user?.id||'');
+  if(row&&(!sameAccount||cloudRowStamp(row)!==sync.stamp)){
+   const outcome=await reconcileCloud({automatic});
+   return outcome==='pushed'||outcome==='restored';
+  }
+  await pushSave();
   status('Sauvegarde cloud envoyée · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
   return true;
  }catch(error){
@@ -297,27 +476,22 @@ async function syncNow(automatic=false){
  }
 }
 function schedule(){
- if(!enabled||!session||!auto||bundling)return;
+ if(bundling)return;
+ markLocalChange();
+ if(!enabled||!session||!auto)return;
  if(syncing){pending=true;return}
- if(timer)return;
- const delay=Math.max(5000,30000-(Date.now()-lastSync));
- timer=setTimeout(()=>{timer=null;syncNow(true)},delay);
+ armSyncTimer();
 }
 async function restore(){
  if(!session||busy)return;
  busy=true;
  if(timer){clearTimeout(timer);timer=null}
- setAuto(false);
  status('Lecture de la sauvegarde cloud…');
  try{
-  const rows=await request('/rest/v1/game_saves?select=payload,updated_at&limit=1');
-  if(!Array.isArray(rows)||!rows[0]?.payload)throw Error('Aucune sauvegarde cloud pour ce compte.');
-  Journey.validate(rows[0].payload);
+  const row=await fetchCloudSave();
+  if(!row)throw Error('Aucune sauvegarde cloud pour ce compte.');
   status('Sauvegarde vérifiée. Confirmation de la restauration…');
-  const file=new File([JSON.stringify(rows[0].payload)],'sauvegarde-en-ligne.json',{type:'application/json'});
-  const statusNode={textContent:''};
-  const restored=await Journey.importSave(file,statusNode);
-  if(!restored&&document.getElementById('cloudStatus'))status(statusNode.textContent||'Restauration annulée : ta progression locale est inchangée.',!!statusNode.textContent);
+  await restoreCloud(row,{skipConfirm:false});
  }catch(error){status('Restauration impossible : '+error.message,true)}finally{busy=false}
 }
 async function submitFeedback(value){
@@ -727,10 +901,14 @@ function renderTeam(){
   const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles et périodes administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="team-rule-note"><b>Prolonger</b> conserve la période et tous ses highscores. <b>Lancer une nouvelle période</b> archive le podium et le tableau complet, puis remet les highscores à zéro. Les membres, les inscriptions et les statistiques d’activité sont conservés. Si tu ne changes pas l’ancienne date de début, la nouvelle période commence maintenant.</div><div class="cloud-actions"><button class="secondary" id="teamSaveRules">Prolonger / enregistrer cette période</button><button class="secondary" id="teamNewPeriod">Archiver et lancer une nouvelle période</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${historyAccess}${campaignReset}${creatorTest}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Période classée <b>${Math.max(1,Number(info.periodNumber)||1)}</b></span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div>${teamPodiumHTML(teamData.scores)}<div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  const pendingCount=pendingScoreCount();
+  const pendingNotice=pendingCount?`<div class="cloud-status cloud-error" id="teamPendingNote" role="status">${pendingCount} vol${pendingCount>1?'s':''} en attente d’envoi à la team (réseau indisponible au moment du vol). <button class="secondary" id="teamRetryPending" type="button">Renvoyer maintenant</button></div>`:'';
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${historyAccess}${campaignReset}${creatorTest}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Période classée <b>${Math.max(1,Number(info.periodNumber)||1)}</b></span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div>${pendingNotice}${teamPodiumHTML(teamData.scores)}<div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
   document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;document.getElementById('teamHistoryOpen').onclick=openTeamHistory;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
+  const retryPending=document.getElementById('teamRetryPending');
+  if(retryPending)retryPending.onclick=async()=>{retryPending.disabled=true;teamStatus('Renvoi des vols en attente…');const sent=await flushPendingTeamScores();await loadTeam(true);teamStatus(sent?sent+' vol'+(sent>1?'s':'')+' renvoyé'+(sent>1?'s':'')+' à la team.':'Rien à renvoyer pour le moment.');renderTeam()};
   const inviteInput=document.getElementById('teamInviteEmail'),inviteLink=document.getElementById('teamEmailInvite');
   const updateEmailInvitation=()=>{
    teamInviteRecipient=String(inviteInput.value||'').trim();
@@ -886,13 +1064,13 @@ async function openTeamStats(){
   if(epoch===teamStatsEpoch&&$('teamStatsRefresh'))$('teamStatsRefresh').disabled=false;
  }
 }
-async function finishTeamScore(value){if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result,skipped:!!result?.skipped}}
-async function submitTeamScore(value){
- if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};
- if(!enabled||!session)return{skipped:true};
- if(!teamLoaded)await loadTeam(false);
- if(!teamData.team)return{skipped:true};
- const body={
+/* Rejets « règles » : réessayer ne changerait rien, on ne les met pas en file.
+ * Tout le reste (réseau, délai dépassé, serveur, session à renouveler) est
+ * conservé pour un renvoi automatique ultérieur. */
+const PERMANENT_TEAM_ERRORS=['TEAM_RULES_REQUIRED','TEAM_PERIOD_NOT_STARTED','TEAM_PERIOD_ENDED','TEAM_DAILY_LIMIT','NOT_IN_TEAM','MODE_INVALID','SCORE_INVALID','DIFFICULTY_INVALID','PROGRESS_INVALID','RUN_ID_INVALID','ALREADY_IN_TEAM'];
+function isPermanentTeamError(message){return PERMANENT_TEAM_ERRORS.some(code=>String(message||'').includes(code))}
+function teamScoreBody(value){
+ return{
   p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
   p_mode:['free','ranked'].includes(value.mode)?value.mode:'free',
   p_difficulty:['easy','normal','hard'].includes(value.difficulty)?value.difficulty:'normal',
@@ -900,14 +1078,81 @@ async function submitTeamScore(value){
   p_wave:Math.max(1,Math.min(5,Math.floor(value.wave)||1)),
   p_run_id:String(value.id||'').trim().slice(0,80)
  };
+}
+function readPendingScores(){
+ try{
+  const list=JSON.parse(localStorage.getItem(PENDING_KEY)||'[]');
+  if(!Array.isArray(list))return[];
+  const now=Date.now();
+  return list.filter(item=>item&&typeof item==='object'&&typeof item.id==='string'&&item.id&&Number.isFinite(item.queuedAt)&&now-item.queuedAt<PENDING_MAX_AGE);
+ }catch{return[]}
+}
+function writePendingScores(list){
+ try{localStorage.setItem(PENDING_KEY,JSON.stringify(list.slice(-PENDING_MAX_ITEMS)))}catch{}
+}
+function enqueuePendingScore(value){
+ const id=String(value.id||'').trim().slice(0,80);
+ if(!id)return;
+ const list=readPendingScores().filter(item=>item.id!==id);
+ list.push({id,score:Math.floor(value.score)||0,mode:value.mode,difficulty:value.difficulty,stage:value.stage,wave:value.wave,queuedAt:Date.now()});
+ writePendingScores(list);
+}
+function removePendingScore(id){
+ const list=readPendingScores().filter(item=>item.id!==String(id||'').trim().slice(0,80));
+ writePendingScores(list);
+}
+function pendingScoreCount(){return readPendingScores().length}
+/* Renvoie les vols en attente. Idempotent côté serveur grâce au run_id unique. */
+async function flushPendingTeamScores(){
+ if(!enabled||!session||flushingPending)return 0;
+ const list=readPendingScores();
+ if(!list.length)return 0;
+ flushingPending=true;
+ let sent=0;
+ try{
+  await ensureSession();
+  for(const item of list){
+   try{
+    await request('/rest/v1/rpc/minuit_submit_team_score',{method:'POST',body:teamScoreBody(item)});
+    removePendingScore(item.id);
+    sent++;
+   }catch(error){
+    const message=String(error?.message||'');
+    if(isPermanentTeamError(message))removePendingScore(item.id);
+    // Erreur transitoire : on garde l’entrée pour le prochain essai.
+   }
+  }
+  if(sent){teamLoaded=false;loadTeam(false).catch(()=>{})}
+ }catch{}finally{flushingPending=false}
+ return sent;
+}
+async function finishTeamScore(value){if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result,skipped:!!result?.skipped}}
+async function submitTeamScore(value){
+ if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};
+ if(!enabled||!session)return{skipped:true};
+ if(!teamLoaded)await loadTeam(false);
+ // Ne sauter que si l’absence de team est confirmée. Si le chargement de la team
+ // a échoué (réseau), on tente quand même l’envoi : le RPC répondra NOT_IN_TEAM
+ // le cas échéant, au lieu de perdre silencieusement le score classé.
+ if(teamLoaded&&!teamData.team)return{skipped:true,reason:'no-team'};
+ const body=teamScoreBody(value);
  let result;
  try{result=await request('/rest/v1/rpc/minuit_submit_team_score',{method:'POST',body})}
  catch(error){
-  if(value.mode==='free'&&String(error?.message||'').includes('MODE_INVALID'))return{skipped:true,reason:'activity-unavailable'};
-  if(String(error?.message||'').includes('NOT_IN_TEAM')){teamData=EMPTY_TEAM();teamLoaded=false}
+  const message=String(error?.message||'');
+  if(value.mode==='free'&&message.includes('MODE_INVALID'))return{skipped:true,reason:'activity-unavailable'};
+  if(message.includes('NOT_IN_TEAM')){teamData=EMPTY_TEAM();teamLoaded=false;return{skipped:true,reason:'no-team'}}
+  if(!isPermanentTeamError(message)){
+   enqueuePendingScore(value);
+   const wrapped=Error(teamErrorMessage(error));
+   wrapped.queued=true;
+   throw wrapped;
+  }
   throw Error(teamErrorMessage(error));
  }
  teamLoaded=false;
+ removePendingScore(value.id);
+ flushPendingTeamScores();
  return result||{bestScore:body.p_score,improved:false,mode:body.p_mode,activityOnly:body.p_mode==='free'};
 }
 function validWeeklySprintState(value){
@@ -1160,7 +1405,7 @@ function renderPanel(target=mount){
   return;
  }
  const identity=session.user.displayName||session.user.email||'accès en ligne',identityLabel=session.user.displayName?'Pseudo':'Compte';
- mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>${identityLabel} : <b>${safeText(identity)}</b><br>Un emplacement cloud par accès ; le dernier envoi remplace le précédent.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée après chaque changement.':'Premier envoi manuel, puis synchronisation automatique.'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
+ mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>${identityLabel} : <b>${safeText(identity)}</b><br>Un emplacement cloud par accès, retrouvé automatiquement à la connexion sur chaque appareil. Envoi auto après chaque changement ; une sauvegarde plus récente venue d’un autre appareil n’est jamais écrasée sans confirmation.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée.':'Synchronisation automatique en cours d’activation…'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
  document.getElementById('cloudSync').onclick=()=>syncNow();
  document.getElementById('cloudRestore').onclick=restore;
  document.getElementById('cloudLogout').onclick=logout;
@@ -1344,6 +1589,8 @@ window.MinuitCloud={
  openTeamStats,
  renderPanel,
  refreshTeam:()=>loadTeam(true),
+ reconcile:options=>reconcileCloud(options),
+ retryTeamScores:()=>flushPendingTeamScores(),
  get configured(){return enabled},
  get connected(){return!!session},
  get teamLoaded(){return teamLoaded},
@@ -1351,9 +1598,24 @@ window.MinuitCloud={
  get isTeamAdmin(){return!!session&&!!teamData.team?.isAdmin},
  get rankedNotice(){return teamPeriodNotice(teamData.team)},
  get rankedStatus(){return teamPeriodStatus(teamData.team)},
+ get pendingTeamScores(){return pendingScoreCount()},
  get user(){return session?.user||null}
 };
-if(enabled&&session)window.useAccountPseudo?.();
-if(enabled&&session&&auto)schedule();
+if(enabled&&session){
+ window.useAccountPseudo?.();
+ // Au démarrage, ne réconcilie le cloud que si la synchro était déjà activée sur
+ // cet appareil (la récupération sur un nouvel appareil se fait à la connexion).
+ // Cela évite toute requête cloud intempestive sur une session simplement reprise.
+ if(auto){
+  reconcileCloud().then(outcome=>{if(outcome!=='restored')flushPendingTeamScores()}).catch(()=>{});
+ }else{
+  flushPendingTeamScores();
+ }
+}
+if(enabled){
+ window.addEventListener('online',()=>{if(session)flushPendingTeamScores()});
+ // Filet de sécurité si le réseau revient sans événement « online ».
+ setInterval(()=>{if(session)flushPendingTeamScores()},60000);
+}
 if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
 })();

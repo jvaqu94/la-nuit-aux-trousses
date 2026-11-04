@@ -988,7 +988,7 @@ if(window.MinuitCloud?.connected&&$('teamEndPanel')&&r.mode==='ranked'){
  const teamMessage=$('teamResultStatus'),submission=queueTeamResult(r);
  teamMessage.textContent='Synchronisation du score avec la team…';
  submission?.then(({data,error})=>{
-  if(error){teamMessage.textContent='Highscore de team non synchronisé : '+error.message;$('teamEndPanel')?.remove();return}
+  if(error){teamMessage.textContent='Highscore de team non synchronisé : '+error.message+(error.queued?' Il est conservé et sera renvoyé automatiquement dès que possible.':'');$('teamEndPanel')?.remove();return}
   if(data?.skipped||!data?.team){teamMessage.textContent='';$('teamEndPanel')?.remove();return}
   const result=data.result||{},remaining=result.gamesRemaining;
   teamMessage.textContent=(result.improved?'Nouveau highscore de team.':'Highscore de team conservé.')+(Number.isFinite(remaining)?' '+remaining+' partie'+(remaining>1?'s':'')+' restante'+(remaining>1?'s':''):'');
@@ -1107,10 +1107,13 @@ const exportKeys=['minuit-settings','minuit-highscores','minuit-v2-scores','minu
 function bundle(){LocalLeague.flush();saveHighScores();write();const saves={};for(const key of exportKeys){try{saves[key]=JSON.parse(localStorage.getItem(key)||'null')}catch{saves[key]=null}}saves[KEY]=JSON.parse(JSON.stringify(j));saves['minuit-local-league-v1']=JSON.parse(JSON.stringify(LocalLeague.data));saves['minuit-settings']=JSON.parse(JSON.stringify(prefs));saves['minuit-highscores']=JSON.parse(JSON.stringify(highScores));saves['minuit-v2-scores']=JSON.parse(JSON.stringify(records));if(saves['minuit-checkpoint']){saves['minuit-checkpoint'].session='';if(!saves['minuit-checkpoint'].league?.local)saves['minuit-checkpoint'].league=null}return{format:'MinuitProgression',version:1,exportedAt:new Date().toISOString(),saves}}
 function exportSave(){const blob=new Blob([JSON.stringify(bundle(),null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='La-Nuit-aux-Trousses-sauvegarde-'+dateKey()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 function validate(b){if(b?.format!=='MinuitProgression'||b.version!==1||!b.saves||typeof b.saves!=='object')throw Error('Ce fichier n’est pas une sauvegarde La Nuit aux Trousses compatible.');function walk(v,depth=0){if(depth>20)throw Error('Sauvegarde trop complexe.');if(typeof v==='number'&&(!Number.isFinite(v)||Math.abs(v)>1e15))throw Error('Valeur numérique invalide.');if(typeof v==='string'&&v.length>5000)throw Error('Texte trop long.');if(v&&typeof v==='object'){if(Object.keys(v).length>10000)throw Error('Sauvegarde trop volumineuse.');for(const [k,x]of Object.entries(v)){if(['__proto__','prototype','constructor'].includes(k))throw Error('Champ interdit.');walk(x,depth+1)}}}walk(b);for(const k of Object.keys(b.saves))if(!exportKeys.includes(k))throw Error('Donnée inconnue dans la sauvegarde.');const p=b.saves[KEY],l=b.saves['minuit-local-league-v1'],cp=b.saves['minuit-checkpoint'];if(!p||p.version!==1||!Number.isFinite(p.xp)||p.xp<0||!p.days||!p.seen||!p.selected||!Array.isArray(p.achievements)||!Array.isArray(p.activeDates)||!Array.isArray(p.recent))throw Error('Progression invalide.');for(const [k,v] of Object.entries(p.selected))if(!items.some(i=>i.kind===k&&i.id===v))throw Error('Cosmétique inconnu.');if(!l?.days||!l?.runs)throw Error('Cumul local invalide.');for(const [day,d] of Object.entries(l.days)){if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!['best','bonus','rankedUsed','dailyUsed'].every(k=>Number.isFinite(d[k])&&d[k]>=0)||!d.stats||!Array.isArray(d.claimed))throw Error('Journée de défi invalide.')}for(const d of Object.values(p.days))if(!d.stats||!Array.isArray(d.claimed))throw Error('Carnet invalide.');for(const s of Object.values(p.seen))if(!s.stats||!Number.isFinite(s.paid))throw Error('Historique invalide.');if(cp&&(![4,5,6,7,8].includes(cp.version)||!Number.isInteger(cp.stage)||cp.stage<0||cp.stage>4||!Number.isInteger(cp.wave)||cp.wave<1||cp.wave>5||!cp.player||!cp.upgrades||!Array.isArray(cp.schedule)))throw Error('Point de reprise invalide.');const statMap=o=>o&&typeof o==='object'&&!Array.isArray(o)&&Object.values(o).every(n=>Number.isFinite(n)&&n>=0);if(!statMap(p.lifetime)||!Array.isArray(p.weeks)||p.weeks.some(w=>typeof w!=='string')||p.activeDates.some(d=>typeof d!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(d))||p.achievements.some(id=>!achievementRules[id])||typeof p.tutorialDone!=='boolean'||p.trainingDone!==undefined&&typeof p.trainingDone!=='boolean'||p.dodgeGuideDone!==undefined&&typeof p.dodgeGuideDone!=='boolean'||!Number.isFinite(p.streak)||p.streak<0)throw Error('Profil invalide.');for(const d of Object.values(p.days))if(!statMap(d.stats)||d.claimed.some(id=>!contracts.some(c=>c.id===id)))throw Error('Contrats invalides.');for(const d of Object.values(l.days))if(!statMap(d.stats)||d.rankedUsed>3||d.dailyUsed>1)throw Error('Défis invalides.');for(const d of Object.values(p.seen))if(!statMap(d.stats)||typeof d.done!=='boolean')throw Error('Vol invalide.');for(const r of p.recent)if(!r||typeof r.id!=='string'||typeof r.day!=='string'||typeof r.world!=='string'||typeof r.cause!=='string'||!statMap(r.stats)||!Number.isFinite(r.score))throw Error('Journal invalide.');for(const r of p.recent)if(r.comment!==undefined&&(typeof r.comment!=='string'||r.comment.length>1000))throw Error('Commentaire invalide.');for(const r of Object.values(l.runs))if(!r||typeof r.id!=='string'||!['ranked','daily'].includes(r.mode)||typeof r.day!=='string'||!statMap(r.stats)||!Number.isFinite(r.score)||typeof r.finished!=='boolean'||!Array.isArray(r.credited))throw Error('Essai local invalide.');if(cp?.journey&&(!statMap(cp.journey.stats)||typeof cp.journey.id!=='string'||!['free','ranked','daily'].includes(cp.journey.mode)))throw Error('Progression du vol invalide.');const settings=b.saves['minuit-settings'];if(settings&&(!settings.keys||!['easy','normal','hard'].includes(settings.difficulty)||settings.touchLayout!==undefined&&!['standard','left','right'].includes(settings.touchLayout)))throw Error('Réglages invalides.');const scores=b.saves['minuit-v2-scores'];if(scores&&(!Array.isArray(scores)||scores.some(r=>!r||!Number.isFinite(r.score)||r.score<0||typeof r.name!=='string'||!['easy','normal','hard','ranked','daily','world2-easy','world2-normal','world2-hard'].includes(r.category))))throw Error('Records invalides.');const high=b.saves['minuit-highscores'];if(high&&!statMap(high))throw Error('HI-SCORE invalide.');if(settings&&(typeof settings.name!=='string'||Object.values(settings.keys).some(k=>typeof k!=='string')))throw Error('Touches invalides.');if(cp&&(!Number.isFinite(cp.score)||!Number.isFinite(cp.lives)||!Number.isFinite(cp.gameTime)||!Number.isFinite(cp.diff)||!Number.isFinite(cp.player.x)||!Number.isFinite(cp.player.y)))throw Error('Point de reprise corrompu.');if(cp?.sweets&&(!Array.isArray(cp.sweets)||cp.sweets.length>20||cp.sweets.some(d=>!d||d.kind!=='sweet'||!['xp','points','shield'].includes(d.sweetType)||!Number.isFinite(d.x)||!Number.isFinite(d.y)||!Number.isFinite(d.xp)||d.xp<0||d.xp>1000||!Number.isFinite(d.points)||d.points<0||d.points>50000)))throw Error('Bonbons de sauvegarde invalides.');window.Arsenal?.validateSave?.(b);window.Adventure?.validateSave?.(b);window.Nemesis?.validateSave?.(b);window.Campaign?.validateSave?.(b);return b}
-async function importSave(file,status){
+async function importSave(file,status,options={}){
  try{
   if(!file)return false;if(file.size>2*1024*1024)throw Error('Fichier trop volumineux (2 Mo maximum).');
-  const b=validate(JSON.parse(await file.text()));if(!confirm('Remplacer ta progression locale par cette sauvegarde ? Une copie de secours sera conservée dans ce navigateur.'))return false;
+  const b=validate(JSON.parse(await file.text()));
+  // La restauration automatique du cloud sur un appareil sans progression locale
+  // ne demande pas de confirmation ; une copie de secours reste toujours conservée.
+  if(!options?.skipConfirm&&!confirm('Remplacer ta progression locale par cette sauvegarde ? Une copie de secours sera conservée dans ce navigateur.'))return false;
   const previous={};for(const k of exportKeys)previous[k]=localStorage.getItem(k);localStorage.setItem('minuit-import-rollback',JSON.stringify(previous));window.MinuitImporting=true;
   try{for(const k of exportKeys){if(b.saves[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,JSON.stringify(b.saves[k]))}}catch(e){for(const k of exportKeys){if(previous[k]==null)localStorage.removeItem(k);else localStorage.setItem(k,previous[k])}window.MinuitImporting=false;throw Error('Stockage insuffisant. Import annulé.')}
   location.reload();return true;
@@ -1179,7 +1182,7 @@ css.textContent+=`
 }
 `;
 document.head.appendChild(css);document.querySelector('.sidebar').insertAdjacentHTML('afterbegin','<section class="panel" id="journeyPanel"></section>');document.querySelector('.arena').insertAdjacentHTML('beforeend','<div id="journeyTutor" class="journey-tutor hidden"></div>');
-window.Journey={contractHTML,menu,archives,begin,event,tick,beforeEnd,finish,abandon,snapshot,restore,canResume,completeDodgeGuide,filter,spellColor,decorate,bundle,exportSave,importSave,validate,saveProgress:write,grantDailyReward,isEarned:earned,collectionArt:grimoireCollectionArt,dailyCosmetics:()=>items.filter(giftEligible),get state(){return j},get run(){return run},items,masteryRules};
+window.Journey={contractHTML,menu,archives,begin,event,tick,beforeEnd,finish,abandon,snapshot,restore,canResume,completeDodgeGuide,filter,spellColor,decorate,bundle,exportSave,importSave,validate,saveProgress:write,grantDailyReward,isEarned:earned,collectionArt:grimoireCollectionArt,dailyCosmetics:()=>items.filter(giftEligible),get state(){return j},get run(){return run},set run(value){run=value},items,masteryRules};
 window.addEventListener('pagehide',write);renderPanel();menu();
 })();
 </script><script>/* Le terrain et ses commandes tiennent dans la fenêtre ; les infos défilent à part. */
@@ -2451,6 +2454,18 @@ const confirmationUrl=enabled?url+'/functions/v1/email-confirmation':'';
 const SESSION_KEY='minuit-supabase-session-v1';
 const AUTO_KEY='minuit-supabase-auto-v1';
 const INVITE_KEY='minuit-team-invite-v1';
+/* Horodatage local de la dernière modification de la progression, et état de la
+ * dernière synchronisation réussie (envoi ou restauration). Ils permettent de
+ * retrouver automatiquement la sauvegarde cloud sur un nouvel appareil et
+ * d’éviter d’écraser une sauvegarde plus récente venue d’un autre appareil. */
+const TOUCH_KEY='minuit-cloud-touched-v1';
+const SYNC_KEY='minuit-cloud-sync-v1';
+/* Vols classés/activité dont l’envoi à la team a échoué (réseau, délai dépassé) :
+ * ils sont conservés ici puis renvoyés automatiquement, sans double comptage
+ * grâce au run_id unique côté serveur. */
+const PENDING_KEY='minuit-team-pending-v1';
+const PENDING_MAX_AGE=3*86400000;
+const PENDING_MAX_ITEMS=30;
 const GAME_VERSION='2026.10.26-10';
 const EMPTY_TEAM=()=>({team:null,scores:[]});
 
@@ -2475,6 +2490,8 @@ let teamStatsEpoch=0;
 let teamHistoryEpoch=0;
 let pendingTeamCode='';
 let teamInviteRecipient='';
+let reconciling=null;
+let flushingPending=false;
 try{
  const fromUrl=normalizeTeamCode(new URLSearchParams(location.search).get('team'));
  let value=fromUrl;
@@ -2506,6 +2523,52 @@ function setAuto(value){
   if(auto&&session)localStorage.setItem(AUTO_KEY,session.user.id);
   else localStorage.removeItem(AUTO_KEY);
  }catch{}
+}
+function readTime(key){
+ try{const value=Number(localStorage.getItem(key));return Number.isFinite(value)&&value>0?value:0}catch{return 0}
+}
+function markLocalChange(){
+ try{localStorage.setItem(TOUCH_KEY,String(Date.now()))}catch{}
+}
+function readSyncState(){
+ try{
+  const value=JSON.parse(localStorage.getItem(SYNC_KEY)||'null');
+  if(value&&typeof value==='object'&&Number.isFinite(value.at))return{at:value.at,stamp:String(value.stamp||''),userId:String(value.userId||'')};
+ }catch{}
+ return null;
+}
+function recordSyncState(stamp){
+ try{localStorage.setItem(SYNC_KEY,JSON.stringify({at:Date.now(),stamp:String(stamp||''),userId:session?.user?.id||''}))}catch{}
+}
+function clearSyncState(){
+ try{localStorage.removeItem(SYNC_KEY);localStorage.removeItem(TOUCH_KEY)}catch{}
+}
+/* Un envoi réussi ou une restauration aligne le local sur le cloud : on efface
+ * le marqueur de modification locale pour ne pas re-déclencher un envoi inutile. */
+function alignLocalToCloud(stamp){
+ recordSyncState(stamp);
+ try{localStorage.removeItem(TOUCH_KEY)}catch{}
+}
+function cloudRowStamp(row){return String(row?.updated_at||row?.client_updated_at||'')}
+async function fetchCloudSave(){
+ const rows=await request('/rest/v1/game_saves?select=payload,client_updated_at,updated_at&limit=1');
+ return Array.isArray(rows)&&rows[0]&&rows[0].payload?rows[0]:null;
+}
+function localHasProgress(){
+ try{
+  const j=window.Journey?.state;
+  if(j&&(Number(j.xp)>0||j.trainingDone||j.tutorialDone||(Array.isArray(j.recent)&&j.recent.length)||(Array.isArray(j.activeDates)&&j.activeDates.length)||Object.keys(j.seen||{}).length))return true;
+  const high=JSON.parse(localStorage.getItem('minuit-highscores')||'null');
+  if(high&&typeof high==='object'&&Object.values(high).some(value=>Number(value)>0))return true;
+  const league=JSON.parse(localStorage.getItem('minuit-local-league-v1')||'null');
+  if(league&&typeof league==='object'&&Object.keys(league.days||{}).length)return true;
+  const scores=JSON.parse(localStorage.getItem('minuit-v2-scores')||'null');
+  if(Array.isArray(scores)&&scores.length)return true;
+ }catch{}
+ return false;
+}
+function inActiveFlight(){
+ try{return !!(window.Journey?.run||window.LocalLeague?.current)}catch{return false}
 }
 function status(text,error=false){
  const element=document.getElementById('cloudStatus');
@@ -2656,7 +2719,11 @@ async function authenticatePseudo(signup){
    const joined=await joinPendingTeam(body.username);
    if(joined)returnHomeAfterInvite(signup);
   }
-  notifyAccount('account-connected');
+  // Retrouve automatiquement la sauvegarde cloud (entraînement, scores, team)
+  // au lieu de laisser l’appareil sur un profil vierge.
+  const outcome=await reconcileCloud();
+  if(outcome!=='restored')notifyAccount('account-connected');
+  flushPendingTeamScores();
  }catch(error){status(pseudoErrorMessage(error),true)}
  finally{busy=false}
 }
@@ -2670,8 +2737,10 @@ async function authenticate(signup){
   const data=await request(signup?'/auth/v1/signup'+redirect:'/auth/v1/token?grant_type=password',{method:'POST',auth:false,body});
   if(setSession(data)){
    renderPanel();
-   status('Compte connecté. La première synchronisation se fait manuellement.');
-   notifyAccount('account-connected');
+   status('Compte connecté. Synchronisation de la sauvegarde…');
+   const outcome=await reconcileCloud();
+   if(outcome!=='restored')notifyAccount('account-connected');
+   flushPendingTeamScores();
   }else status('Compte créé. Ouvre le lien reçu, puis reviens ici te connecter.');
  }catch(error){
   const message=/email.*not.*confirmed/i.test(error.message)?'Adresse pas encore confirmée. Ouvre le lien reçu ou choisis « Renvoyer la confirmation ».':error.message;
@@ -2705,6 +2774,118 @@ async function logout(){
  }
 }
 
+function cloudDateLabel(row){
+ const value=Date.parse(row?.client_updated_at||row?.updated_at||'');
+ return Number.isFinite(value)?new Date(value).toLocaleString('fr-FR',{dateStyle:'short',timeStyle:'short'}):'date inconnue';
+}
+function armSyncTimer(){
+ if(timer)return;
+ const delay=Math.max(5000,30000-(Date.now()-lastSync));
+ timer=setTimeout(()=>{timer=null;syncNow(true)},delay);
+}
+/* Envoi brut de la sauvegarde locale, puis alignement de l’état de synchro. */
+async function pushSave(){
+ bundling=true;
+ let payload;
+ try{payload=Journey.bundle()}finally{bundling=false}
+ const rows=await request('/rest/v1/game_saves?on_conflict=user_id',{
+  method:'POST',
+  body:{user_id:session.user.id,payload,client_updated_at:new Date().toISOString()},
+  headers:{Prefer:'resolution=merge-duplicates,return=representation'}
+ });
+ let stamp=Array.isArray(rows)&&rows[0]?cloudRowStamp(rows[0]):'';
+ if(!stamp){const row=await fetchCloudSave().catch(()=>null);stamp=cloudRowStamp(row)}
+ alignLocalToCloud(stamp);
+ lastSync=Date.now();
+ setAuto(true);
+ return stamp;
+}
+/* Restauration d’une ligne cloud. L’état de synchro est aligné avant l’import,
+ * car Journey.importSave recharge la page en cas de succès. */
+async function restoreCloud(row,options={}){
+ const payload=row?.payload;
+ if(!payload)throw Error('Aucune sauvegarde cloud pour ce compte.');
+ Journey.validate(payload);
+ const stamp=cloudRowStamp(row);
+ let prevSync=null,prevTouch=null;
+ try{prevSync=localStorage.getItem(SYNC_KEY);prevTouch=localStorage.getItem(TOUCH_KEY)}catch{}
+ const savedAuto=auto;
+ alignLocalToCloud(stamp);
+ setAuto(true);
+ const file=new File([JSON.stringify(payload)],'sauvegarde-en-ligne.json',{type:'application/json'});
+ const statusNode={textContent:''};
+ const restored=await Journey.importSave(file,statusNode,options.skipConfirm?{skipConfirm:true}:undefined);
+ if(!restored){
+  setAuto(savedAuto);
+  try{
+   if(prevSync==null)localStorage.removeItem(SYNC_KEY);else localStorage.setItem(SYNC_KEY,prevSync);
+   if(prevTouch==null)localStorage.removeItem(TOUCH_KEY);else localStorage.setItem(TOUCH_KEY,prevTouch);
+  }catch{}
+  status(statusNode.textContent||'Restauration annulée : ta progression locale est inchangée.',!!statusNode.textContent);
+ }
+ return restored;
+}
+/* Décide quoi faire entre le local et le cloud à la connexion / au démarrage.
+ * options.automatic=true (synchro périodique) ne demande jamais de confirmation
+ * et n’écrase pas un cloud divergent : il diffère la décision à l’utilisateur.
+ * Renvoie 'restored', 'pushed', 'enabled', 'deferred', 'error' ou 'noop'. */
+async function reconcileCloud(options={}){
+ if(!enabled||!session)return 'noop';
+ if(reconciling)return reconciling;
+ const automatic=!!options.automatic;
+ reconciling=(async()=>{
+  try{
+   await ensureSession();
+   const row=await fetchCloudSave();
+   const sync=readSyncState();
+   const sameAccount=!!sync&&sync.userId===(session?.user?.id||'');
+   const localDirty=sameAccount?readTime(TOUCH_KEY)>sync.at:localHasProgress();
+   if(!row){
+    if(localHasProgress()){
+     await pushSave();
+     status('Sauvegarde cloud créée · synchronisation automatique activée.');
+     return 'pushed';
+    }
+    setAuto(true);
+    status('Compte connecté · synchronisation automatique activée.');
+    return 'enabled';
+   }
+   const cloudDirty=!sameAccount||cloudRowStamp(row)!==sync.stamp;
+   if(cloudDirty&&!localDirty){
+    // Le cloud a des changements que cet appareil n’a pas : rien à perdre, on récupère.
+    if(inActiveFlight())return 'deferred';
+    status('Récupération de ta sauvegarde cloud…');
+    return await restoreCloud(row,{skipConfirm:true})?'restored':'noop';
+   }
+   if(cloudDirty&&localDirty){
+    // Les deux côtés ont changé depuis la dernière synchro : le joueur choisit.
+    // En synchro automatique, on ne décide jamais à sa place : on diffère.
+    if(inActiveFlight()||automatic)return 'deferred';
+    const takeCloud=confirm('Une sauvegarde cloud modifiée sur un autre appareil existe ('+cloudDateLabel(row)+').\n\nOK : récupérer la sauvegarde cloud.\nAnnuler : garder la progression de cet appareil et l’envoyer.');
+    if(takeCloud){
+     status('Récupération de ta sauvegarde cloud…');
+     return await restoreCloud(row,{skipConfirm:true})?'restored':'noop';
+    }
+    await pushSave();
+    status('Progression de cet appareil envoyée · synchronisation automatique activée.');
+    return 'pushed';
+   }
+   // Le cloud n’a pas changé depuis la dernière synchro : le local fait foi.
+   setAuto(true);
+   if(localDirty){
+    await pushSave();
+    status('Sauvegarde cloud envoyée · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    return 'pushed';
+   }
+   armSyncTimer();
+   return 'enabled';
+  }catch(error){
+   status('Cloud indisponible : '+error.message+' La copie locale est conservée.',true);
+   return 'error';
+  }finally{reconciling=null}
+ })();
+ return reconciling;
+}
 async function syncNow(automatic=false){
  if(!enabled||!session||syncing||(automatic&&!auto)){if(syncing)pending=true;return false}
  syncing=true;
@@ -2712,16 +2893,17 @@ async function syncNow(automatic=false){
  status('Envoi de la sauvegarde…');
  try{
   await ensureSession();
-  bundling=true;
-  let payload;
-  try{payload=Journey.bundle()}finally{bundling=false}
-  await request('/rest/v1/game_saves?on_conflict=user_id',{
-   method:'POST',
-   body:{user_id:session.user.id,payload,client_updated_at:new Date().toISOString()},
-   headers:{Prefer:'resolution=merge-duplicates,return=minimal'}
-  });
-  lastSync=Date.now();
-  setAuto(true);
+  // Protection contre l’écrasement : si le cloud a changé depuis notre dernière
+  // synchro, on réconcilie au lieu de le remplacer aveuglément.
+  let row=null;
+  try{row=await fetchCloudSave()}catch{row=null}
+  const sync=readSyncState();
+  const sameAccount=!!sync&&sync.userId===(session?.user?.id||'');
+  if(row&&(!sameAccount||cloudRowStamp(row)!==sync.stamp)){
+   const outcome=await reconcileCloud({automatic});
+   return outcome==='pushed'||outcome==='restored';
+  }
+  await pushSave();
   status('Sauvegarde cloud envoyée · '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
   return true;
  }catch(error){
@@ -2733,27 +2915,22 @@ async function syncNow(automatic=false){
  }
 }
 function schedule(){
- if(!enabled||!session||!auto||bundling)return;
+ if(bundling)return;
+ markLocalChange();
+ if(!enabled||!session||!auto)return;
  if(syncing){pending=true;return}
- if(timer)return;
- const delay=Math.max(5000,30000-(Date.now()-lastSync));
- timer=setTimeout(()=>{timer=null;syncNow(true)},delay);
+ armSyncTimer();
 }
 async function restore(){
  if(!session||busy)return;
  busy=true;
  if(timer){clearTimeout(timer);timer=null}
- setAuto(false);
  status('Lecture de la sauvegarde cloud…');
  try{
-  const rows=await request('/rest/v1/game_saves?select=payload,updated_at&limit=1');
-  if(!Array.isArray(rows)||!rows[0]?.payload)throw Error('Aucune sauvegarde cloud pour ce compte.');
-  Journey.validate(rows[0].payload);
+  const row=await fetchCloudSave();
+  if(!row)throw Error('Aucune sauvegarde cloud pour ce compte.');
   status('Sauvegarde vérifiée. Confirmation de la restauration…');
-  const file=new File([JSON.stringify(rows[0].payload)],'sauvegarde-en-ligne.json',{type:'application/json'});
-  const statusNode={textContent:''};
-  const restored=await Journey.importSave(file,statusNode);
-  if(!restored&&document.getElementById('cloudStatus'))status(statusNode.textContent||'Restauration annulée : ta progression locale est inchangée.',!!statusNode.textContent);
+  await restoreCloud(row,{skipConfirm:false});
  }catch(error){status('Restauration impossible : '+error.message,true)}finally{busy=false}
 }
 async function submitFeedback(value){
@@ -3163,10 +3340,14 @@ function renderTeam(){
   const adminRules=info.isAdmin?`<details class="team-admin-panel"${info.rulesConfigured?'':' open'}><summary>⚙ Règles et périodes administrateur</summary>${teamRuleFields('teamEdit',info)}<div class="team-rule-note"><b>Prolonger</b> conserve la période et tous ses highscores. <b>Lancer une nouvelle période</b> archive le podium et le tableau complet, puis remet les highscores à zéro. Les membres, les inscriptions et les statistiques d’activité sont conservés. Si tu ne changes pas l’ancienne date de début, la nouvelle période commence maintenant.</div><div class="cloud-actions"><button class="secondary" id="teamSaveRules">Prolonger / enregistrer cette période</button><button class="secondary" id="teamNewPeriod">Archiver et lancer une nouvelle période</button></div></details>`:'';
   const share=teamShareLinks(info),mobileShare=share.link?`<div class="team-mobile-share"><span>PARTAGER L’INVITATION</span><div class="cloud-actions"><a class="secondary" id="teamWhatsApp" href="${share.whatsapp}" target="_blank" rel="noopener">WhatsApp</a><a class="secondary" id="teamMessenger" href="${share.messenger}" target="_blank" rel="noopener">Messenger</a></div></div>`:'';
   const emailShare=`<div class="team-email-share"><span>INVITATION PAR E-MAIL</span><label for="teamInviteEmail">Adresse du destinataire</label><div class="team-email-row"><input id="teamInviteEmail" type="email" inputmode="email" autocomplete="off" spellcheck="false" maxlength="180" placeholder="joueur@example.com" value="${safeText(teamInviteRecipient)}"><a class="secondary" id="teamEmailInvite" href="${safeText(share.email)}">Inviter par e-mail</a></div><small>Le destinataire, le code et le lien sont préremplis. Tu confirmes ensuite l’envoi dans ta messagerie.</small></div>`;
-  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${historyAccess}${campaignReset}${creatorTest}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Période classée <b>${Math.max(1,Number(info.periodNumber)||1)}</b></span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div>${teamPodiumHTML(teamData.scores)}<div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
+  const pendingCount=pendingScoreCount();
+  const pendingNotice=pendingCount?`<div class="cloud-status cloud-error" id="teamPendingNote" role="status">${pendingCount} vol${pendingCount>1?'s':''} en attente d’envoi à la team (réseau indisponible au moment du vol). <button class="secondary" id="teamRetryPending" type="button">Renvoyer maintenant</button></div>`:'';
+  card.innerHTML=`<h3>🏆 TEAM · ${safeText(info.name||'Sans nom')}${info.isAdmin?'<small class="team-role">ADMIN</small>':''}</h3><div class="team-code-line"><span>CODE À PARTAGER</span><button class="team-code" id="teamCopyCode" title="Copier le code">${safeText(formatTeamCode(info.code))}</button></div>${statsAccess}${historyAccess}${campaignReset}${creatorTest}${mobileShare}${emailShare}<div class="team-summary"><span><b>${teamNumber(info.memberCount)}</b> membre${Number(info.memberCount)>1?'s':''}</span><span>Période classée <b>${Math.max(1,Number(info.periodNumber)||1)}</b></span><span>Total des highscores <b>${teamNumber(info.totalScore)}</b></span></div><div class="team-rules-summary">${teamRulesSummary(info)}</div>${pendingNotice}${teamPodiumHTML(teamData.scores)}<div class="team-leaderboard" aria-label="Highscores des membres">${rows||'<p>Aucun membre pour le moment.</p>'}</div>${adminRules}<div class="cloud-actions"><button class="secondary" id="teamRefresh">Actualiser</button><button class="secondary" id="teamLeave">Quitter la team</button>${info.isAdmin?'<button class="secondary team-danger" id="teamDelete">Supprimer la team</button>':''}</div><div class="cloud-actions"><button class="secondary board-global-btn" id="teamBoardOpen">Voir le classement de la team</button></div><div class="cloud-status" id="teamStatus" role="status">${info.rulesConfigured?(periodNotice?safeText(periodNotice):'Le meilleur score est conservé ; chaque partie classée comptabilisée utilise une partie du jour.'):'Les scores restent suspendus jusqu’à la configuration des règles par l’administrateur.'}</div>`;
   document.getElementById('teamRefresh').onclick=()=>loadTeam(true);document.getElementById('teamBoardOpen').onclick=openTeamBoard;document.getElementById('teamHistoryOpen').onclick=openTeamHistory;
   document.getElementById('teamLeave').onclick=leaveTeam;
   document.getElementById('teamCopyCode').onclick=copyTeamCode;
+  const retryPending=document.getElementById('teamRetryPending');
+  if(retryPending)retryPending.onclick=async()=>{retryPending.disabled=true;teamStatus('Renvoi des vols en attente…');const sent=await flushPendingTeamScores();await loadTeam(true);teamStatus(sent?sent+' vol'+(sent>1?'s':'')+' renvoyé'+(sent>1?'s':'')+' à la team.':'Rien à renvoyer pour le moment.');renderTeam()};
   const inviteInput=document.getElementById('teamInviteEmail'),inviteLink=document.getElementById('teamEmailInvite');
   const updateEmailInvitation=()=>{
    teamInviteRecipient=String(inviteInput.value||'').trim();
@@ -3322,13 +3503,13 @@ async function openTeamStats(){
   if(epoch===teamStatsEpoch&&$('teamStatsRefresh'))$('teamStatsRefresh').disabled=false;
  }
 }
-async function finishTeamScore(value){if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result,skipped:!!result?.skipped}}
-async function submitTeamScore(value){
- if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};
- if(!enabled||!session)return{skipped:true};
- if(!teamLoaded)await loadTeam(false);
- if(!teamData.team)return{skipped:true};
- const body={
+/* Rejets « règles » : réessayer ne changerait rien, on ne les met pas en file.
+ * Tout le reste (réseau, délai dépassé, serveur, session à renouveler) est
+ * conservé pour un renvoi automatique ultérieur. */
+const PERMANENT_TEAM_ERRORS=['TEAM_RULES_REQUIRED','TEAM_PERIOD_NOT_STARTED','TEAM_PERIOD_ENDED','TEAM_DAILY_LIMIT','NOT_IN_TEAM','MODE_INVALID','SCORE_INVALID','DIFFICULTY_INVALID','PROGRESS_INVALID','RUN_ID_INVALID','ALREADY_IN_TEAM'];
+function isPermanentTeamError(message){return PERMANENT_TEAM_ERRORS.some(code=>String(message||'').includes(code))}
+function teamScoreBody(value){
+ return{
   p_score:Math.max(0,Math.min(100000000,Math.floor(value.score)||0)),
   p_mode:['free','ranked'].includes(value.mode)?value.mode:'free',
   p_difficulty:['easy','normal','hard'].includes(value.difficulty)?value.difficulty:'normal',
@@ -3336,14 +3517,81 @@ async function submitTeamScore(value){
   p_wave:Math.max(1,Math.min(5,Math.floor(value.wave)||1)),
   p_run_id:String(value.id||'').trim().slice(0,80)
  };
+}
+function readPendingScores(){
+ try{
+  const list=JSON.parse(localStorage.getItem(PENDING_KEY)||'[]');
+  if(!Array.isArray(list))return[];
+  const now=Date.now();
+  return list.filter(item=>item&&typeof item==='object'&&typeof item.id==='string'&&item.id&&Number.isFinite(item.queuedAt)&&now-item.queuedAt<PENDING_MAX_AGE);
+ }catch{return[]}
+}
+function writePendingScores(list){
+ try{localStorage.setItem(PENDING_KEY,JSON.stringify(list.slice(-PENDING_MAX_ITEMS)))}catch{}
+}
+function enqueuePendingScore(value){
+ const id=String(value.id||'').trim().slice(0,80);
+ if(!id)return;
+ const list=readPendingScores().filter(item=>item.id!==id);
+ list.push({id,score:Math.floor(value.score)||0,mode:value.mode,difficulty:value.difficulty,stage:value.stage,wave:value.wave,queuedAt:Date.now()});
+ writePendingScores(list);
+}
+function removePendingScore(id){
+ const list=readPendingScores().filter(item=>item.id!==String(id||'').trim().slice(0,80));
+ writePendingScores(list);
+}
+function pendingScoreCount(){return readPendingScores().length}
+/* Renvoie les vols en attente. Idempotent côté serveur grâce au run_id unique. */
+async function flushPendingTeamScores(){
+ if(!enabled||!session||flushingPending)return 0;
+ const list=readPendingScores();
+ if(!list.length)return 0;
+ flushingPending=true;
+ let sent=0;
+ try{
+  await ensureSession();
+  for(const item of list){
+   try{
+    await request('/rest/v1/rpc/minuit_submit_team_score',{method:'POST',body:teamScoreBody(item)});
+    removePendingScore(item.id);
+    sent++;
+   }catch(error){
+    const message=String(error?.message||'');
+    if(isPermanentTeamError(message))removePendingScore(item.id);
+    // Erreur transitoire : on garde l’entrée pour le prochain essai.
+   }
+  }
+  if(sent){teamLoaded=false;loadTeam(false).catch(()=>{})}
+ }catch{}finally{flushingPending=false}
+ return sent;
+}
+async function finishTeamScore(value){if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};if(!enabled||!session)return{skipped:true};const result=await submitTeamScore(value);await loadTeam(true);return{team:teamData.team,scores:teamData.scores,result,skipped:!!result?.skipped}}
+async function submitTeamScore(value){
+ if(!['ranked','free'].includes(value?.mode))return{skipped:true,reason:'untracked'};
+ if(!enabled||!session)return{skipped:true};
+ if(!teamLoaded)await loadTeam(false);
+ // Ne sauter que si l’absence de team est confirmée. Si le chargement de la team
+ // a échoué (réseau), on tente quand même l’envoi : le RPC répondra NOT_IN_TEAM
+ // le cas échéant, au lieu de perdre silencieusement le score classé.
+ if(teamLoaded&&!teamData.team)return{skipped:true,reason:'no-team'};
+ const body=teamScoreBody(value);
  let result;
  try{result=await request('/rest/v1/rpc/minuit_submit_team_score',{method:'POST',body})}
  catch(error){
-  if(value.mode==='free'&&String(error?.message||'').includes('MODE_INVALID'))return{skipped:true,reason:'activity-unavailable'};
-  if(String(error?.message||'').includes('NOT_IN_TEAM')){teamData=EMPTY_TEAM();teamLoaded=false}
+  const message=String(error?.message||'');
+  if(value.mode==='free'&&message.includes('MODE_INVALID'))return{skipped:true,reason:'activity-unavailable'};
+  if(message.includes('NOT_IN_TEAM')){teamData=EMPTY_TEAM();teamLoaded=false;return{skipped:true,reason:'no-team'}}
+  if(!isPermanentTeamError(message)){
+   enqueuePendingScore(value);
+   const wrapped=Error(teamErrorMessage(error));
+   wrapped.queued=true;
+   throw wrapped;
+  }
   throw Error(teamErrorMessage(error));
  }
  teamLoaded=false;
+ removePendingScore(value.id);
+ flushPendingTeamScores();
  return result||{bestScore:body.p_score,improved:false,mode:body.p_mode,activityOnly:body.p_mode==='free'};
 }
 function validWeeklySprintState(value){
@@ -3596,7 +3844,7 @@ function renderPanel(target=mount){
   return;
  }
  const identity=session.user.displayName||session.user.email||'accès en ligne',identityLabel=session.user.displayName?'Pseudo':'Compte';
- mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>${identityLabel} : <b>${safeText(identity)}</b><br>Un emplacement cloud par accès ; le dernier envoi remplace le précédent.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée après chaque changement.':'Premier envoi manuel, puis synchronisation automatique.'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
+ mount.innerHTML=`<section class="cloud-card"><h3>☁ SAUVEGARDE EN LIGNE</h3><p>${identityLabel} : <b>${safeText(identity)}</b><br>Un emplacement cloud par accès, retrouvé automatiquement à la connexion sur chaque appareil. Envoi auto après chaque changement ; une sauvegarde plus récente venue d’un autre appareil n’est jamais écrasée sans confirmation.</p><div class="cloud-actions"><button class="secondary" id="cloudSync">Envoyer ma progression</button><button class="secondary" id="cloudRestore">Récupérer le cloud</button><button class="secondary" id="cloudLogout">Déconnecter</button></div><div class="cloud-status" id="cloudStatus" role="status">${auto?'Synchronisation automatique activée.':'Synchronisation automatique en cours d’activation…'}</div></section><section class="cloud-card team-card" id="teamCard"></section>`;
  document.getElementById('cloudSync').onclick=()=>syncNow();
  document.getElementById('cloudRestore').onclick=restore;
  document.getElementById('cloudLogout').onclick=logout;
@@ -3780,6 +4028,8 @@ window.MinuitCloud={
  openTeamStats,
  renderPanel,
  refreshTeam:()=>loadTeam(true),
+ reconcile:options=>reconcileCloud(options),
+ retryTeamScores:()=>flushPendingTeamScores(),
  get configured(){return enabled},
  get connected(){return!!session},
  get teamLoaded(){return teamLoaded},
@@ -3787,10 +4037,25 @@ window.MinuitCloud={
  get isTeamAdmin(){return!!session&&!!teamData.team?.isAdmin},
  get rankedNotice(){return teamPeriodNotice(teamData.team)},
  get rankedStatus(){return teamPeriodStatus(teamData.team)},
+ get pendingTeamScores(){return pendingScoreCount()},
  get user(){return session?.user||null}
 };
-if(enabled&&session)window.useAccountPseudo?.();
-if(enabled&&session&&auto)schedule();
+if(enabled&&session){
+ window.useAccountPseudo?.();
+ // Au démarrage, ne réconcilie le cloud que si la synchro était déjà activée sur
+ // cet appareil (la récupération sur un nouvel appareil se fait à la connexion).
+ // Cela évite toute requête cloud intempestive sur une session simplement reprise.
+ if(auto){
+  reconcileCloud().then(outcome=>{if(outcome!=='restored')flushPendingTeamScores()}).catch(()=>{});
+ }else{
+  flushPendingTeamScores();
+ }
+}
+if(enabled){
+ window.addEventListener('online',()=>{if(session)flushPendingTeamScores()});
+ // Filet de sécurité si le réseau revient sans événement « online ».
+ setInterval(()=>{if(session)flushPendingTeamScores()},60000);
+}
 if(enabled&&pendingTeamCode)setTimeout(()=>{document.getElementById('archives')?.click()},0);
 })();
 </script><script>/* Réglages remaniés : les contrôles d’origine sont déplacés, jamais recréés. */
@@ -7536,6 +7801,2404 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     createSnapshotFor
   });
 });
+</script><script>//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+var qrcode = function() {
+
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+
+    var _this = {};
+
+    var makeImpl = function(test, maskPattern) {
+
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+
+      mapData(_dataCache, maskPattern);
+    };
+
+    var setupPositionProbePattern = function(row, col) {
+
+      for (var r = -1; r <= 7; r += 1) {
+
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+
+        for (var c = -1; c <= 7; c += 1) {
+
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+
+    var getBestMaskPattern = function() {
+
+      var minLostPoint = 0;
+      var pattern = 0;
+
+      for (var i = 0; i < 8; i += 1) {
+
+        makeImpl(true, i);
+
+        var lostPoint = QRUtil.getLostPoint(_this);
+
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+
+      return pattern;
+    };
+
+    var setupTimingPattern = function() {
+
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+
+    var setupPositionAdjustPattern = function() {
+
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+
+      for (var i = 0; i < pos.length; i += 1) {
+
+        for (var j = 0; j < pos.length; j += 1) {
+
+          var row = pos[i];
+          var col = pos[j];
+
+          if (_modules[row][col] != null) {
+            continue;
+          }
+
+          for (var r = -2; r <= 2; r += 1) {
+
+            for (var c = -2; c <= 2; c += 1) {
+
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    var setupTypeNumber = function(test) {
+
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+
+    var setupTypeInfo = function(test, maskPattern) {
+
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+
+    var mapData = function(data, maskPattern) {
+
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+
+        if (col == 6) col -= 1;
+
+        while (true) {
+
+          for (var c = 0; c < 2; c += 1) {
+
+            if (_modules[row][col - c] == null) {
+
+              var dark = false;
+
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+
+              var mask = maskFunc(row, col - c);
+
+              if (mask) {
+                dark = !dark;
+              }
+
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+
+          row += inc;
+
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+
+    var createBytes = function(buffer, rsBlocks) {
+
+      var offset = 0;
+
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+
+        dcdata[r] = new Array(dcCount);
+
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+
+      var data = new Array(totalCodeCount);
+      var index = 0;
+
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      return data;
+    };
+
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+
+      var buffer = qrBitBuffer();
+
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+
+      // padding
+      while (true) {
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+
+      return createBytes(buffer, rsBlocks);
+    };
+
+    _this.addData = function(data, mode) {
+
+      mode = mode || 'Byte';
+
+      var newData = null;
+
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+
+        _typeNumber = typeNumber;
+      }
+
+      makeImpl(false, getBestMaskPattern() );
+    };
+
+    _this.createTableTag = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var qrHtml = '';
+
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+
+        qrHtml += '<tr>';
+
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+
+        qrHtml += '</tr>';
+      }
+
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+
+      return qrHtml;
+    };
+
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
+      qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+
+      return qrSvg;
+    };
+
+    _this.createDataURL = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+
+    // create conversion map.
+
+    var unicodeMap = function() {
+
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+
+      return unicodeMap;
+    }();
+
+    var unknownChar = '?'.charCodeAt(0);
+
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+
+  var QRUtil = function() {
+
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+
+    var _this = {};
+
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+
+    _this.getMaskFunction = function(maskPattern) {
+
+      switch (maskPattern) {
+
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+
+    _this.getLengthInBits = function(mode, type) {
+
+      if (1 <= type && type < 10) {
+
+        // 1 - 9
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 27) {
+
+        // 10 - 26
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 41) {
+
+        // 27 - 40
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else {
+        throw 'type:' + type;
+      }
+    };
+
+    _this.getLostPoint = function(qrcode) {
+
+      var moduleCount = qrcode.getModuleCount();
+
+      var lostPoint = 0;
+
+      // LEVEL1
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+
+          for (var r = -1; r <= 1; r += 1) {
+
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+
+            for (var c = -1; c <= 1; c += 1) {
+
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+
+              if (r == 0 && c == 0) {
+                continue;
+              }
+
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+
+      // LEVEL2
+
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+
+      // LEVEL3
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      // LEVEL4
+
+      var darkCount = 0;
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+
+      return lostPoint;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+
+  var QRMath = function() {
+
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+
+    var _this = {};
+
+    _this.glog = function(n) {
+
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+
+      return LOG_TABLE[n];
+    };
+
+    _this.gexp = function(n) {
+
+      while (n < 0) {
+        n += 255;
+      }
+
+      while (n >= 256) {
+        n -= 255;
+      }
+
+      return EXP_TABLE[n];
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+
+  function qrPolynomial(num, shift) {
+
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+
+    var _this = {};
+
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+
+    _this.getLength = function() {
+      return _num.length;
+    };
+
+    _this.multiply = function(e) {
+
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+
+      return qrPolynomial(num, 0);
+    };
+
+    _this.mod = function(e) {
+
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+
+  var QRRSBlock = function() {
+
+    var RS_BLOCK_TABLE = [
+
+      // L
+      // M
+      // Q
+      // H
+
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+
+    var _this = {};
+
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+
+      var length = rsBlock.length / 3;
+
+      var list = [];
+
+      for (var i = 0; i < length; i += 1) {
+
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+
+      return list;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+
+  var qrBitBuffer = function() {
+
+    var _buffer = [];
+    var _length = 0;
+
+    var _this = {};
+
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+
+    _this.putBit = function(bit) {
+
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+
+      _length += 1;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+
+  var qrNumber = function(data) {
+
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _data;
+
+      var i = 0;
+
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+
+  var qrAlphaNum = function(data) {
+
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var s = _data;
+
+      var i = 0;
+
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+
+    var getCode = function(c) {
+
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+
+  var qr8BitByte = function(data) {
+
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+
+  var qrKanji = function(data) {
+
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _bytes;
+
+      var i = 0;
+
+      while (i + 1 < data.length) {
+
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+
+        buffer.put(c, 13);
+
+        i += 2;
+      }
+
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+
+    return _this;
+  };
+
+  //=====================================================================
+  // GIF Support etc.
+  //
+
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+
+  var byteArrayOutputStream = function() {
+
+    var _bytes = [];
+
+    var _this = {};
+
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+
+  var base64EncodeOutputStream = function() {
+
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+
+    var _this = {};
+
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+
+    _this.writeByte = function(n) {
+
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+
+    _this.flush = function() {
+
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+
+    _this.toString = function() {
+      return _base64;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+
+  var base64DecodeInputStream = function(str) {
+
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+
+    var _this = {};
+
+    _this.read = function() {
+
+      while (_buflen < 8) {
+
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+
+        var c = _str.charAt(_pos);
+        _pos += 1;
+
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+
+  var gifImage = function(width, height) {
+
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+
+    var _this = {};
+
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+
+    _this.write = function(out) {
+
+      //---------------------------------
+      // GIF Signature
+
+      out.writeString('GIF87a');
+
+      //---------------------------------
+      // Screen Descriptor
+
+      out.writeShort(_width);
+      out.writeShort(_height);
+
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Global Color Map
+
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+
+      //---------------------------------
+      // Image Descriptor
+
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Local Color Map
+
+      //---------------------------------
+      // Raster Data
+
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+
+      out.writeByte(lzwMinCodeSize);
+
+      var offset = 0;
+
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+
+    var bitOutputStream = function(out) {
+
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+
+      var _this = {};
+
+      _this.write = function(data, length) {
+
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+
+      return _this;
+    };
+
+    var getLZWRaster = function(lzwMinCodeSize) {
+
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+
+      // Setup LZWTable
+      var table = lzwTable();
+
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+
+      // clear code
+      bitOut.write(clearCode, bitLength);
+
+      var dataIndex = 0;
+
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+
+      while (dataIndex < _data.length) {
+
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+
+        if (table.contains(s + c) ) {
+
+          s = s + c;
+
+        } else {
+
+          bitOut.write(table.indexOf(s), bitLength);
+
+          if (table.size() < 0xfff) {
+
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+
+            table.add(s + c);
+          }
+
+          s = c;
+        }
+      }
+
+      bitOut.write(table.indexOf(s), bitLength);
+
+      // end code
+      bitOut.write(endCode, bitLength);
+
+      bitOut.flush();
+
+      return byteOut.toByteArray();
+    };
+
+    var lzwTable = function() {
+
+      var _map = {};
+      var _size = 0;
+
+      var _this = {};
+
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+
+      _this.size = function() {
+        return _size;
+      };
+
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+
+      return _this;
+    };
+
+    return _this;
+  };
+
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+
+    var b = byteArrayOutputStream();
+    gif.write(b);
+
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+
+    return 'data:image/gif;base64,' + base64;
+  };
+
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+
+  return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
+}();
+
+(function (factory) {
+  if (typeof define === 'function' && define.amd) {
+      define([], factory);
+  } else if (typeof exports === 'object') {
+      module.exports = factory();
+  }
+}(function () {
+    return qrcode;
+}));
+</script><script>/* La Nuit aux Trousses — QR code d’invitation au Duel de la Nuit noire.
+   Génère un QR code 100 % local (aucun service externe, fonctionne hors-ligne
+   et dans l’édition autonome) à partir du lien d’invitation. S’appuie sur le
+   générateur MIT « qrcode-generator » (Kazuhiko Arase) embarqué dans qrcode.js.
+   Partagé entre le navigateur (window.NightDuelQR) et les tests Node (CommonJS). */
+(function(root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.NightDuelQR = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function() {
+  'use strict';
+
+  // Résout le générateur : global `qrcode` posé par qrcode.js dans le navigateur,
+  // ou require('./qrcode.js') côté Node. Résolution paresseuse (à l’appel).
+  function getFactory() {
+    if (typeof qrcode === 'function') return qrcode;
+    if (typeof require === 'function') {
+      try {
+        return require('./qrcode.js');
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function available() {
+    return Boolean(getFactory());
+  }
+
+  function escapeAttr(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
+    ));
+  }
+
+  // Construit la matrice du QR. `ecl` : niveau de correction L/M/Q/H (M par défaut).
+  // typeNumber 0 = taille automatique ajustée au contenu.
+  function matrix(text, opts = {}) {
+    const factory = getFactory();
+    if (!factory) throw new Error('Générateur QR indisponible.');
+    const value = String(text ?? '');
+    if (!value) throw new Error('Lien d’invitation vide.');
+    const qr = factory(0, opts.ecl || 'M');
+    qr.addData(value);
+    qr.make();
+    const size = qr.getModuleCount();
+    return { size, isDark: (r, c) => qr.isDark(r, c) };
+  }
+
+  // SVG vectoriel net (crispEdges), zone de silence de `margin` modules,
+  // fort contraste noir/blanc pour une lecture fiable par l’appareil photo.
+  function svg(text, opts = {}) {
+    const { size, isDark } = matrix(text, opts);
+    const margin = opts.margin == null ? 4 : opts.margin;
+    const dim = size + margin * 2;
+    const dark = opts.dark || '#000000';
+    const light = opts.light || '#ffffff';
+    const title = escapeAttr(opts.title || 'QR code d’invitation au duel');
+    let path = '';
+    for (let r = 0; r < size; r += 1) {
+      for (let c = 0; c < size; c += 1) {
+        if (isDark(r, c)) path += `M${c + margin} ${r + margin}h1v1h-1z`;
+      }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dim} ${dim}" ` +
+      `shape-rendering="crispEdges" role="img" aria-label="${title}" focusable="false">` +
+      `<title>${title}</title>` +
+      `<rect width="${dim}" height="${dim}" fill="${light}"/>` +
+      `<path d="${path}" fill="${dark}"/></svg>`;
+  }
+
+  // PNG téléchargeable (navigateur uniquement). Renvoie null si le canvas ou le
+  // générateur n’est pas disponible — l’appelant affiche alors un message doux.
+  function pngDataUrl(text, opts = {}) {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    let canvas;
+    try {
+      const { size, isDark } = matrix(text, opts);
+      const margin = opts.margin == null ? 4 : opts.margin;
+      const scale = opts.scale || 12;
+      const dim = (size + margin * 2) * scale;
+      canvas = document.createElement('canvas');
+      canvas.width = dim;
+      canvas.height = dim;
+      const ctx = canvas.getContext && canvas.getContext('2d');
+      if (!ctx || typeof canvas.toDataURL !== 'function') return null;
+      ctx.fillStyle = opts.light || '#ffffff';
+      ctx.fillRect(0, 0, dim, dim);
+      ctx.fillStyle = opts.dark || '#000000';
+      for (let r = 0; r < size; r += 1) {
+        for (let c = 0; c < size; c += 1) {
+          if (isDark(r, c)) ctx.fillRect((c + margin) * scale, (r + margin) * scale, scale, scale);
+        }
+      }
+      return canvas.toDataURL('image/png');
+    } catch (_) {
+      return null;
+    }
+  }
+
+  return Object.freeze({ available, matrix, svg, pngDataUrl });
+});
 </script><script>/* La Nuit aux Trousses — Duel de la Nuit noire (1 contre 1 en temps réel).
    Simulation arbitrée par le client créateur, commandes seules côté invitée,
    snapshots filtrés sans coordonnées cachées, draft 3/10 indépendant de la campagne. */
@@ -7566,6 +10229,25 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
   let statusNotice = '';
   let statusError = false;
   let busy = false;
+
+  // Invitations dans l'application : file entrante (popup), invitations envoyées,
+  // et petit observateur qui interroge le serveur tant que le compte est connecté.
+  let incomingInvites = [];
+  let sentInvites = [];
+  let invitePollTimer = null;
+  let activeInvitePopup = null;
+  let inviteRespondBusy = false;
+  let inviteWatcherBound = false;
+  let createInvitePseudo = '';
+  let waitingInvitePseudo = '';
+  let teamInfo = null;
+  let teamPlayers = [];
+  let teamPlayersLoading = false;
+  let teamPlayersError = '';
+  let teamPlayersRequestId = 0;
+  const teamInviteBusyIds = new Set();
+  const dismissedInviteIds = new Set();
+  const INVITE_POLL_MS = 15000;
 
   let channel = null;
   let pollTimer = null;
@@ -7865,7 +10547,9 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       combatActive = false;
       hideTopHud();
       startPolling(2200);
-      renderScreen();
+      // Ne reconstruit pas l'écran à chaque sondage : préserve la saisie du pseudo
+      // et le QR déjà affichés. Le premier rendu (après création) passe ici.
+      if (!document.querySelector('#overlay .duel-share-card')) renderScreen();
       return;
     }
 
@@ -7985,8 +10669,9 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     }
   }
 
-  async function createInvitation() {
+  async function createInvitation(inviteMemberId = '') {
     if (busy || !window.MinuitCloud?.connected) return;
+    const pseudoToInvite = inviteMemberId ? '' : String(createInvitePseudo || '').trim();
     busy = true;
     setStatus('Création de l’invitation privée…');
     try {
@@ -7997,6 +10682,12 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       ingestDuelPayload(data);
       busy = false;
       transitionForDuelStatus('');
+      if (inviteMemberId) {
+        await sendTeamDuelInvite(inviteMemberId);
+      } else if (pseudoToInvite) {
+        createInvitePseudo = '';
+        await sendDuelInvite(pseudoToInvite);
+      }
     } catch (err) {
       busy = false;
       setStatus(err?.message || 'Création du duel impossible.', true);
@@ -8129,11 +10820,379 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     if (back) back.onclick = leaveToHome;
   }
 
+  function inviteQrPanelHtml(inviteUrl) {
+    try {
+      if (!window.NightDuelQR?.available?.()) return '';
+      const qrSvg = window.NightDuelQR.svg(inviteUrl, { title: 'QR code d’invitation au Duel de la Nuit noire' });
+      if (!qrSvg) return '';
+      return `<div class="duel-qr-panel">
+        <div class="duel-qr-frame" id="duelInviteQr">${qrSvg}</div>
+        <div class="duel-qr-side">
+          <b>Scanne pour rejoindre</b>
+          <small>Ouvre l’appareil photo du téléphone de ton adversaire et vise ce code : le duel s’ouvre directement, sans rien copier.</small>
+          <button type="button" class="secondary" id="duelQrDownload">Télécharger le QR</button>
+        </div>
+      </div>`;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function downloadInviteQr(inviteUrl) {
+    try {
+      const dataUrl = window.NightDuelQR?.pngDataUrl?.(inviteUrl, { scale: 12, margin: 4 });
+      if (!dataUrl) throw new Error('QR indisponible');
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `duel-nuit-noire-${String(duel?.id || '').slice(0, 8)}.png`;
+      document.body?.appendChild(link);
+      link.click();
+      if (typeof link.remove === 'function') link.remove();
+      setStatus('QR code téléchargé : partage l’image ou fais-la scanner.');
+    } catch (_) {
+      setStatus('Téléchargement du QR indisponible : utilise le lien d’invitation.', true);
+    }
+  }
+
+  function inviteModeLabel(mode) {
+    return mode === 'ranked' ? 'Classé' : 'Amical';
+  }
+
+  function inviteWagerLabel(wager) {
+    return Number(wager) > 0 ? `Mise ${Number(wager)} ☾ chacune` : 'Sans mise';
+  }
+
+  async function refreshIncomingInvitations() {
+    if (!window.MinuitCloud?.connected) return;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invitations', {});
+      incomingInvites = (Array.isArray(data) ? data : []).filter(inv => inv && !dismissedInviteIds.has(inv.id));
+      maybeShowInvitePopup();
+    } catch (_) {
+      // Silencieux : l'observateur réessaiera au prochain cycle.
+    }
+  }
+
+  async function refreshSentInvitations() {
+    if (!window.MinuitCloud?.connected || duel?.status !== 'waiting' || !duel?.id) return;
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_sent_invitations', { p_duel: duel.id });
+      sentInvites = Array.isArray(data) ? data : [];
+      renderSentInvites();
+    } catch (_) {
+      sentInvites = [];
+      renderSentInvites();
+    }
+  }
+
+  function renderSentInvites() {
+    const holder = el('duelSentInvites');
+    if (!holder) return;
+    if (!sentInvites.length) {
+      holder.innerHTML = '<small class="duel-sent-empty">Aucune invitation envoyée pour le moment.</small>';
+      return;
+    }
+    holder.innerHTML = sentInvites.map(inv => `<div class="duel-sent-row">
+      <span><b>${esc(inv.toName || 'Sorcière')}</b><small>${esc(inviteModeLabel(inv.mode))} · ${esc(inviteWagerLabel(inv.wager))} · en attente</small></span>
+      <button type="button" class="secondary" data-cancel-invite="${esc(inv.id)}">Annuler</button>
+    </div>`).join('');
+    document.querySelectorAll('[data-cancel-invite]').forEach(btn => {
+      btn.onclick = () => cancelSentInvite(btn.dataset.cancelInvite);
+    });
+  }
+
+  async function sendDuelInvite(pseudo) {
+    if (!window.MinuitCloud?.connected || !duel?.id) return;
+    const name = String(pseudo || '').trim();
+    if (name.length < 2) {
+      setStatus('Saisis le pseudo exact de la joueuse à inviter.', true);
+      return;
+    }
+    setStatus(`Envoi de l’invitation à ${name}…`);
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invite', { p_duel: duel.id, p_pseudo: name });
+      waitingInvitePseudo = '';
+      const input = el('duelInAppPseudo');
+      if (input) input.value = '';
+      setStatus(`Invitation envoyée à ${data?.invitation?.toName || name}. Elle recevra un popup dans le jeu (valable 10 minutes).`);
+      await refreshSentInvitations();
+      await refreshTeamPlayers();
+    } catch (err) {
+      setStatus(err?.message || 'Envoi de l’invitation impossible.', true);
+    }
+  }
+
+  async function cancelSentInvite(invitationId) {
+    if (!window.MinuitCloud?.connected || !invitationId) return;
+    try {
+      await window.MinuitCloud.rpc('minuit_duel_invite_cancel', { p_invitation: invitationId });
+      setStatus('Invitation annulée.');
+      await refreshSentInvitations();
+      await refreshTeamPlayers();
+    } catch (err) {
+      setStatus(err?.message || 'Annulation impossible.', true);
+    }
+  }
+
+  function teamPlayersCardHtml() {
+    return `<div class="duel-card duel-team-card">
+      <div class="duel-team-card-head">
+        <h3>DÉFIER MA TEAM</h3>
+        <button type="button" class="secondary duel-team-refresh" id="duelTeamRefresh">Actualiser</button>
+      </div>
+      <small class="duel-inapp-hint" id="duelTeamSubtitle">Choisis un membre de ta team : l’invitation part directement, sans saisir son pseudo.</small>
+      <div id="duelTeamPlayers" class="duel-team-list" aria-live="polite"></div>
+    </div>`;
+  }
+
+  function renderTeamPlayers() {
+    const subtitle = el('duelTeamSubtitle');
+    if (subtitle) {
+      subtitle.textContent = teamInfo
+        ? `Team « ${teamInfo.name || 'Sans nom'} » · ${Number(teamInfo.memberCount) || teamPlayers.length} membre${(Number(teamInfo.memberCount) || teamPlayers.length) > 1 ? 's' : ''}. L’invitation par pseudo reste aussi disponible.`
+        : 'Choisis un membre de ta team : l’invitation part directement, sans saisir son pseudo.';
+    }
+    const refreshBtn = el('duelTeamRefresh');
+    if (refreshBtn) {
+      refreshBtn.disabled = teamPlayersLoading;
+      refreshBtn.onclick = () => refreshTeamPlayers();
+    }
+    const holder = el('duelTeamPlayers');
+    if (!holder) return;
+    if (teamPlayersLoading && !teamPlayers.length) {
+      holder.innerHTML = '<small class="duel-team-empty">Chargement des membres de la team…</small>';
+      return;
+    }
+    if (teamPlayersError) {
+      holder.innerHTML = `<small class="duel-team-empty is-error">${esc(teamPlayersError)}</small>`;
+      return;
+    }
+    if (!teamInfo) {
+      holder.innerHTML = '<small class="duel-team-empty">Tu n’es pas encore dans une team. Rejoins-en une dans Compte & team pour défier ses membres, ou invite par pseudo.</small>';
+      return;
+    }
+    if (!teamPlayers.length) {
+      holder.innerHTML = '<small class="duel-team-empty">Aucun autre membre dans ta team pour le moment.</small>';
+      return;
+    }
+    holder.innerHTML = teamPlayers.map(member => {
+      const sending = teamInviteBusyIds.has(member.id);
+      const disabled = !member.canInvite || sending || busy;
+      const label = sending
+        ? 'Envoi…'
+        : member.isYou
+          ? 'Toi'
+          : member.invitationStatus === 'pending'
+            ? 'Invitée ✓'
+            : member.canInvite
+              ? 'Défier'
+              : 'Indisponible';
+      return `<div class="duel-team-row${member.isYou ? ' is-you' : ''}">
+        <span><b>${esc(member.displayName || member.duelName || 'Sorcière')}</b><small>${esc(member.availability || 'Disponible')}</small></span>
+        <button type="button" class="secondary" id="duelTeamChallenge_${esc(member.id)}" data-challenge-member="${esc(member.id)}" ${disabled ? 'disabled' : ''}>${esc(label)}</button>
+      </div>`;
+    }).join('');
+    teamPlayers.forEach(member => {
+      const btn = el(`duelTeamChallenge_${member.id}`);
+      if (btn) btn.onclick = () => challengeTeamMember(member.id);
+    });
+  }
+
+  async function refreshTeamPlayers() {
+    if (!window.MinuitCloud?.connected) return;
+    const requestId = ++teamPlayersRequestId;
+    teamPlayersLoading = true;
+    teamPlayersError = '';
+    renderTeamPlayers();
+    try {
+      const duelId = duel?.status === 'waiting' ? duel.id : null;
+      const data = await window.MinuitCloud.rpc('minuit_duel_team_players', { p_duel: duelId });
+      if (requestId !== teamPlayersRequestId) return;
+      teamInfo = data?.team || null;
+      teamPlayers = Array.isArray(data?.players) ? data.players : [];
+    } catch (err) {
+      if (requestId !== teamPlayersRequestId) return;
+      teamInfo = null;
+      teamPlayers = [];
+      teamPlayersError = err?.message || 'Impossible de charger les membres de la team.';
+    } finally {
+      if (requestId === teamPlayersRequestId) {
+        teamPlayersLoading = false;
+        renderTeamPlayers();
+      }
+    }
+  }
+
+  async function challengeTeamMember(memberId) {
+    if (!window.MinuitCloud?.connected || !memberId) return;
+    const member = teamPlayers.find(p => p.id === memberId);
+    if (!member) {
+      setStatus('Ce membre n’est plus dans la team. Actualise la liste.', true);
+      await refreshTeamPlayers();
+      return;
+    }
+    if (member.isYou) {
+      setStatus('Tu ne peux pas te défier toi-même.', true);
+      return;
+    }
+    if (!member.canInvite) {
+      setStatus(`${member.displayName || 'Ce membre'} : ${member.availability || 'indisponible'}.`, true);
+      return;
+    }
+    if (duel && duel.status !== 'waiting') {
+      setStatus('Termine ou annule le duel en cours avant d’en créer un autre.', true);
+      return;
+    }
+    if (!duel || duel.status !== 'waiting') {
+      await createInvitation(memberId);
+      return;
+    }
+    await sendTeamDuelInvite(memberId);
+  }
+
+  async function sendTeamDuelInvite(memberId) {
+    if (!window.MinuitCloud?.connected || !duel?.id || duel.status !== 'waiting' || !memberId) return;
+    if (teamInviteBusyIds.has(memberId)) return;
+    const member = teamPlayers.find(p => p.id === memberId);
+    const name = member?.displayName || member?.duelName || 'cette joueuse';
+    teamInviteBusyIds.add(memberId);
+    renderTeamPlayers();
+    setStatus(`Envoi de l’invitation à ${name}…`);
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invite_member', { p_duel: duel.id, p_member: memberId });
+      setStatus(`Invitation envoyée à ${data?.invitation?.toName || name}. Elle recevra un popup dans le jeu (valable 10 minutes).`);
+      await refreshSentInvitations();
+      await refreshTeamPlayers();
+    } catch (err) {
+      setStatus(err?.message || 'Envoi de l’invitation impossible.', true);
+      await refreshTeamPlayers();
+    } finally {
+      teamInviteBusyIds.delete(memberId);
+      renderTeamPlayers();
+    }
+  }
+
+  function maybeShowInvitePopup() {
+    if (activeInvitePopup || screenOpen || combatActive || !window.MinuitCloud?.connected) return;
+    const next = incomingInvites.find(inv => inv && !dismissedInviteIds.has(inv.id));
+    if (!next) return;
+    activeInvitePopup = next;
+    renderInvitePopup(next);
+    try {
+      window.dispatchEvent(new CustomEvent('minuit:duel-invitation', { detail: next }));
+    } catch (_) {}
+  }
+
+  function renderInvitePopup(invite) {
+    document.getElementById('duelInvitePopup')?.remove();
+    const popup = document.createElement('div');
+    popup.id = 'duelInvitePopup';
+    popup.className = 'duel-invite-popup';
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-live', 'polite');
+    popup.setAttribute('aria-label', 'Invitation à un Duel de la Nuit noire');
+    popup.innerHTML = `
+      <div class="duel-invite-popup-eyebrow">☾ INVITATION À UN DUEL</div>
+      <b>${esc(invite.fromName || 'Une sorcière')} te défie en Duel de la Nuit noire</b>
+      <small>${esc(inviteModeLabel(invite.mode))} · ${esc(inviteWagerLabel(invite.wager))} · expire dans 10 min</small>
+      <div class="duel-invite-popup-actions">
+        <button type="button" class="primary" id="duelInviteAccept">Rejoindre le duel</button>
+        <button type="button" class="secondary" id="duelInviteDecline">Refuser</button>
+      </div>
+      <div class="duel-invite-popup-status" id="duelInvitePopupStatus" role="status"></div>`;
+    document.body?.appendChild(popup);
+    const acceptBtn = el('duelInviteAccept');
+    const declineBtn = el('duelInviteDecline');
+    if (acceptBtn) acceptBtn.onclick = () => respondToIncomingInvite(invite, true);
+    if (declineBtn) declineBtn.onclick = () => respondToIncomingInvite(invite, false);
+  }
+
+  function closeInvitePopup() {
+    document.getElementById('duelInvitePopup')?.remove();
+    activeInvitePopup = null;
+    maybeShowInvitePopup();
+  }
+
+  async function respondToIncomingInvite(invite, accept) {
+    if (inviteRespondBusy || !invite || !window.MinuitCloud?.connected) return;
+    if (accept && getGameState() === 'play' && !combatActive) {
+      const ok = typeof window.confirm === 'function'
+        ? window.confirm('Rejoindre le duel mettra fin à ta partie en cours. Continuer ?')
+        : true;
+      if (!ok) return;
+    }
+    inviteRespondBusy = true;
+    const statusEl = el('duelInvitePopupStatus');
+    if (statusEl) statusEl.textContent = accept ? 'Connexion au duel…' : 'Envoi du refus…';
+    try {
+      const data = await window.MinuitCloud.rpc('minuit_duel_invite_respond', { p_invitation: invite.id, p_accept: Boolean(accept) });
+      dismissedInviteIds.add(invite.id);
+      incomingInvites = incomingInvites.filter(inv => inv.id !== invite.id);
+      closeInvitePopup();
+      if (accept && data?.duel) {
+        enterDuelFromInvite(data.duel);
+      }
+    } catch (err) {
+      const message = err?.message || 'Réponse à l’invitation impossible.';
+      const currentStatus = el('duelInvitePopupStatus');
+      if (currentStatus) currentStatus.textContent = message;
+      if (/expirée|plus disponible|déjà traitée/i.test(message)) {
+        dismissedInviteIds.add(invite.id);
+        incomingInvites = incomingInvites.filter(inv => inv.id !== invite.id);
+        closeInvitePopup();
+      }
+    } finally {
+      inviteRespondBusy = false;
+    }
+  }
+
+  function enterDuelFromInvite(payload) {
+    clearPendingInvite();
+    ingestDuelPayload(payload);
+    screenOpen = true;
+    statusNotice = '';
+    statusError = false;
+    isolateFromCampaign();
+    ensureRealtimeChannel(duel?.id);
+    channel?.send('joined', { duelId: duel?.id });
+    transitionForDuelStatus('');
+  }
+
+  function startInviteWatcher() {
+    if (!window.MinuitCloud?.connected) return;
+    refreshIncomingInvitations();
+    if (!inviteWatcherBound) {
+      inviteWatcherBound = true;
+      window.addEventListener('focus', () => refreshIncomingInvitations());
+      window.addEventListener('online', () => refreshIncomingInvitations());
+    }
+    if (invitePollTimer) return;
+    invitePollTimer = setInterval(() => refreshIncomingInvitations(), INVITE_POLL_MS);
+  }
+
+  function stopInviteWatcher() {
+    if (invitePollTimer) {
+      clearInterval(invitePollTimer);
+      invitePollTimer = null;
+    }
+    incomingInvites = [];
+    sentInvites = [];
+    teamInfo = null;
+    teamPlayers = [];
+    teamPlayersLoading = false;
+    teamPlayersError = '';
+    teamPlayersRequestId += 1;
+    teamInviteBusyIds.clear();
+    document.getElementById('duelInvitePopup')?.remove();
+    activeInvitePopup = null;
+  }
+
   function renderWaitingScreen() {
     const creatorName = players[0]?.name || window.MinuitCloud?.user?.displayName || 'Sorcière';
     const links = Core.buildShareLinks(window.location?.href || 'https://minuit.local/', duel.id, creatorName, duel.mode);
     const modeLabel = duel.mode === 'ranked' ? 'Classé' : 'Amical';
     const wagerLabel = duel.wager > 0 ? `Mise : ${duel.wager} éclats chacune (pot de ${duel.wager * 2})` : 'Sans mise d’éclats';
+    const qrPanel = inviteQrPanelHtml(links.inviteUrl);
 
     overlay(`<section class="night-duel-screen" aria-label="Invitation Duel de la Nuit noire">
       <div class="duel-header">
@@ -8147,6 +11206,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
           <input id="duelInviteLink" type="text" readonly value="${esc(links.inviteUrl)}">
           <button type="button" class="primary" id="duelCopyLink">Copier le lien</button>
         </div>
+        ${qrPanel}
         <div class="duel-uuid-line">
           <span>UUID du duel : <code id="duelUuidCode">${esc(duel.id)}</code></span>
           <button type="button" class="secondary" id="duelCopyUuid">Copier l’UUID</button>
@@ -8155,6 +11215,17 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
           <a class="secondary duel-share-link" id="duelShareWhatsapp" href="${esc(links.whatsapp)}" target="_blank" rel="noopener noreferrer">Partager sur WhatsApp</a>
           <a class="secondary duel-share-link" id="duelShareMessenger" href="${esc(links.messenger)}" target="_blank" rel="noopener noreferrer">Partager sur Messenger</a>
         </div>
+      </div>
+      ${teamPlayersCardHtml()}
+      <div class="duel-card duel-inapp-card">
+        <h3>INVITER PAR PSEUDO</h3>
+        <label class="duel-field-label" for="duelInAppPseudo">Pseudo de la joueuse à inviter</label>
+        <div class="duel-copy-row">
+          <input id="duelInAppPseudo" type="text" maxlength="24" placeholder="Ex. : Nyx" value="${esc(waitingInvitePseudo)}" autocomplete="off" spellcheck="false">
+          <button type="button" class="primary" id="duelInAppSend">Envoyer l’invitation</button>
+        </div>
+        <small class="duel-inapp-hint">La joueuse recevra un popup dans le jeu pour rejoindre ou refuser. L’invitation expire après 10 minutes.</small>
+        <div id="duelSentInvites" class="duel-sent-invites"></div>
       </div>
       <div class="duel-status${statusError ? ' is-error' : ''}" id="duelStatusMsg" role="status">${esc(statusNotice || 'En attente de la seconde sorcière…')}</div>
       <div class="menu-actions duel-footer-actions">
@@ -8179,7 +11250,29 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     };
     el('duelCopyLink').onclick = () => copyText(links.inviteUrl, 'Lien d’invitation');
     el('duelCopyUuid').onclick = () => copyText(duel.id, 'UUID du duel');
-    el('duelRefreshWait').onclick = () => syncDuelStatus(true);
+    const qrDownload = el('duelQrDownload');
+    if (qrDownload) qrDownload.onclick = () => downloadInviteQr(links.inviteUrl);
+    const inAppInput = el('duelInAppPseudo');
+    const inAppSend = el('duelInAppSend');
+    if (inAppInput) {
+      inAppInput.addEventListener('input', () => { waitingInvitePseudo = inAppInput.value; });
+      inAppInput.addEventListener('keydown', evt => {
+        if (evt.key === 'Enter') {
+          evt.preventDefault();
+          sendDuelInvite(inAppInput.value);
+        }
+      });
+    }
+    if (inAppSend) inAppSend.onclick = () => sendDuelInvite(inAppInput?.value || waitingInvitePseudo);
+    renderSentInvites();
+    refreshSentInvitations();
+    renderTeamPlayers();
+    refreshTeamPlayers();
+    el('duelRefreshWait').onclick = () => {
+      syncDuelStatus(true);
+      refreshSentInvitations();
+      refreshTeamPlayers();
+    };
     el('duelCancelInvite').onclick = () => cancelOrForfeitDuel(false);
   }
 
@@ -8323,6 +11416,8 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
             <button type="button" class="secondary${createWager === 0 ? ' is-selected' : ''}" id="duelWagerZero">Sans mise</button>
             <button type="button" class="secondary${createWager === 10 ? ' is-selected' : ''}" id="duelWagerTen" ${(Number(p.shards) || 0) < 10 ? 'disabled' : ''}>Mise 10 ☾ (pot 20)</button>
           </div>
+          <label class="duel-field-label" for="duelCreateInvitePseudo">Inviter directement ce pseudo (optionnel)</label>
+          <input id="duelCreateInvitePseudo" type="text" maxlength="24" placeholder="Ex. : Nyx" value="${esc(createInvitePseudo)}" autocomplete="off" spellcheck="false">
           <button type="button" class="primary duel-full-btn" id="duelCreateBtn">Créer le duel & obtenir le lien</button>
         </div>
         <div class="duel-card">
@@ -8332,6 +11427,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
           <button type="button" class="primary duel-full-btn" id="duelJoinBtn">Rejoindre ce duel</button>
         </div>
       </div>
+      ${teamPlayersCardHtml()}
       <div class="duel-card duel-halos-card">
         <h3>HALOS COSMÉTIQUES (ÉCLATS DE LUNE · AUCUN AVANTAGE EN JEU)</h3>
         <div class="duel-halo-grid">
@@ -8372,7 +11468,13 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       createWager = 10;
       renderHubScreen();
     };
-    el('duelCreateBtn').onclick = createInvitation;
+    const createPseudoInput = el('duelCreateInvitePseudo');
+    if (createPseudoInput) {
+      createPseudoInput.addEventListener('input', () => { createInvitePseudo = createPseudoInput.value; });
+    }
+    el('duelCreateBtn').onclick = () => createInvitation();
+    renderTeamPlayers();
+    refreshTeamPlayers();
     el('duelJoinBtn').onclick = () => joinInvitation(el('duelJoinInput')?.value || '');
     el('duelJoinInput').addEventListener('keydown', evt => {
       if (evt.key === 'Enter') {
@@ -9077,6 +12179,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
   }
 
   window.addEventListener('minuit:account-connected', async () => {
+    startInviteWatcher();
     if (!screenOpen && !pendingInviteId) return;
     screenOpen = true;
     await refreshProfile();
@@ -9088,6 +12191,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
   });
 
   window.addEventListener('minuit:account-disconnected', () => {
+    stopInviteWatcher();
     profile = null;
     if (screenOpen || combatActive) {
       teardownDuelRuntime();
@@ -9123,10 +12227,43 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     .duel-full-btn{width:100%;min-height:42px}
     .duel-copy-row{display:flex;gap:7px;align-items:stretch}
     .duel-copy-row input{flex:1}
+    .duel-qr-panel{display:flex;gap:14px;align-items:center;padding:12px;border:1px solid #78608b66;border-radius:10px;background:#241b35}
+    .duel-qr-frame{flex:0 0 auto;width:164px;height:164px;padding:8px;background:#fff;border-radius:10px;box-shadow:0 4px 18px #0006}
+    .duel-qr-frame svg{display:block;width:100%;height:100%}
+    .duel-qr-side{display:flex;flex-direction:column;gap:7px;min-width:0}
+    .duel-qr-side b{font-size:12px;color:#ffe6bd}
+    .duel-qr-side small{font-size:10px;line-height:1.55;color:#c7b6d8}
+    .duel-qr-side button{align-self:flex-start}
     .duel-uuid-line{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:10px;color:#c7b6d8}
     .duel-uuid-line code{padding:4px 7px;border-radius:5px;background:#291f3b;color:#ffe0a6;overflow-wrap:anywhere}
     .duel-share-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .duel-share-link{display:flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:1px solid #7b648f;border-radius:8px;background:#261d38;color:#f2e7ff;text-decoration:none;font-size:11px;text-align:center}
+    .duel-inapp-hint{font-size:10px;line-height:1.5;color:#c7b6d8}
+    .duel-sent-invites{display:flex;flex-direction:column;gap:6px}
+    .duel-sent-empty{font-size:10px;color:#a996ba}
+    .duel-sent-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
+    .duel-sent-row span{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-sent-row b{font-size:11px;color:#f3e7ff;overflow-wrap:anywhere}
+    .duel-sent-row small{font-size:9px;color:#bba8cd}
+    .duel-team-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+    .duel-team-card-head h3{margin:0}
+    .duel-team-refresh{min-height:32px;padding:5px 10px;font-size:10px}
+    .duel-team-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;padding-right:2px}
+    .duel-team-empty{font-size:10px;line-height:1.5;color:#a996ba}
+    .duel-team-empty.is-error{color:#f5aba4}
+    .duel-team-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
+    .duel-team-row.is-you{border-color:#ffd08e66;background:#2a2138}
+    .duel-team-row span{display:flex;flex-direction:column;gap:2px;min-width:0}
+    .duel-team-row b{font-size:11px;color:#f3e7ff;overflow-wrap:anywhere}
+    .duel-team-row small{font-size:9px;color:#bba8cd}
+    .duel-team-row button{flex:0 0 auto;min-height:34px;padding:6px 12px;font-size:10px}
+    .duel-invite-popup{position:fixed;right:16px;bottom:16px;z-index:10000;width:min(340px,calc(100vw - 32px));display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid #d8b574aa;border-radius:12px;background:linear-gradient(150deg,#2e233c,#171226);box-shadow:0 14px 40px #000a;color:#efe5f7;text-align:left}
+    .duel-invite-popup-eyebrow{font-size:9px;letter-spacing:1.1px;color:#ffd28e}
+    .duel-invite-popup b{font-size:13px;line-height:1.4;color:#fff2d6;overflow-wrap:anywhere}
+    .duel-invite-popup small{font-size:10px;color:#cbbad9}
+    .duel-invite-popup-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
+    .duel-invite-popup-actions button{min-height:40px}
+    .duel-invite-popup-status{min-height:14px;font-size:10px;color:#f5aba4}
     .duel-halo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .duel-halo-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid #6e578155;border-radius:8px;background:#231a34}
     .duel-halo-item.is-equipped{border-color:#ffd08e99}
@@ -9173,6 +12310,11 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       .duel-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       .duel-hub-columns,.duel-draft-grid,.duel-halo-grid,.duel-share-buttons{grid-template-columns:1fr}
       .duel-copy-row{flex-direction:column}
+      .duel-qr-panel{flex-direction:column;text-align:center}
+      .duel-qr-frame{width:188px;height:188px}
+      .duel-qr-side{align-items:center}
+      .duel-qr-side button{align-self:center}
+      .duel-invite-popup{left:16px;right:16px;width:auto}
       .duel-top-hud{top:4px;left:4px;right:4px;padding:5px 7px;gap:4px}
       .duel-hud-scoreline{font-size:10px}
       .duel-hud-side b{font-size:11px}
@@ -9182,6 +12324,10 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
 
   wireCombatInputs();
   installMenuButton();
+
+  // Si une session est déjà reprise au chargement (pas d'événement account-connected),
+  // démarre quand même l'observateur d'invitations pour afficher le popup côté invité.
+  if (window.MinuitCloud?.connected) startInviteWatcher();
 
   pendingInviteId = readInitialInvite();
   if (pendingInviteId) {
@@ -9205,6 +12351,20 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     },
     get currentDuel() {
       return duel;
+    },
+    refreshInvitations: refreshIncomingInvitations,
+    sendInvitation: sendDuelInvite,
+    respondToInvitation: respondToIncomingInvite,
+    refreshTeamPlayers,
+    challengeTeamMember,
+    get pendingInvitations() {
+      return incomingInvites.slice();
+    },
+    get activeInvitation() {
+      return activeInvitePopup;
+    },
+    get teamPlayers() {
+      return teamPlayers.slice();
     }
   };
 })();
