@@ -6679,9 +6679,8 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
   const INTERMISSION_DURATION = 2.4;
 
   const BURST_COUNT = 3;
-  const BURST_INTERVAL = 2.0;
+  const BURST_INTERVAL = 0.70;
   const BURST_STEP = 0.12;
-  const INITIAL_BURST_DELAY = 0.85;
 
   const BASE_HALO_RADIUS = 195;
   const SHOT_REVEAL_DURATION = 0.55;
@@ -6730,15 +6729,15 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       category: 'Projectile supplémentaire',
       icon: '✦',
       short: '+1 tir par rafale',
-      desc: 'Chaque salve automatique passe de 3 à 4 projectiles.'
+      desc: 'Chaque salve manuelle passe de 3 à 4 projectiles.'
     }),
     Object.freeze({
       id: 'swift-powder',
       name: 'Poudre vive',
       category: 'Cadence',
       icon: '⚡',
-      short: 'Rafales plus proches',
-      desc: 'Rapproche le rythme des salves automatiques (1,45 s).'
+      short: 'Salves plus proches',
+      desc: 'Rapproche le rythme des salves manuelles (0,50 s).'
     }),
     Object.freeze({
       id: 'prism-fan',
@@ -6746,7 +6745,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       category: 'Tirs latéraux',
       icon: '❖',
       short: '2 éclats latéraux',
-      desc: 'Ajoute deux projectiles obliques à chaque tir de la rafale.'
+      desc: 'Ajoute deux projectiles obliques à chaque tir de la salve.'
     }),
     Object.freeze({
       id: 'dawn-halo',
@@ -7074,7 +7073,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       moveSpeed: 330 * speedFactor,
       focusSpeed: 175 * speedFactor,
       burstCount: BURST_COUNT + (has('twin-burst') ? 1 : 0),
-      burstInterval: has('swift-powder') ? 1.45 : BURST_INTERVAL,
+      burstInterval: has('swift-powder') ? 0.50 : BURST_INTERVAL,
       burstStep: has('swift-powder') ? 0.095 : BURST_STEP,
       sideAngles: has('prism-fan') ? [-0.36, 0, 0.36] : [0],
       haloRadius: has('dawn-halo') ? 275 : BASE_HALO_RADIUS,
@@ -7110,7 +7109,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       hearts: stats.maxHearts,
       maxHearts: stats.maxHearts,
       parry: stats.initialParry,
-      burstTimer: INITIAL_BURST_DELAY,
+      fireCooldown: 0,
       burstRemaining: 0,
       burstShotTimer: 0,
       dashTimer: 0,
@@ -7138,7 +7137,8 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
         aimX: ARENA_CENTER.x,
         aimY: ARENA_CENTER.y,
         dash: false,
-        dashSeq: 0
+        dashSeq: 0,
+        fire: false
       }
     };
   }
@@ -7156,7 +7156,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       w.hearts = w.stats.maxHearts;
       w.maxHearts = w.stats.maxHearts;
       w.parry = w.stats.initialParry;
-      w.burstTimer = INITIAL_BURST_DELAY;
+      w.fireCooldown = 0;
       w.burstRemaining = 0;
       w.burstShotTimer = 0;
       w.dashTimer = 0;
@@ -7175,6 +7175,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       w.cmd.moveY = 0;
       w.cmd.hasTarget = false;
       w.cmd.dash = false;
+      w.cmd.fire = false;
     }
     match.roundTime = 0;
     match.roundPhase = 'fighting';
@@ -7261,6 +7262,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       w.cmd.aimX = clampNumber(input.aimX, 0, ARENA_WIDTH, ARENA_CENTER.x);
       w.cmd.aimY = clampNumber(input.aimY, 0, ARENA_HEIGHT, ARENA_CENTER.y);
     }
+    if ('fire' in input) w.cmd.fire = Boolean(input.fire);
     if (input.dash === true) {
       w.cmd.dash = true;
     }
@@ -7560,11 +7562,13 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
 
     for (const role of ['creator', 'opponent']) {
       const w = match.witches[role];
-      w.burstTimer -= dt;
-      if (w.burstTimer <= 0 && w.burstRemaining <= 0) {
+      // Aucun tir automatique : une salve ne part que si la joueuse maintient
+      // la commande de tir. Tirer révèle brièvement la position, comme avant.
+      w.fireCooldown = Math.max(0, w.fireCooldown - dt);
+      if (w.cmd.fire && w.fireCooldown <= 0 && w.burstRemaining <= 0) {
         w.burstRemaining = w.stats.burstCount;
         w.burstShotTimer = 0;
-        w.burstTimer = w.stats.burstInterval;
+        w.fireCooldown = w.stats.burstInterval;
       }
       if (w.burstRemaining > 0) {
         w.burstShotTimer -= dt;
@@ -7787,6 +7791,9 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
         dashCooldown: Math.round(self.dashCooldown * 100) / 100,
         dashMaxCooldown: self.stats.dashCooldown,
         dashActive: self.dashTimer > 0,
+        fireCooldown: Math.round(self.fireCooldown * 100) / 100,
+        fireMaxCooldown: self.stats.burstInterval,
+        firing: self.burstRemaining > 0,
         invulnerable: self.invTimer > 0,
         perfectDodges: self.perfectDodges,
         dodgeSuccess: self.dodgeSuccessTimer > 0,
@@ -7828,6 +7835,52 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       footsteps: visibleFootsteps,
       dodgeTrails: visibleTrails
     };
+  }
+
+  // Chaque joueuse voit sa propre sorcière en bas et l'adversaire en haut.
+  // Le monde reste arbitré côté créatrice ; ces helpers ne font que convertir
+  // l'écran local de l'invitée (pivoté de 180°) vers le monde, et inversement.
+  function orientCommandForRole(role, cmd) {
+    if (!cmd || typeof cmd !== 'object' || role !== 'opponent') return cmd;
+    const out = { ...cmd };
+    if (Number.isFinite(Number(out.moveX))) out.moveX = -Number(out.moveX);
+    if (Number.isFinite(Number(out.moveY))) out.moveY = -Number(out.moveY);
+    if (out.targetX != null && Number.isFinite(Number(out.targetX))) out.targetX = ARENA_WIDTH - Number(out.targetX);
+    if (out.targetY != null && Number.isFinite(Number(out.targetY))) out.targetY = ARENA_HEIGHT - Number(out.targetY);
+    if (out.aimX != null && Number.isFinite(Number(out.aimX))) out.aimX = ARENA_WIDTH - Number(out.aimX);
+    if (out.aimY != null && Number.isFinite(Number(out.aimY))) out.aimY = ARENA_HEIGHT - Number(out.aimY);
+    return out;
+  }
+
+  function orientSnapshotForViewer(snapshot, viewerRole) {
+    if (!snapshot || typeof snapshot !== 'object' || viewerRole !== 'opponent') return snapshot;
+    const fx = x => (x != null && Number.isFinite(Number(x)) ? ARENA_WIDTH - Number(x) : x);
+    const fy = y => (y != null && Number.isFinite(Number(y)) ? ARENA_HEIGHT - Number(y) : y);
+    const fa = a => (a != null && Number.isFinite(Number(a)) ? Number(a) + Math.PI : a);
+    const out = { ...snapshot };
+    out.self = { ...snapshot.self, x: fx(snapshot.self.x), y: fy(snapshot.self.y), aimAngle: fa(snapshot.self.aimAngle) };
+    out.opponent = { ...snapshot.opponent };
+    if (snapshot.opponent.visible) {
+      out.opponent.x = fx(snapshot.opponent.x);
+      out.opponent.y = fy(snapshot.opponent.y);
+      out.opponent.aimAngle = fa(snapshot.opponent.aimAngle);
+    }
+    if (snapshot.lastKnownOpponent) {
+      out.lastKnownOpponent = {
+        ...snapshot.lastKnownOpponent,
+        x: fx(snapshot.lastKnownOpponent.x),
+        y: fy(snapshot.lastKnownOpponent.y),
+        aimAngle: fa(snapshot.lastKnownOpponent.aimAngle)
+      };
+    }
+    out.projectiles = (snapshot.projectiles || []).map(p => ({ ...p, x: fx(p.x), y: fy(p.y), vx: -p.vx, vy: -p.vy }));
+    out.footsteps = (snapshot.footsteps || []).map(s => ({ ...s, x: fx(s.x), y: fy(s.y) }));
+    out.dodgeTrails = (snapshot.dodgeTrails || []).map(t => ({
+      ...t,
+      x1: fx(t.x1), y1: fy(t.y1),
+      x2: fx(t.x2), y2: fy(t.y2)
+    }));
+    return out;
   }
 
   return Object.freeze({
@@ -7877,7 +7930,9 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     applyCommand,
     isOpponentVisible,
     stepMatch,
-    createSnapshotFor
+    createSnapshotFor,
+    orientCommandForRole,
+    orientSnapshotForViewer
   });
 });
 </script><script>//---------------------------------------------------------------------
@@ -10344,10 +10399,11 @@ var qrcode = function() {
   const duelKeys = new Set();
   let padDashHeld = false;
   let padPauseHeld = false;
+  let fireButtonHeld = false;
 
   const pointerState = {
     mouseAimActive: false,
-    mouseDown: false,
+    fireMouse: false,
     aimX: Core.ARENA_CENTER.x,
     aimY: Core.ARENA_CENTER.y,
     moveTouchId: null,
@@ -10508,6 +10564,9 @@ var qrcode = function() {
     if (pauseBtn && basePauseLabel) pauseBtn.textContent = basePauseLabel;
     const hint = el('hint');
     if (hint && baseHintLabel) hint.textContent = baseHintLabel;
+    const fireBtn = el('duelFire');
+    if (fireBtn) fireBtn.style.display = 'none';
+    fireButtonHeld = false;
     hideTopHud();
   }
 
@@ -10589,7 +10648,8 @@ var qrcode = function() {
         aimX: data.aimX,
         aimY: data.aimY,
         dash: data.dash,
-        dashSeq: data.dashSeq
+        dashSeq: data.dashSeq,
+        fire: data.fire
       });
       return;
     }
@@ -11640,6 +11700,7 @@ var qrcode = function() {
           <small id="duelHudSelfName">TOI</small>
           <b id="duelHudSelfHearts">♥♥♥♥♥</b>
           <span id="duelHudDashState">Esquive prête</span>
+          <span id="duelHudFireState">Tir manuel prêt</span>
         </div>
         <div class="duel-hud-center">
           <div class="duel-hud-scoreline"><span id="duelHudRound">M1/3</span> · <strong id="duelHudScore">0 — 0</strong> · <b id="duelHudClock">01:30</b></div>
@@ -11693,6 +11754,7 @@ var qrcode = function() {
     const selfHearts = el('duelHudSelfHearts');
     const oppHearts = el('duelHudOppHearts');
     const dashState = el('duelHudDashState');
+    const fireState = el('duelHudFireState');
     const roundEl = el('duelHudRound');
     const scoreEl = el('duelHudScore');
     const clockEl = el('duelHudClock');
@@ -11709,6 +11771,10 @@ var qrcode = function() {
         : renderSnap.self.dashCooldown > 0
           ? `Esquive ${renderSnap.self.dashCooldown.toFixed(1)} s`
           : 'Esquive prête';
+    }
+    if (fireState) {
+      const fireCd = Number(renderSnap.self.fireCooldown) || 0;
+      fireState.textContent = fireCd > 0 ? `Tir ${fireCd.toFixed(1)} s` : 'Tir manuel prêt';
     }
     if (roundEl) roundEl.textContent = `M${renderSnap.round}/3`;
     if (scoreEl) scoreEl.textContent = `${myScore} — ${oppScore}`;
@@ -11748,6 +11814,13 @@ var qrcode = function() {
       dashBtn.classList.toggle('dash-ready', cd <= 0);
       dashBtn.classList.toggle('dash-cooldown', cd > 0);
     }
+    const fireBtn = el('duelFire');
+    if (fireBtn) {
+      const fireCd = Number(renderSnap.self.fireCooldown) || 0;
+      fireBtn.textContent = fireCd > 0 ? `✦ Tir ${fireCd.toFixed(1)} s` : '✦ Tir';
+      fireBtn.classList.toggle('duel-fire-ready', fireCd <= 0);
+      fireBtn.classList.toggle('duel-fire-cooldown', fireCd > 0);
+    }
   }
 
   function resumeCombat() {
@@ -11786,7 +11859,8 @@ var qrcode = function() {
     padDashHeld = false;
     padPauseHeld = false;
     pointerState.mouseAimActive = false;
-    pointerState.mouseDown = false;
+    pointerState.fireMouse = false;
+    fireButtonHeld = false;
     pointerState.moveTouchId = null;
     pointerState.aimTouchId = null;
     pointerState.touchMoveX = 0;
@@ -11817,7 +11891,7 @@ var qrcode = function() {
   function readLocalCommand() {
     if (combatPaused) {
       return {
-        moveX: 0, moveY: 0, focus: false,
+        moveX: 0, moveY: 0, focus: false, fire: false,
         hasTarget: false, targetX: pointerState.aimX, targetY: pointerState.aimY,
         hasAim: false, aimX: pointerState.aimX, aimY: pointerState.aimY,
         dashSeq
@@ -11838,6 +11912,10 @@ var qrcode = function() {
     let moveX = kx;
     let moveY = ky;
     let focus = keyIsDown(bindingFor('focus', 'Shift'));
+    let fire = keyIsDown(bindingFor('special', 'f')) || keyIsDown('f') || pointerState.fireMouse || fireButtonHeld;
+    let aimX = pointerState.aimX;
+    let aimY = pointerState.aimY;
+    let hasAim = Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null);
 
     const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
     if (gp) {
@@ -11847,7 +11925,16 @@ var qrcode = function() {
         moveX = ax;
         moveY = ay;
       }
-      focus = focus || Boolean(gp.buttons?.[6]?.pressed || gp.buttons?.[7]?.pressed);
+      focus = focus || Boolean(gp.buttons?.[6]?.pressed);
+      fire = fire || Boolean(gp.buttons?.[7]?.pressed);
+      const rx = Number(gp.axes?.[2]) || 0;
+      const ry = Number(gp.axes?.[3]) || 0;
+      if (Math.hypot(rx, ry) > 0.22 && renderSnap) {
+        const screenSelf = Core.orientSnapshotForViewer(renderSnap, myRole()).self;
+        aimX = Math.max(0, Math.min(Core.ARENA_WIDTH, screenSelf.x + rx * 260));
+        aimY = Math.max(0, Math.min(Core.ARENA_HEIGHT, screenSelf.y + ry * 260));
+        hasAim = true;
+      }
     }
 
     if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
@@ -11860,19 +11947,23 @@ var qrcode = function() {
       moveY /= len;
     }
 
-    const useMouseFollow = len < 0.05 && pointerState.mouseDown;
     return {
       moveX: Math.round(moveX * 1000) / 1000,
       moveY: Math.round(moveY * 1000) / 1000,
       focus: Boolean(focus),
-      hasTarget: useMouseFollow,
-      targetX: Math.round(pointerState.aimX * 10) / 10,
-      targetY: Math.round(pointerState.aimY * 10) / 10,
-      hasAim: Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null),
-      aimX: Math.round(pointerState.aimX * 10) / 10,
-      aimY: Math.round(pointerState.aimY * 10) / 10,
+      fire: Boolean(fire),
+      hasTarget: false,
+      targetX: Math.round(aimX * 10) / 10,
+      targetY: Math.round(aimY * 10) / 10,
+      hasAim,
+      aimX: Math.round(aimX * 10) / 10,
+      aimY: Math.round(aimY * 10) / 10,
       dashSeq
     };
+  }
+
+  function localCommandToWorld(cmd) {
+    return Core.orientCommandForRole(myRole(), cmd);
   }
 
   function pollDuelGamepadActions() {
@@ -11896,7 +11987,7 @@ var qrcode = function() {
   function triggerLocalDodge() {
     if (!combatActive || combatPaused) return false;
     dashSeq += 1;
-    const cmd = readLocalCommand();
+    const cmd = localCommandToWorld(readLocalCommand());
     cmd.dash = true;
     if (myRole() === 'creator' && hostMatch) {
       Core.applyCommand(hostMatch, 'creator', cmd);
@@ -11915,7 +12006,7 @@ var qrcode = function() {
     if (!combatActive || !duel) return;
     applyTouchLayoutPreference();
     pollDuelGamepadActions();
-    const cmd = readLocalCommand();
+    const cmd = localCommandToWorld(readLocalCommand());
 
     if (myRole() === 'creator' && hostMatch) {
       Core.applyCommand(hostMatch, 'creator', cmd);
@@ -12016,6 +12107,7 @@ var qrcode = function() {
   function drawDuelArena() {
     if (!combatActive || !renderSnap || typeof ctx === 'undefined' || !ctx) return;
     const c = ctx;
+    const viewSnap = Core.orientSnapshotForViewer(renderSnap, myRole());
     const width = Core.ARENA_WIDTH;
     const height = Core.ARENA_HEIGHT;
     const cx = Core.ARENA_CENTER.x;
@@ -12045,7 +12137,7 @@ var qrcode = function() {
     c.stroke();
 
     // Halo de vision de la joueuse locale.
-    const self = renderSnap.self;
+    const self = viewSnap.self;
     const selfCosmetic = Core.getHaloCosmetic(self.cosmetic);
     const haloGrad = c.createRadialGradient(self.x, self.y, 18, self.x, self.y, self.haloRadius);
     haloGrad.addColorStop(0, selfCosmetic.color);
@@ -12065,8 +12157,8 @@ var qrcode = function() {
     c.setLineDash([]);
 
     // Onde de pulsation lunaire.
-    if (renderSnap.lunarWave) {
-      const p = Math.min(1, renderSnap.lunarWave.age / Math.max(0.1, renderSnap.lunarWave.maxAge));
+    if (viewSnap.lunarWave) {
+      const p = Math.min(1, viewSnap.lunarWave.age / Math.max(0.1, viewSnap.lunarWave.maxAge));
       c.strokeStyle = `rgba(198, 226, 255, ${(1 - p) * 0.7})`;
       c.lineWidth = 4;
       c.beginPath();
@@ -12075,7 +12167,7 @@ var qrcode = function() {
     }
 
     // Indices de pas (cercles acoustiques).
-    for (const step of renderSnap.footsteps || []) {
+    for (const step of viewSnap.footsteps || []) {
       const ratio = Math.min(1, step.age / Math.max(0.1, step.maxAge));
       const isMine = step.ownerRole === self.role;
       c.strokeStyle = isMine
@@ -12088,7 +12180,7 @@ var qrcode = function() {
     }
 
     // Traînées d'esquive.
-    for (const trail of renderSnap.dodgeTrails || []) {
+    for (const trail of viewSnap.dodgeTrails || []) {
       const ratio = Math.min(1, trail.age / Math.max(0.1, trail.maxAge));
       const isMine = trail.ownerRole === self.role;
       c.strokeStyle = isMine
@@ -12103,9 +12195,9 @@ var qrcode = function() {
     }
 
     // Silhouette figée à la dernière position connue lorsque l'adversaire est cachée.
-    const opp = renderSnap.opponent;
-    if (!opp.visible && renderSnap.lastKnownOpponent) {
-      const lk = renderSnap.lastKnownOpponent;
+    const opp = viewSnap.opponent;
+    if (!opp.visible && viewSnap.lastKnownOpponent) {
+      const lk = viewSnap.lastKnownOpponent;
       drawWitchFigure(c, lk.x, lk.y, lk.aimAngle, '#b8a4d6', {
         ghost: true,
         age: lk.age,
@@ -12123,7 +12215,7 @@ var qrcode = function() {
     }
 
     // Projectiles dangereux : TOUJOURS visibles même hors du halo !
-    for (const proj of renderSnap.projectiles || []) {
+    for (const proj of viewSnap.projectiles || []) {
       const isDanger = proj.ownerRole !== self.role;
       const speed = Math.hypot(proj.vx, proj.vy) || 1;
       const tailX = proj.x - (proj.vx / speed) * (proj.r * 2.4);
@@ -12162,22 +12254,22 @@ var qrcode = function() {
     }
 
     // Brume extérieure au rayon de zone (rétrécissement progressif après 60 s).
-    if (renderSnap.zoneRadius < 680) {
+    if (viewSnap.zoneRadius < 680) {
       c.save();
       c.beginPath();
       c.rect(0, 0, width, height);
-      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2, true);
-      c.fillStyle = renderSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
+      c.arc(cx, cy, viewSnap.zoneRadius, 0, Math.PI * 2, true);
+      c.fillStyle = viewSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
       c.fill('evenodd');
 
-      c.strokeStyle = renderSnap.suddenDeath
+      c.strokeStyle = viewSnap.suddenDeath
         ? '#ff6b88'
-        : renderSnap.roundTime >= Core.ZONE_SHRINK_START
+        : viewSnap.roundTime >= Core.ZONE_SHRINK_START
           ? '#ffb86c'
           : 'rgba(182, 152, 224, 0.35)';
-      c.lineWidth = renderSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
+      c.lineWidth = viewSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
       c.beginPath();
-      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2);
+      c.arc(cx, cy, viewSnap.zoneRadius, 0, Math.PI * 2);
       c.stroke();
       c.restore();
     }
@@ -12224,10 +12316,12 @@ var qrcode = function() {
           triggerLocalDodge();
           return;
         }
-        pointerState.mouseDown = true;
-        pointerState.mouseAimActive = true;
-        pointerState.aimX = pt.x;
-        pointerState.aimY = pt.y;
+        if (evt.button === 0) {
+          pointerState.fireMouse = true;
+          pointerState.mouseAimActive = true;
+          pointerState.aimX = pt.x;
+          pointerState.aimY = pt.y;
+        }
       });
 
       node.addEventListener('pointermove', evt => {
@@ -12267,7 +12361,7 @@ var qrcode = function() {
         } else if (evt.pointerId === pointerState.aimTouchId) {
           pointerState.aimTouchId = null;
         } else if (evt.pointerType !== 'touch') {
-          pointerState.mouseDown = false;
+          pointerState.fireMouse = false;
         }
       };
       node.addEventListener('pointerup', releasePointer);
@@ -12299,7 +12393,8 @@ var qrcode = function() {
     });
     window.addEventListener('blur', () => {
       duelKeys.clear();
-      pointerState.mouseDown = false;
+      pointerState.fireMouse = false;
+      fireButtonHeld = false;
       pointerState.moveTouchId = null;
       pointerState.aimTouchId = null;
       pointerState.touchMoveX = 0;
@@ -12308,6 +12403,44 @@ var qrcode = function() {
   }
 
   function wireCombatButtons() {
+    const bar = document.querySelector('.touchbar');
+    let fireBtn = el('duelFire');
+    if (!fireBtn && bar) {
+      fireBtn = document.createElement('button');
+      fireBtn.type = 'button';
+      fireBtn.id = 'duelFire';
+      fireBtn.className = 'secondary duel-fire-button';
+      fireBtn.textContent = '✦ Tir';
+      const dashNode = el('dash');
+      if (dashNode && dashNode.parentElement === bar) bar.insertBefore(fireBtn, dashNode);
+      else bar.appendChild(fireBtn);
+      const press = evt => {
+        evt?.preventDefault?.();
+        fireButtonHeld = true;
+        try { fireBtn.setPointerCapture?.(evt.pointerId); } catch (_) {}
+      };
+      const release = evt => {
+        evt?.preventDefault?.();
+        fireButtonHeld = false;
+      };
+      fireBtn.addEventListener('pointerdown', press);
+      fireBtn.addEventListener('pointerup', release);
+      fireBtn.addEventListener('pointercancel', release);
+      fireBtn.addEventListener('pointerleave', release);
+      fireBtn.addEventListener('keydown', evt => {
+        if (evt.key === ' ' || evt.key === 'Enter') {
+          evt.preventDefault();
+          fireButtonHeld = true;
+        }
+      });
+      fireBtn.addEventListener('keyup', evt => {
+        if (evt.key === ' ' || evt.key === 'Enter') {
+          evt.preventDefault();
+          fireButtonHeld = false;
+        }
+      });
+    }
+    if (fireBtn) fireBtn.style.display = '';
     const dashBtn = el('dash');
     if (dashBtn) {
       if (!basePauseLabel) basePauseLabel = el('pause')?.textContent || '';
@@ -12330,8 +12463,7 @@ var qrcode = function() {
       };
     }
     const hint = el('hint');
-    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · clic/droit viser · Espace/E esquive · Maj précision';
-    const bar = document.querySelector('.touchbar');
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt · F/clic gauche ou bouton Tir · Espace/E esquive · Maj précision';
     if (bar) bar.style.display = 'flex';
   }
 
@@ -12529,6 +12661,9 @@ var qrcode = function() {
     .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
     .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
     .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
+    .duel-fire-button{min-width:96px;border-color:#d8b574aa;color:#ffe6bd;background:linear-gradient(145deg,#3a2849,#251c36)}
+    .duel-fire-ready{box-shadow:0 0 0 1px #ffd08e55}
+    .duel-fire-cooldown{opacity:.72}
     body.night-duel-combat .hud,
     body.night-duel-combat .bossbar,
     body.night-duel-combat .game-details{display:none!important}
