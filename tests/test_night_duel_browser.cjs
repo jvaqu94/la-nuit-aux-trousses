@@ -660,6 +660,9 @@ function createFakeDom(initialUrl, sessionObj) {
       if (sel === '#overlay .duel-draft-grid') {
         return allElements.find(e => e.classList.contains('duel-draft-grid')) || null;
       }
+      if (sel === '#overlay .duel-share-card') {
+        return allElements.find(e => e.classList.contains('duel-share-card')) || null;
+      }
       return null;
     },
     querySelectorAll: sel => {
@@ -965,6 +968,20 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.ok(guestScreen.self.x > 400, 'À l’écran, l’invitée se voit bien aller vers la droite');
   assert.ok(guestScreen.self.y > 650, 'L’invitée se voit en bas de son écran, comme la créatrice');
   guest.ctx.drawGame();
+
+  // 4bis. Resynchronisation : un retour d'onglet côté invitée (événement focus)
+  //       redemande un snapshot à l'hôte, qui répond avec un état frais. C'est le
+  //       correctif « ne se synchronise plus » après une veille / micro-coupure.
+  mockSupabase.wireLog.length = 0;
+  guest.sandbox.dispatchEvent({ type: 'focus' });
+  await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'snapshot-request'));
+  for (let i = 0; i < 6; i += 1) tickClient(host, 1 / 60);
+  await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'snapshot'));
+  assert.ok(
+    mockSupabase.wireLog.some(m => m.payload?.event === 'snapshot-request') &&
+    mockSupabase.wireLog.some(m => m.payload?.event === 'snapshot'),
+    'Le focus invité déclenche une redemande de snapshot answered par l’hôte'
+  );
 
   // 5. Conclusion du duel en 2 manches gagnantes + double rapport de consensus + mise à jour de la cote (1000 -> 1020 / 980).
   // Les deux sorcières montent vers le haut de leur propre écran (donc vers le centre
