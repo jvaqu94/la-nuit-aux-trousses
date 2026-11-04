@@ -21,9 +21,8 @@
   const INTERMISSION_DURATION = 2.4;
 
   const BURST_COUNT = 3;
-  const BURST_INTERVAL = 2.0;
+  const BURST_INTERVAL = 0.70;
   const BURST_STEP = 0.12;
-  const INITIAL_BURST_DELAY = 0.85;
 
   const BASE_HALO_RADIUS = 195;
   const SHOT_REVEAL_DURATION = 0.55;
@@ -72,15 +71,15 @@
       category: 'Projectile supplémentaire',
       icon: '✦',
       short: '+1 tir par rafale',
-      desc: 'Chaque salve automatique passe de 3 à 4 projectiles.'
+      desc: 'Chaque salve manuelle passe de 3 à 4 projectiles.'
     }),
     Object.freeze({
       id: 'swift-powder',
       name: 'Poudre vive',
       category: 'Cadence',
       icon: '⚡',
-      short: 'Rafales plus proches',
-      desc: 'Rapproche le rythme des salves automatiques (1,45 s).'
+      short: 'Salves plus proches',
+      desc: 'Rapproche le rythme des salves manuelles (0,50 s).'
     }),
     Object.freeze({
       id: 'prism-fan',
@@ -88,7 +87,7 @@
       category: 'Tirs latéraux',
       icon: '❖',
       short: '2 éclats latéraux',
-      desc: 'Ajoute deux projectiles obliques à chaque tir de la rafale.'
+      desc: 'Ajoute deux projectiles obliques à chaque tir de la salve.'
     }),
     Object.freeze({
       id: 'dawn-halo',
@@ -416,7 +415,7 @@
       moveSpeed: 330 * speedFactor,
       focusSpeed: 175 * speedFactor,
       burstCount: BURST_COUNT + (has('twin-burst') ? 1 : 0),
-      burstInterval: has('swift-powder') ? 1.45 : BURST_INTERVAL,
+      burstInterval: has('swift-powder') ? 0.50 : BURST_INTERVAL,
       burstStep: has('swift-powder') ? 0.095 : BURST_STEP,
       sideAngles: has('prism-fan') ? [-0.36, 0, 0.36] : [0],
       haloRadius: has('dawn-halo') ? 275 : BASE_HALO_RADIUS,
@@ -452,7 +451,7 @@
       hearts: stats.maxHearts,
       maxHearts: stats.maxHearts,
       parry: stats.initialParry,
-      burstTimer: INITIAL_BURST_DELAY,
+      fireCooldown: 0,
       burstRemaining: 0,
       burstShotTimer: 0,
       dashTimer: 0,
@@ -480,7 +479,8 @@
         aimX: ARENA_CENTER.x,
         aimY: ARENA_CENTER.y,
         dash: false,
-        dashSeq: 0
+        dashSeq: 0,
+        fire: false
       }
     };
   }
@@ -498,7 +498,7 @@
       w.hearts = w.stats.maxHearts;
       w.maxHearts = w.stats.maxHearts;
       w.parry = w.stats.initialParry;
-      w.burstTimer = INITIAL_BURST_DELAY;
+      w.fireCooldown = 0;
       w.burstRemaining = 0;
       w.burstShotTimer = 0;
       w.dashTimer = 0;
@@ -517,6 +517,7 @@
       w.cmd.moveY = 0;
       w.cmd.hasTarget = false;
       w.cmd.dash = false;
+      w.cmd.fire = false;
     }
     match.roundTime = 0;
     match.roundPhase = 'fighting';
@@ -603,6 +604,7 @@
       w.cmd.aimX = clampNumber(input.aimX, 0, ARENA_WIDTH, ARENA_CENTER.x);
       w.cmd.aimY = clampNumber(input.aimY, 0, ARENA_HEIGHT, ARENA_CENTER.y);
     }
+    if ('fire' in input) w.cmd.fire = Boolean(input.fire);
     if (input.dash === true) {
       w.cmd.dash = true;
     }
@@ -902,11 +904,13 @@
 
     for (const role of ['creator', 'opponent']) {
       const w = match.witches[role];
-      w.burstTimer -= dt;
-      if (w.burstTimer <= 0 && w.burstRemaining <= 0) {
+      // Aucun tir automatique : une salve ne part que si la joueuse maintient
+      // la commande de tir. Tirer révèle brièvement la position, comme avant.
+      w.fireCooldown = Math.max(0, w.fireCooldown - dt);
+      if (w.cmd.fire && w.fireCooldown <= 0 && w.burstRemaining <= 0) {
         w.burstRemaining = w.stats.burstCount;
         w.burstShotTimer = 0;
-        w.burstTimer = w.stats.burstInterval;
+        w.fireCooldown = w.stats.burstInterval;
       }
       if (w.burstRemaining > 0) {
         w.burstShotTimer -= dt;
@@ -1129,6 +1133,9 @@
         dashCooldown: Math.round(self.dashCooldown * 100) / 100,
         dashMaxCooldown: self.stats.dashCooldown,
         dashActive: self.dashTimer > 0,
+        fireCooldown: Math.round(self.fireCooldown * 100) / 100,
+        fireMaxCooldown: self.stats.burstInterval,
+        firing: self.burstRemaining > 0,
         invulnerable: self.invTimer > 0,
         perfectDodges: self.perfectDodges,
         dodgeSuccess: self.dodgeSuccessTimer > 0,
@@ -1170,6 +1177,52 @@
       footsteps: visibleFootsteps,
       dodgeTrails: visibleTrails
     };
+  }
+
+  // Chaque joueuse voit sa propre sorcière en bas et l'adversaire en haut.
+  // Le monde reste arbitré côté créatrice ; ces helpers ne font que convertir
+  // l'écran local de l'invitée (pivoté de 180°) vers le monde, et inversement.
+  function orientCommandForRole(role, cmd) {
+    if (!cmd || typeof cmd !== 'object' || role !== 'opponent') return cmd;
+    const out = { ...cmd };
+    if (Number.isFinite(Number(out.moveX))) out.moveX = -Number(out.moveX);
+    if (Number.isFinite(Number(out.moveY))) out.moveY = -Number(out.moveY);
+    if (out.targetX != null && Number.isFinite(Number(out.targetX))) out.targetX = ARENA_WIDTH - Number(out.targetX);
+    if (out.targetY != null && Number.isFinite(Number(out.targetY))) out.targetY = ARENA_HEIGHT - Number(out.targetY);
+    if (out.aimX != null && Number.isFinite(Number(out.aimX))) out.aimX = ARENA_WIDTH - Number(out.aimX);
+    if (out.aimY != null && Number.isFinite(Number(out.aimY))) out.aimY = ARENA_HEIGHT - Number(out.aimY);
+    return out;
+  }
+
+  function orientSnapshotForViewer(snapshot, viewerRole) {
+    if (!snapshot || typeof snapshot !== 'object' || viewerRole !== 'opponent') return snapshot;
+    const fx = x => (x != null && Number.isFinite(Number(x)) ? ARENA_WIDTH - Number(x) : x);
+    const fy = y => (y != null && Number.isFinite(Number(y)) ? ARENA_HEIGHT - Number(y) : y);
+    const fa = a => (a != null && Number.isFinite(Number(a)) ? Number(a) + Math.PI : a);
+    const out = { ...snapshot };
+    out.self = { ...snapshot.self, x: fx(snapshot.self.x), y: fy(snapshot.self.y), aimAngle: fa(snapshot.self.aimAngle) };
+    out.opponent = { ...snapshot.opponent };
+    if (snapshot.opponent.visible) {
+      out.opponent.x = fx(snapshot.opponent.x);
+      out.opponent.y = fy(snapshot.opponent.y);
+      out.opponent.aimAngle = fa(snapshot.opponent.aimAngle);
+    }
+    if (snapshot.lastKnownOpponent) {
+      out.lastKnownOpponent = {
+        ...snapshot.lastKnownOpponent,
+        x: fx(snapshot.lastKnownOpponent.x),
+        y: fy(snapshot.lastKnownOpponent.y),
+        aimAngle: fa(snapshot.lastKnownOpponent.aimAngle)
+      };
+    }
+    out.projectiles = (snapshot.projectiles || []).map(p => ({ ...p, x: fx(p.x), y: fy(p.y), vx: -p.vx, vy: -p.vy }));
+    out.footsteps = (snapshot.footsteps || []).map(s => ({ ...s, x: fx(s.x), y: fy(s.y) }));
+    out.dodgeTrails = (snapshot.dodgeTrails || []).map(t => ({
+      ...t,
+      x1: fx(t.x1), y1: fy(t.y1),
+      x2: fx(t.x2), y2: fy(t.y2)
+    }));
+    return out;
   }
 
   return Object.freeze({
@@ -1219,6 +1272,8 @@
     applyCommand,
     isOpponentVisible,
     stepMatch,
-    createSnapshotFor
+    createSnapshotFor,
+    orientCommandForRole,
+    orientSnapshotForViewer
   });
 });

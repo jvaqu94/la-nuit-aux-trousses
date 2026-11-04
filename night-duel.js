@@ -64,10 +64,11 @@
   const duelKeys = new Set();
   let padDashHeld = false;
   let padPauseHeld = false;
+  let fireButtonHeld = false;
 
   const pointerState = {
     mouseAimActive: false,
-    mouseDown: false,
+    fireMouse: false,
     aimX: Core.ARENA_CENTER.x,
     aimY: Core.ARENA_CENTER.y,
     moveTouchId: null,
@@ -228,6 +229,9 @@
     if (pauseBtn && basePauseLabel) pauseBtn.textContent = basePauseLabel;
     const hint = el('hint');
     if (hint && baseHintLabel) hint.textContent = baseHintLabel;
+    const fireBtn = el('duelFire');
+    if (fireBtn) fireBtn.style.display = 'none';
+    fireButtonHeld = false;
     hideTopHud();
   }
 
@@ -309,7 +313,8 @@
         aimX: data.aimX,
         aimY: data.aimY,
         dash: data.dash,
-        dashSeq: data.dashSeq
+        dashSeq: data.dashSeq,
+        fire: data.fire
       });
       return;
     }
@@ -1360,6 +1365,7 @@
           <small id="duelHudSelfName">TOI</small>
           <b id="duelHudSelfHearts">♥♥♥♥♥</b>
           <span id="duelHudDashState">Esquive prête</span>
+          <span id="duelHudFireState">Tir manuel prêt</span>
         </div>
         <div class="duel-hud-center">
           <div class="duel-hud-scoreline"><span id="duelHudRound">M1/3</span> · <strong id="duelHudScore">0 — 0</strong> · <b id="duelHudClock">01:30</b></div>
@@ -1413,6 +1419,7 @@
     const selfHearts = el('duelHudSelfHearts');
     const oppHearts = el('duelHudOppHearts');
     const dashState = el('duelHudDashState');
+    const fireState = el('duelHudFireState');
     const roundEl = el('duelHudRound');
     const scoreEl = el('duelHudScore');
     const clockEl = el('duelHudClock');
@@ -1429,6 +1436,10 @@
         : renderSnap.self.dashCooldown > 0
           ? `Esquive ${renderSnap.self.dashCooldown.toFixed(1)} s`
           : 'Esquive prête';
+    }
+    if (fireState) {
+      const fireCd = Number(renderSnap.self.fireCooldown) || 0;
+      fireState.textContent = fireCd > 0 ? `Tir ${fireCd.toFixed(1)} s` : 'Tir manuel prêt';
     }
     if (roundEl) roundEl.textContent = `M${renderSnap.round}/3`;
     if (scoreEl) scoreEl.textContent = `${myScore} — ${oppScore}`;
@@ -1468,6 +1479,13 @@
       dashBtn.classList.toggle('dash-ready', cd <= 0);
       dashBtn.classList.toggle('dash-cooldown', cd > 0);
     }
+    const fireBtn = el('duelFire');
+    if (fireBtn) {
+      const fireCd = Number(renderSnap.self.fireCooldown) || 0;
+      fireBtn.textContent = fireCd > 0 ? `✦ Tir ${fireCd.toFixed(1)} s` : '✦ Tir';
+      fireBtn.classList.toggle('duel-fire-ready', fireCd <= 0);
+      fireBtn.classList.toggle('duel-fire-cooldown', fireCd > 0);
+    }
   }
 
   function resumeCombat() {
@@ -1506,7 +1524,8 @@
     padDashHeld = false;
     padPauseHeld = false;
     pointerState.mouseAimActive = false;
-    pointerState.mouseDown = false;
+    pointerState.fireMouse = false;
+    fireButtonHeld = false;
     pointerState.moveTouchId = null;
     pointerState.aimTouchId = null;
     pointerState.touchMoveX = 0;
@@ -1537,7 +1556,7 @@
   function readLocalCommand() {
     if (combatPaused) {
       return {
-        moveX: 0, moveY: 0, focus: false,
+        moveX: 0, moveY: 0, focus: false, fire: false,
         hasTarget: false, targetX: pointerState.aimX, targetY: pointerState.aimY,
         hasAim: false, aimX: pointerState.aimX, aimY: pointerState.aimY,
         dashSeq
@@ -1558,6 +1577,10 @@
     let moveX = kx;
     let moveY = ky;
     let focus = keyIsDown(bindingFor('focus', 'Shift'));
+    let fire = keyIsDown(bindingFor('special', 'f')) || keyIsDown('f') || pointerState.fireMouse || fireButtonHeld;
+    let aimX = pointerState.aimX;
+    let aimY = pointerState.aimY;
+    let hasAim = Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null);
 
     const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
     if (gp) {
@@ -1567,7 +1590,16 @@
         moveX = ax;
         moveY = ay;
       }
-      focus = focus || Boolean(gp.buttons?.[6]?.pressed || gp.buttons?.[7]?.pressed);
+      focus = focus || Boolean(gp.buttons?.[6]?.pressed);
+      fire = fire || Boolean(gp.buttons?.[7]?.pressed);
+      const rx = Number(gp.axes?.[2]) || 0;
+      const ry = Number(gp.axes?.[3]) || 0;
+      if (Math.hypot(rx, ry) > 0.22 && renderSnap) {
+        const screenSelf = Core.orientSnapshotForViewer(renderSnap, myRole()).self;
+        aimX = Math.max(0, Math.min(Core.ARENA_WIDTH, screenSelf.x + rx * 260));
+        aimY = Math.max(0, Math.min(Core.ARENA_HEIGHT, screenSelf.y + ry * 260));
+        hasAim = true;
+      }
     }
 
     if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
@@ -1580,19 +1612,23 @@
       moveY /= len;
     }
 
-    const useMouseFollow = len < 0.05 && pointerState.mouseDown;
     return {
       moveX: Math.round(moveX * 1000) / 1000,
       moveY: Math.round(moveY * 1000) / 1000,
       focus: Boolean(focus),
-      hasTarget: useMouseFollow,
-      targetX: Math.round(pointerState.aimX * 10) / 10,
-      targetY: Math.round(pointerState.aimY * 10) / 10,
-      hasAim: Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null),
-      aimX: Math.round(pointerState.aimX * 10) / 10,
-      aimY: Math.round(pointerState.aimY * 10) / 10,
+      fire: Boolean(fire),
+      hasTarget: false,
+      targetX: Math.round(aimX * 10) / 10,
+      targetY: Math.round(aimY * 10) / 10,
+      hasAim,
+      aimX: Math.round(aimX * 10) / 10,
+      aimY: Math.round(aimY * 10) / 10,
       dashSeq
     };
+  }
+
+  function localCommandToWorld(cmd) {
+    return Core.orientCommandForRole(myRole(), cmd);
   }
 
   function pollDuelGamepadActions() {
@@ -1616,7 +1652,7 @@
   function triggerLocalDodge() {
     if (!combatActive || combatPaused) return false;
     dashSeq += 1;
-    const cmd = readLocalCommand();
+    const cmd = localCommandToWorld(readLocalCommand());
     cmd.dash = true;
     if (myRole() === 'creator' && hostMatch) {
       Core.applyCommand(hostMatch, 'creator', cmd);
@@ -1635,7 +1671,7 @@
     if (!combatActive || !duel) return;
     applyTouchLayoutPreference();
     pollDuelGamepadActions();
-    const cmd = readLocalCommand();
+    const cmd = localCommandToWorld(readLocalCommand());
 
     if (myRole() === 'creator' && hostMatch) {
       Core.applyCommand(hostMatch, 'creator', cmd);
@@ -1736,6 +1772,7 @@
   function drawDuelArena() {
     if (!combatActive || !renderSnap || typeof ctx === 'undefined' || !ctx) return;
     const c = ctx;
+    const viewSnap = Core.orientSnapshotForViewer(renderSnap, myRole());
     const width = Core.ARENA_WIDTH;
     const height = Core.ARENA_HEIGHT;
     const cx = Core.ARENA_CENTER.x;
@@ -1765,7 +1802,7 @@
     c.stroke();
 
     // Halo de vision de la joueuse locale.
-    const self = renderSnap.self;
+    const self = viewSnap.self;
     const selfCosmetic = Core.getHaloCosmetic(self.cosmetic);
     const haloGrad = c.createRadialGradient(self.x, self.y, 18, self.x, self.y, self.haloRadius);
     haloGrad.addColorStop(0, selfCosmetic.color);
@@ -1785,8 +1822,8 @@
     c.setLineDash([]);
 
     // Onde de pulsation lunaire.
-    if (renderSnap.lunarWave) {
-      const p = Math.min(1, renderSnap.lunarWave.age / Math.max(0.1, renderSnap.lunarWave.maxAge));
+    if (viewSnap.lunarWave) {
+      const p = Math.min(1, viewSnap.lunarWave.age / Math.max(0.1, viewSnap.lunarWave.maxAge));
       c.strokeStyle = `rgba(198, 226, 255, ${(1 - p) * 0.7})`;
       c.lineWidth = 4;
       c.beginPath();
@@ -1795,7 +1832,7 @@
     }
 
     // Indices de pas (cercles acoustiques).
-    for (const step of renderSnap.footsteps || []) {
+    for (const step of viewSnap.footsteps || []) {
       const ratio = Math.min(1, step.age / Math.max(0.1, step.maxAge));
       const isMine = step.ownerRole === self.role;
       c.strokeStyle = isMine
@@ -1808,7 +1845,7 @@
     }
 
     // Traînées d'esquive.
-    for (const trail of renderSnap.dodgeTrails || []) {
+    for (const trail of viewSnap.dodgeTrails || []) {
       const ratio = Math.min(1, trail.age / Math.max(0.1, trail.maxAge));
       const isMine = trail.ownerRole === self.role;
       c.strokeStyle = isMine
@@ -1823,9 +1860,9 @@
     }
 
     // Silhouette figée à la dernière position connue lorsque l'adversaire est cachée.
-    const opp = renderSnap.opponent;
-    if (!opp.visible && renderSnap.lastKnownOpponent) {
-      const lk = renderSnap.lastKnownOpponent;
+    const opp = viewSnap.opponent;
+    if (!opp.visible && viewSnap.lastKnownOpponent) {
+      const lk = viewSnap.lastKnownOpponent;
       drawWitchFigure(c, lk.x, lk.y, lk.aimAngle, '#b8a4d6', {
         ghost: true,
         age: lk.age,
@@ -1843,7 +1880,7 @@
     }
 
     // Projectiles dangereux : TOUJOURS visibles même hors du halo !
-    for (const proj of renderSnap.projectiles || []) {
+    for (const proj of viewSnap.projectiles || []) {
       const isDanger = proj.ownerRole !== self.role;
       const speed = Math.hypot(proj.vx, proj.vy) || 1;
       const tailX = proj.x - (proj.vx / speed) * (proj.r * 2.4);
@@ -1882,22 +1919,22 @@
     }
 
     // Brume extérieure au rayon de zone (rétrécissement progressif après 60 s).
-    if (renderSnap.zoneRadius < 680) {
+    if (viewSnap.zoneRadius < 680) {
       c.save();
       c.beginPath();
       c.rect(0, 0, width, height);
-      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2, true);
-      c.fillStyle = renderSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
+      c.arc(cx, cy, viewSnap.zoneRadius, 0, Math.PI * 2, true);
+      c.fillStyle = viewSnap.suddenDeath ? 'rgba(46, 10, 28, 0.76)' : 'rgba(18, 10, 34, 0.68)';
       c.fill('evenodd');
 
-      c.strokeStyle = renderSnap.suddenDeath
+      c.strokeStyle = viewSnap.suddenDeath
         ? '#ff6b88'
-        : renderSnap.roundTime >= Core.ZONE_SHRINK_START
+        : viewSnap.roundTime >= Core.ZONE_SHRINK_START
           ? '#ffb86c'
           : 'rgba(182, 152, 224, 0.35)';
-      c.lineWidth = renderSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
+      c.lineWidth = viewSnap.roundTime >= Core.ZONE_SHRINK_START ? 3 : 1.5;
       c.beginPath();
-      c.arc(cx, cy, renderSnap.zoneRadius, 0, Math.PI * 2);
+      c.arc(cx, cy, viewSnap.zoneRadius, 0, Math.PI * 2);
       c.stroke();
       c.restore();
     }
@@ -1944,10 +1981,12 @@
           triggerLocalDodge();
           return;
         }
-        pointerState.mouseDown = true;
-        pointerState.mouseAimActive = true;
-        pointerState.aimX = pt.x;
-        pointerState.aimY = pt.y;
+        if (evt.button === 0) {
+          pointerState.fireMouse = true;
+          pointerState.mouseAimActive = true;
+          pointerState.aimX = pt.x;
+          pointerState.aimY = pt.y;
+        }
       });
 
       node.addEventListener('pointermove', evt => {
@@ -1987,7 +2026,7 @@
         } else if (evt.pointerId === pointerState.aimTouchId) {
           pointerState.aimTouchId = null;
         } else if (evt.pointerType !== 'touch') {
-          pointerState.mouseDown = false;
+          pointerState.fireMouse = false;
         }
       };
       node.addEventListener('pointerup', releasePointer);
@@ -2019,7 +2058,8 @@
     });
     window.addEventListener('blur', () => {
       duelKeys.clear();
-      pointerState.mouseDown = false;
+      pointerState.fireMouse = false;
+      fireButtonHeld = false;
       pointerState.moveTouchId = null;
       pointerState.aimTouchId = null;
       pointerState.touchMoveX = 0;
@@ -2028,6 +2068,44 @@
   }
 
   function wireCombatButtons() {
+    const bar = document.querySelector('.touchbar');
+    let fireBtn = el('duelFire');
+    if (!fireBtn && bar) {
+      fireBtn = document.createElement('button');
+      fireBtn.type = 'button';
+      fireBtn.id = 'duelFire';
+      fireBtn.className = 'secondary duel-fire-button';
+      fireBtn.textContent = '✦ Tir';
+      const dashNode = el('dash');
+      if (dashNode && dashNode.parentElement === bar) bar.insertBefore(fireBtn, dashNode);
+      else bar.appendChild(fireBtn);
+      const press = evt => {
+        evt?.preventDefault?.();
+        fireButtonHeld = true;
+        try { fireBtn.setPointerCapture?.(evt.pointerId); } catch (_) {}
+      };
+      const release = evt => {
+        evt?.preventDefault?.();
+        fireButtonHeld = false;
+      };
+      fireBtn.addEventListener('pointerdown', press);
+      fireBtn.addEventListener('pointerup', release);
+      fireBtn.addEventListener('pointercancel', release);
+      fireBtn.addEventListener('pointerleave', release);
+      fireBtn.addEventListener('keydown', evt => {
+        if (evt.key === ' ' || evt.key === 'Enter') {
+          evt.preventDefault();
+          fireButtonHeld = true;
+        }
+      });
+      fireBtn.addEventListener('keyup', evt => {
+        if (evt.key === ' ' || evt.key === 'Enter') {
+          evt.preventDefault();
+          fireButtonHeld = false;
+        }
+      });
+    }
+    if (fireBtn) fireBtn.style.display = '';
     const dashBtn = el('dash');
     if (dashBtn) {
       if (!basePauseLabel) basePauseLabel = el('pause')?.textContent || '';
@@ -2050,8 +2128,7 @@
       };
     }
     const hint = el('hint');
-    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · clic/droit viser · Espace/E esquive · Maj précision';
-    const bar = document.querySelector('.touchbar');
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt · F/clic gauche ou bouton Tir · Espace/E esquive · Maj précision';
     if (bar) bar.style.display = 'flex';
   }
 
@@ -2249,6 +2326,9 @@
     .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
     .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
     .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
+    .duel-fire-button{min-width:96px;border-color:#d8b574aa;color:#ffe6bd;background:linear-gradient(145deg,#3a2849,#251c36)}
+    .duel-fire-ready{box-shadow:0 0 0 1px #ffd08e55}
+    .duel-fire-cooldown{opacity:.72}
     body.night-duel-combat .hud,
     body.night-duel-combat .bossbar,
     body.night-duel-combat .game-details{display:none!important}

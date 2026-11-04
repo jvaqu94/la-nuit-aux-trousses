@@ -53,11 +53,21 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.equal(initialGuestSnap.opponent.aimAngle, null);
   assert.equal(JSON.stringify(initialGuestSnap).includes('"y":730'), false);
 
-  // Avance jusqu'à la première rafale (~0.85 s) : 3 projectiles pour creator, 4 pour opponent (twin-burst).
-  Core.stepMatch(match, 1.25);
+  // Aucun tir automatique : même après plusieurs secondes, aucune salve ne part
+  // et personne n'est révélé tant que la commande de tir n'est pas maintenue.
+  Core.stepMatch(match, 2.5);
+  assert.equal(match.projectiles.length, 0, 'Aucun projectile sans commande de tir manuelle');
+  assert.equal(match.witches.creator.revealTimer, 0, 'Le créateur ne se révèle pas tout seul');
+  assert.equal(match.witches.opponent.revealTimer, 0, "L'invitée ne se révèle pas toute seule");
+  assert.equal(Core.createSnapshotFor(match, 'opponent').opponent.visible, false);
+
+  // Tir manuel : 3 projectiles pour creator, 4 pour opponent (twin-burst).
+  Core.applyCommand(match, 'creator', { fire: true });
+  Core.applyCommand(match, 'opponent', { fire: true });
+  Core.stepMatch(match, 0.4);
   const creatorShots = match.projectiles.filter(p => p.ownerRole === 'creator');
   const opponentShots = match.projectiles.filter(p => p.ownerRole === 'opponent');
-  assert.equal(creatorShots.length, 3, 'Rafale de base = 3 projectiles');
+  assert.equal(creatorShots.length, 3, 'Salve manuelle de base = 3 projectiles');
   assert.equal(opponentShots.length, 4, 'Rafale jumelle = 4 projectiles');
   assert.equal(opponentShots[0].r > creatorShots[0].r, true, 'Onde large élargit les projectiles');
 
@@ -66,13 +76,14 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.equal(duringShotSnap.opponent.visible, true);
   assert.notEqual(duringShotSnap.opponent.x, null);
   assert.equal(duringShotSnap.projectiles.length, 7);
+  assert.ok(duringShotSnap.self.fireCooldown > 0, 'Le cooldown de tir est exposé au HUD');
 
-  // Le créateur se déplace loin pendant que la révélation expire ; les projectiles restent visibles
-  // mais les nouvelles coordonnées cachées ne fuitent jamais dans le snapshot invité.
-  match.witches.creator.burstTimer = 10;
-  match.witches.opponent.burstTimer = 10;
-  Core.applyCommand(match, 'creator', { moveX: -1, moveY: 0 });
-  Core.stepMatch(match, 0.75);
+  // Relâcher le tir arrête les nouvelles salves ; le créateur se déplace loin pendant que
+  // la révélation expire. Les projectiles restent visibles mais les nouvelles coordonnées
+  // cachées ne fuitent jamais dans le snapshot invité.
+  Core.applyCommand(match, 'creator', { fire: false, moveX: -1, moveY: 0 });
+  Core.applyCommand(match, 'opponent', { fire: false });
+  Core.stepMatch(match, 1.2);
   const hiddenAgainSnap = Core.createSnapshotFor(match, 'opponent');
   assert.equal(hiddenAgainSnap.opponent.visible, false);
   assert.equal(hiddenAgainSnap.opponent.x, null);
@@ -92,8 +103,8 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['fleeting-dash', 'comet-boots', 'dawn-halo'],
     opponentPerks: ['short-lance', 'ember-heart', 'swift-powder']
   });
-  match.witches.creator.burstTimer = 99;
-  match.witches.opponent.burstTimer = 99;
+  match.witches.creator.fireCooldown = 99;
+  match.witches.opponent.fireCooldown = 99;
 
   // Projectile passant à proximité (34 px du centre : hors HIT_RADIUS=16+8=24, mais dans DODGE_PROXIMITY_RADIUS=52+8=60).
   match.projectiles.push({
@@ -122,8 +133,8 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
     creatorPerks: ['fleeting-dash', 'comet-boots', 'dawn-halo'],
     opponentPerks: ['short-lance', 'ember-heart', 'swift-powder']
   });
-  matchDirect.witches.creator.burstTimer = 99;
-  matchDirect.witches.opponent.burstTimer = 99;
+  matchDirect.witches.creator.fireCooldown = 99;
+  matchDirect.witches.opponent.fireCooldown = 99;
   matchDirect.projectiles.push({
     id: 901,
     ownerRole: 'opponent',
@@ -170,8 +181,8 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   });
   // Neutralise les tirs pour observer précisément l'horloge d'arène jusqu'à 90 s.
   const holdFire = () => {
-    match.witches.creator.burstTimer = 999;
-    match.witches.opponent.burstTimer = 999;
+    match.witches.creator.fireCooldown = 999;
+    match.witches.opponent.fireCooldown = 999;
   };
   holdFire();
   Core.stepMatch(match, 15.05);
@@ -332,4 +343,39 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.deepEqual(m1.witches.creator.stats, m1.witches.opponent.stats, 'Les halos sont purement cosmétiques');
 }
 
-console.log('Duel de la Nuit noire — cœur déterministe, visibilité, snapshots, mort subite et cotes : OK');
+// 7. Orientation d'écran identique : chaque joueuse voit sa sorcière en bas et
+//    l'adversaire en haut ; les commandes locales de l'invitée sont converties
+//    vers le monde avant arbitrage.
+{
+  const match = Core.createMatch({
+    creatorPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash'],
+    opponentPerks: ['comet-boots', 'dawn-halo', 'fleeting-dash']
+  });
+  const creatorView = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'creator'), 'creator');
+  const guestView = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'opponent'), 'opponent');
+  assert.equal(creatorView.self.y, 730, 'La créatrice se voit en bas');
+  assert.equal(guestView.self.y, 730, "L'invitée se voit aussi en bas");
+  assert.equal(guestView.self.x, 400);
+  assert.ok(Math.sin(guestView.self.aimAngle) < -0.999 && Math.abs(Math.cos(guestView.self.aimAngle)) < 0.02, "L'invitée vise vers le haut de son écran");
+
+  const localCmd = { moveX: 1, moveY: -1, aimX: 600, aimY: 200, fire: true, dashSeq: 3 };
+  const worldCmd = Core.orientCommandForRole('opponent', localCmd);
+  assert.equal(worldCmd.moveX, -1, 'Droite écran invité = gauche monde');
+  assert.equal(worldCmd.moveY, 1, 'Haut écran invité = bas monde');
+  assert.equal(worldCmd.aimX, 200);
+  assert.equal(worldCmd.aimY, 700);
+  assert.equal(worldCmd.fire, true);
+  assert.equal(worldCmd.dashSeq, 3);
+  assert.equal(Core.orientCommandForRole('creator', localCmd), localCmd, 'La créatrice joue déjà en coordonnées monde');
+
+  Core.applyCommand(match, 'opponent', worldCmd);
+  Core.stepMatch(match, 0.2);
+  assert.ok(match.witches.opponent.x < 400, "L'invitée va à droite de son écran, donc à gauche du monde");
+  assert.ok(match.witches.opponent.y > 170, "L'invitée monte vers le centre depuis le haut du monde");
+  const guestAfter = Core.orientSnapshotForViewer(Core.createSnapshotFor(match, 'opponent'), 'opponent');
+  assert.ok(guestAfter.self.x > 400, 'Le snapshot orienté montre bien le déplacement à droite');
+  assert.ok(guestAfter.self.y < 730);
+  assert.ok(guestAfter.projectiles.every(p => p.ownerRole !== 'opponent' || p.vy < 0), 'Les tirs invités montent à l’écran');
+}
+
+console.log('Duel de la Nuit noire — cœur déterministe, tir manuel, orientation, visibilité, snapshots, mort subite et cotes : OK');

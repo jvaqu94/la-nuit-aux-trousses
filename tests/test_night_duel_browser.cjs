@@ -904,6 +904,13 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.equal(host.document.getElementById('pause').textContent, 'Ⅱ Abandon');
   assert.ok(host.document.getElementById('hint').textContent.includes('DUEL'));
 
+  assert.ok(host.document.getElementById('duelFire'), 'le duel doit proposer un bouton Tir manuel');
+  assert.ok(host.document.getElementById('hint').textContent.includes('Tir'));
+
+  // Aucun tir automatique : l'hôte avance sans tirer et ne révèle pas sa position.
+  for (let i = 0; i < 90; i += 1) tickClient(host, 1 / 60);
+  assert.equal((host.ctx.NightDuel.snapshot?.projectiles?.length || 0), 0, 'aucun projectile sans tir manuel');
+
   // Le bouton Esquive tactile doit déclencher l’esquive du duel, pas celle de la campagne.
   host.document.getElementById('dash').click();
   tickClient(host, 1 / 60);
@@ -934,26 +941,36 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.equal(firstWireSnap.opponent.x, null, 'Aucune coordonnée X cachée envoyée à l’invitée');
   assert.equal(firstWireSnap.opponent.y, null, 'Aucune coordonnée Y cachée envoyée à l’invitée');
 
-  // L'invitée envoie une commande de déplacement vers la droite (sans jamais envoyer de position d'autorité).
+  // L'invitée envoie une commande de déplacement vers la droite de SON écran.
+  // Comme son écran est orienté comme celui de la créatrice (elle se voit en bas),
+  // la droite écran correspond à la gauche du monde arbitré par l'hôte.
   guest.ctx.moveInput.arrowright = true;
   tickClient(guest, 0.05);
   await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd'));
   const wireCmd = mockSupabase.wireLog.find(m => m.payload?.event === 'cmd').payload.payload;
-  assert.equal(wireCmd.moveX, 1);
+  assert.equal(wireCmd.moveX, -1, 'droite écran invitée = gauche monde');
   assert.equal('hearts' in wireCmd, false, 'Le paquet de commande invité ne transporte aucun état d’autorité');
 
-  // Avance l'hôte d'1,2 s : les rafales automatiques tirent et les projectiles deviennent visibles chez l'invitée.
+  // Les deux joueuses maintiennent le tir manuel (F) : les salves partent et les
+  // projectiles deviennent visibles chez l'invitée.
+  host.ctx.moveInput.f = true;
+  guest.ctx.moveInput.f = true;
   for (let i = 0; i < 72; i += 1) {
     tickClient(host, 1 / 60);
   }
   await waitUntil(() => (guest.ctx.NightDuel.snapshot?.projectiles?.length || 0) >= 3);
-  assert.ok(guest.ctx.NightDuel.snapshot.self.x > 400, 'La commande de l’invitée a bien déplacé sa sorcière côté hôte');
+  const guestWorld = guest.ctx.NightDuel.snapshot;
+  const guestScreen = Core.orientSnapshotForViewer(guestWorld, 'opponent');
+  assert.ok(guestWorld.self.x < 400, 'La commande de l’invitée a bien déplacé sa sorcière côté hôte');
+  assert.ok(guestScreen.self.x > 400, 'À l’écran, l’invitée se voit bien aller vers la droite');
+  assert.ok(guestScreen.self.y > 650, 'L’invitée se voit en bas de son écran, comme la créatrice');
   guest.ctx.drawGame();
 
   // 5. Conclusion du duel en 2 manches gagnantes + double rapport de consensus + mise à jour de la cote (1000 -> 1020 / 980).
-  // Rapproche les deux sorcières au centre et laisse les salves conclure les 2 manches.
+  // Les deux sorcières montent vers le haut de leur propre écran (donc vers le centre
+  // du monde) et maintiennent le tir manuel pour conclure les 2 manches.
   guest.ctx.moveInput.arrowright = false;
-  guest.ctx.moveInput.arrowdown = true;
+  guest.ctx.moveInput.arrowup = true;
   host.ctx.moveInput.arrowup = true;
   let guard = 0;
   while (host.ctx.NightDuel.isCombatActive && guard < 2400) {
@@ -1065,7 +1082,9 @@ async function tryOptionalChromiumFlow() {
     assert.equal(hiddenSnap.opponent.y, null);
 
     await p2.keyboard.down('ArrowRight');
+    await p2.keyboard.down('f');
     await p2.waitForFunction(() => (window.NightDuel?.snapshot?.projectiles?.length || 0) > 0);
+    await p2.keyboard.up('f');
     await p2.keyboard.up('ArrowRight');
 
     await p2.click('#duelForfeitBtn');
