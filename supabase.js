@@ -117,14 +117,22 @@ async function fetchCloudSave(){
 }
 function localHasProgress(){
  try{
+  // Le profil sait distinguer un vrai premier vol d'une simple journée vide
+  // créée par l'affichage du menu sur un appareil neuf.
+  if(typeof window.Journey?.hasPlayed==='function')return !!window.Journey.hasPlayed();
   const j=window.Journey?.state;
-  if(j&&(Number(j.xp)>0||j.trainingDone||j.tutorialDone||(Array.isArray(j.recent)&&j.recent.length)||(Array.isArray(j.activeDates)&&j.activeDates.length)||Object.keys(j.seen||{}).length))return true;
+  if(j&&(Number(j.xp)>0||j.trainingDone||j.tutorialDone||j.firstGameAt||(Array.isArray(j.recent)&&j.recent.length)||(Array.isArray(j.activeDates)&&j.activeDates.length)||Object.keys(j.seen||{}).length))return true;
   const high=JSON.parse(localStorage.getItem('minuit-highscores')||'null');
-  if(high&&typeof high==='object'&&Object.values(high).some(value=>Number(value)>0))return true;
-  const league=JSON.parse(localStorage.getItem('minuit-local-league-v1')||'null');
-  if(league&&typeof league==='object'&&Object.keys(league.days||{}).length)return true;
+  if(high&&typeof high==='object'&&!Array.isArray(high)&&Object.values(high).some(value=>Number(value)>0))return true;
   const scores=JSON.parse(localStorage.getItem('minuit-v2-scores')||'null');
   if(Array.isArray(scores)&&scores.length)return true;
+  const checkpoint=JSON.parse(localStorage.getItem('minuit-checkpoint')||'null');
+  if(checkpoint&&typeof checkpoint==='object'&&checkpoint.version)return true;
+  const league=JSON.parse(localStorage.getItem('minuit-local-league-v1')||'null');
+  if(league&&typeof league==='object'){
+   if(Object.keys(league.runs||{}).length)return true;
+   if(Object.values(league.days||{}).some(day=>day&&(Number(day.best)>0||Number(day.bonus)>0||Number(day.rankedUsed)>0||Number(day.dailyUsed)>0||Object.values(day.stats||{}).some(value=>Number(value)>0))))return true;
+  }
  }catch{}
  return false;
 }
@@ -364,7 +372,7 @@ async function pushSave(){
 /* Restauration d’une ligne cloud. L’état de synchro est aligné avant l’import,
  * car Journey.importSave recharge la page en cas de succès. */
 async function restoreCloud(row,options={}){
- const payload=row?.payload;
+ const payload=typeof Journey.normalizeBundle==='function'?Journey.normalizeBundle(row?.payload):row?.payload;
  if(!payload)throw Error('Aucune sauvegarde cloud pour ce compte.');
  Journey.validate(payload);
  const stamp=cloudRowStamp(row);

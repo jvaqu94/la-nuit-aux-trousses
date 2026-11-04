@@ -121,5 +121,12 @@ const style=document.createElement('style');style.textContent=`
 @media(max-height:500px) and (min-width:651px){.home-menu .home-hero{min-height:275px}#menuVisual.home-visual{min-height:275px}.home-witch{width:255px}.home-moon{width:150px;height:150px}.home-hero .menu-copy{padding-top:18px;padding-bottom:18px}.home-hero .menu-copy h1{font-size:39px}.home-menu-panels{margin-top:8px}}
 @media(prefers-reduced-motion:reduce){.home-menu *{scroll-behavior:auto}}
 `;
-document.head.appendChild(style);setInterval(updateHomeAudio,800);Journey.menu();
+document.head.appendChild(style);setInterval(updateHomeAudio,800);
+/* Après connexion / restauration, le menu doit refléter le profil récupéré :
+   un compte ayant déjà joué ou terminé l'entraînement ne reste pas bloqué sur
+   le bouton « Entraînement obligatoire » rendu avant la synchronisation. */
+function refreshHomeAfterAccount(){if(state==='league-menu'&&!Adventure.training)Journey.menu()}
+window.addEventListener('minuit:account-connected',refreshHomeAfterAccount);
+window.addEventListener('minuit:progress-restored',refreshHomeAfterAccount);
+Journey.menu();
 })();

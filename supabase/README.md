@@ -79,7 +79,7 @@ Ouvrir **Compte & team** dans le menu ou les réglages :
 1. créer un accès avec un pseudo et un mot de passe, ou se connecter avec un compte e-mail existant ;
 2. **la synchronisation est automatique dans les deux sens** : à la connexion, la sauvegarde locale est envoyée si le cloud est vide, sinon la sauvegarde cloud est récupérée automatiquement (entraînement, scores, réglages, team) ;
 3. les changements suivants sont envoyés automatiquement, au maximum toutes les 30 secondes ;
-4. sur un autre appareil, il suffit de se connecter avec le même accès pour retrouver sa progression — aucun bouton obligatoire. **Envoyer ma progression** et **Récupérer le cloud** restent disponibles pour forcer une action.
+4. sur un autre appareil, il suffit de se connecter avec le même accès pour retrouver sa progression — aucun bouton obligatoire. **Envoyer ma progression** et **Récupérer le cloud** restent disponibles pour forcer une action. L’entraînement obligatoire suit le profil : s’il a déjà commencé/terminé une partie ou terminé l’entraînement, il n’est pas redemandé. Les anciennes sauvegardes sont normalisées à partir des traces de partie existantes, et une journée vide créée par le menu sur un appareil neuf n’est pas considérée comme une progression locale divergente.
 
 La restauration automatique réutilise la validation de l’import JSON et conserve une copie locale de secours (`minuit-import-rollback`) avant remplacement ; elle ne demande pas de confirmation quand l’appareil n’a pas de progression locale à perdre. Un compte possède un seul emplacement.
 
