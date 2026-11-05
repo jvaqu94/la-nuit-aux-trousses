@@ -427,6 +427,63 @@ hebdomadaires et duel gardent leur défilement et leur décor d'origine.
 
 ![Les quinze silhouettes vues de dessus](bestiaire-monde-3.jpg)
 
+## 9quater. Deuxième retour en jeu : butin, thème du Faubourg, pièges, minutes
+
+### Le butin dans les murs
+
+Le labyrinthe ne se contente plus de gêner : il récompense. Environ 38 % des blocs
+portent un sceau de cire **visible avant de casser**, ce qui transforme le mur en
+décision — quel bloc ouvrir, avec quel temps restant. Les cinq sceaux correspondent
+aux objets déjà ramassés par le jeu principal (`points`, `shield`, `candy`, `heal`,
+`upgrade`), donc rien de neuf à apprendre.
+
+Le pictogramme est **tracé par le code**, pas écrit avec un caractère Unicode : les
+glyphes ✦ ◈ ✷ ♥ ⚚ manquent dans beaucoup de polices et deviendraient des carrés vides.
+
+### Le Faubourg avait perdu son thème
+
+Le premier univers est un faubourg de nuit. Le Garde-mèche était un anneau hexagonal
+avec un orbe central, et le Facteur de cire un insecte à sacoche rectangulaire :
+lus comme des modules de science-fiction au milieu des toits. Ils sont redessinés en
+cire, fer forgé et bois, avec des bouts de chandelle, un dôme de verre, un éteignoir,
+une sacoche de cuir et des lettres cachetées.
+
+### Trois pièges vicieux, trois héritages
+
+| Forme | Univers | Mécanique | Héritage | Contre-jeu |
+| --- | --- | --- | --- | --- |
+| Volet claqueur | Faubourg | annonce 1,3 s puis panneau solide qui bouche la route | obstacles M1 × annonce M2 | le tuer annule ; sinon casser le panneau |
+| Moucheur | Lanternes rendues | souffle une mèche et la porte en halo protecteur | coût de flamme × halo M1 | le tuer rend la mèche |
+| Faux-cierge | Faubourg | déguisé en cierge, mord si ramassé | leurre du vampire M1 | tirer de loin : démasqué, dégâts ×2, prime |
+
+Le Faux-cierge reste **lisible** : sceau de cire rouge et légende « tire dessus avant
+de ramasser ». La vraie mèche porte une bande d'or et la légende « MÈCHE · +1 FLAMME ».
+Le piège punit la gourmandise, pas l'inattention.
+
+Un défaut trouvé en testant : `addMark` ne recopiait pas le champ `snuff`, donc le
+mouchage était annoncé mais sans effet. Corrigé et verrouillé par assertion.
+
+### Les minutes : quinze annoncées, cinq seulement jouables
+
+Le briefing promettait trois minutes par univers ; seule la vague 2 en donnait une.
+Les vagues 3 et 4 libèrent désormais la leur quand leur objectif est rempli (tenue
+de 22 s, puis deux sceaux éteints), et la vague ne se termine qu'une fois la minute
+ramassée. Un test parcourt les cinq univers et vérifie **3 + 3 + 3 + 3 + 3 = 15**.
+
+La minute est passée d'un glyphe `◷` à un **cadran de montre de gousset** : boîtier
+d'or, cadran clair lisible, douze graduations, aiguille animée, halo, et une légende
+qui compte l'univers et le total. La mèche, elle, a son propre cierge à bande d'or.
+
+### Plus aucune esquisse
+
+Les `stroke-dasharray` qui subsistaient dans les corps (Écho sans visage, Flamme
+creuse, Sonneur, Passeur) donnaient un air de brouillon. Ils sont remplacés par des
+tracés pleins, et un test refuse tout pointillé dans un sprite.
+
+![Le Faubourg et ses pièges](apercu-monde-3.jpg)
+
+![Bestiaire et objets](bestiaire-monde-3.jpg)
+
 ## 10. Découpage de livraison (historique)
 
 1. **Socle** : `activeWorld===3`, `thirdWorlds`, jauge de boss alternative, plafonds de budget + tests.

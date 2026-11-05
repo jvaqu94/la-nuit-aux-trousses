@@ -220,6 +220,74 @@ ajoute une troisième couche de pression :
   leur arène reste lisible, et se réinitialise à chaque changement de vague.
 - **Mondes 1 et 2, courses hebdomadaires et duel ne sont pas touchés.**
 
+#### Le butin scellé dans les murs
+
+Environ **38 % des blocs** portent un **sceau de cire visible avant de casser** : le
+joueur choisit quel bloc ouvrir au lieu de subir un tirage invisible. Le pictogramme
+est tracé par le code (pas un caractère Unicode, qui manquerait dans la police) :
+
+| Sceau | Bonus | Poids |
+| --- | --- | --- |
+| Losange | Trésor (points) | 34 |
+| Écu | Bouclier spectral | 20 |
+| Trois barres | Triple tir | 18 |
+| Croix | Vie | 14 |
+| Flèche | Arsenal (amélioration, sinon trésor) | 8 |
+
+Ce sont exactement les objets du jeu principal : ils tombent à l'endroit du bloc et
+sont ramassés par le code de butin existant, sans nouvelle mécanique à apprendre.
+
+#### Le Faubourg remis dans son thème
+
+Le premier univers du monde 3 est un faubourg de nuit — toits, ruelle, fenêtres
+allumées. Ses créatures étaient trop « futuristes » : anneau hexagonal et orbe
+lumineux. Elles sont redessinées en **cire, fer forgé et bois** :
+
+- **Garde-mèche** : veilleuse ronde en fer forgé, six bouts de chandelle, dôme de
+  verre, éteignoir au bout d'un bras.
+- **Facteur de cire** : papillon de cire portant un cierge, sacoche de cuir et
+  lettres cachetées.
+- **Volet claqueur** *(nouveau)* : volet de bois à gonds de fer, œil en trou de serrure.
+- **Faux-cierge** *(nouveau)* : cierge à gueule de cire, marqué d'un sceau rouge.
+
+#### Trois pièges vicieux
+
+Chacun réutilise une mécanique déjà apprise, et chacun se lit à l'écran :
+
+- **Volet claqueur** — annonce un « VOLET » pendant 1,3 s, puis **bouche la route**
+  par un panneau solide destructible. Le tuer avant l'échéance annule le claquement.
+  *(Héritage : obstacles destructibles du monde 1 × annonce Relais du monde 2.)*
+- **Moucheur** — souffle **une de tes mèches** et la porte comme un halo qui
+  **protège les autres** (dégâts ×0,55). Le tuer te rend la mèche.
+  *(Héritage : coût de flamme × halo protecteur.)*
+- **Faux-cierge** — se déguise en cierge récompense. Le ramasser **mord** (une vie) ;
+  lui tirer dessus de loin le démasque, **double les dégâts** et paie une prime.
+  Le signe est visible : **sceau de cire rouge** et légende « tire dessus avant de
+  ramasser ». La vraie mèche, elle, porte une bande d'or.
+  *(Héritage : leurre du vampire du monde 1.)*
+
+Le Moucheur rejoint le Bois des lanternes rendues ; les deux autres, le Faubourg.
+
+#### Les minutes, enfin représentées
+
+Le briefing annonçait **quinze minutes** mais une seule était ramassable par univers.
+Il y en a désormais **trois par univers** (vagues 2, 3 et 4), soit les quinze promises :
+
+- vague 2 : sous garde du Garde-mèche ;
+- vague 3 : libérée après les 22 secondes de tenue ;
+- vague 4 : libérée par les deux sceaux éteints.
+
+La minute n'est plus un glyphe `◷` mais un **cadran de montre de gousset** dessiné
+(`MinuitArt.minuteToken`) : boîtier d'or, cadran clair, graduations, aiguille qui
+tourne, halo et légende « MINUTE 2/3 À PRENDRE · 7/15 rendues ». Le bandeau d'objectif
+compte les minutes de l'univers et le total.
+
+#### Fin des silhouettes « esquisse »
+
+Les pointillés de construction qui faisaient brouillon (Écho sans visage, flamme de
+la Flamme creuse, anneau du Sonneur, ondulation du Passeur) sont remplacés par des tracés
+pleins. Un test interdit désormais tout `stroke-dasharray` dans le corps d'un sprite.
+
 **Aucun de ces cinq gardiens n’a de barre de vie.** Chacun possède sa jauge, sa condition de victoire et sa langue d’annonce ; trois d’entre eux ne tirent jamais. Les dégâts du joueur ne les entament pas : ils servent à agir sur le décor du combat (mèches, battant, boucle, lanternes).
 
 **Le monde 3 est un vrai shoot.** Après retour en jeu, les budgets ont été relevés : plus de monstres, et **toutes les formes tirent des projectiles** à chaque cycle. Leur mécanique signature revient un cycle sur deux, pour rester lisible au lieu de remplacer le combat.
@@ -445,7 +513,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `scenery/` | Images sources des décors, dont `sixth-*.jpg` pour le monde 3. |
 | `sixth-hour-art.js` | Silhouettes SVG et couches d’animation des 10 formes et 5 gardiens du monde 3. |
 | `sixth-scenery.js` | Décors peints du monde 3, embarqués (généré par `tools/build_sixth_scenery.py`). |
-| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, rangées à brèche, coincement du joueur. |
+| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, rangées à brèche, butin scellé, coincement du joueur. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
 | `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
 | `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |

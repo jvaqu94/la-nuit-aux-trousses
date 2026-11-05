@@ -29,10 +29,10 @@ const secondWorlds=[
 ];
 /* Monde 3 · La Sixième Heure : cinq univers, cinq veilles, cinq gardiens sans barre de vie. */
 const thirdWorlds=[
- {name:'Le Faubourg des veilles',short:'FAUBOURG',colors:['#2a2440','#141327','#4a3a5c'],moon:'#ffd9a0',boss:'La Veilleuse',kind:'veilleuse',foes:['wickWarden','waxCourier'],hour:'L’heure des fenêtres'},
+ {name:'Le Faubourg des veilles',short:'FAUBOURG',colors:['#2a2440','#141327','#4a3a5c'],moon:'#ffd9a0',boss:'La Veilleuse',kind:'veilleuse',foes:['wickWarden','waxCourier','shutterImp','waxMimic'],hour:'L’heure des fenêtres'},
  {name:'Le Clocher muet',short:'CLOCHER',colors:['#1f3340','#101c26','#3c5a63'],moon:'#cfe6d8',boss:'Le Sonneur sans battant',kind:'sonneur',foes:['bronzeCrow','crackedBell'],hour:'L’heure qui n’a pas sonné'},
  {name:'L’Estran des pas perdus',short:'ESTRAN',colors:['#26333f','#111a24','#465a63'],moon:'#e8dcc0',boss:'Le Passeur sans ombre',kind:'passeur',foes:['saltWalker','printThief'],hour:'L’heure des traces'},
- {name:'Le Bois des lanternes rendues',short:'LANTERNES RENDUES',colors:['#2b2338','#141020','#4b3a55'],moon:'#f4c98f',boss:'La Cueilleuse de flammes',kind:'cueilleuse',foes:['wickPicker','hollowFlame'],hour:'L’heure des flambeaux rendus'},
+ {name:'Le Bois des lanternes rendues',short:'LANTERNES RENDUES',colors:['#2b2338','#141020','#4b3a55'],moon:'#f4c98f',boss:'La Cueilleuse de flammes',kind:'cueilleuse',foes:['wickPicker','hollowFlame','snufferHand'],hour:'L’heure des flambeaux rendus'},
  {name:'Le Cadran noir',short:'CADRAN NOIR',colors:['#1a1730','#0d0b1a','#3a2f52'],moon:'#fff0bd',boss:'Le Chasseur sans visage',kind:'chasseur',foes:['unnamedDigit','facelessEcho'],hour:'L’heure aux trousses'}
 ];
 function save(){

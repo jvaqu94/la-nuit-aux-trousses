@@ -7,7 +7,7 @@
    au sud (elle descend vers le joueur), ailes, pattes et bras rayonnants. */
 (()=>{
 'use strict';
-const foes=['wickWarden','waxCourier','bronzeCrow','crackedBell','saltWalker','printThief','wickPicker','hollowFlame','unnamedDigit','facelessEcho'];
+const foes=['wickWarden','waxCourier','bronzeCrow','crackedBell','saltWalker','printThief','wickPicker','hollowFlame','unnamedDigit','facelessEcho','shutterImp','waxMimic','snufferHand'];
 const bosses=['veilleuse','sonneur','passeur','cueilleuse','chasseur'];
 const kinds=new Set([...foes,...bosses]),bossKinds=new Set(bosses);
 const reduceMotion=!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -24,10 +24,11 @@ const defs=`<defs>
 <linearGradient id="night3" x2=".8" y2="1"><stop stop-color="#6b6099"/><stop offset=".42" stop-color="#3b3360"/><stop offset="1" stop-color="#1e1936"/></linearGradient>
 <linearGradient id="gold3" x2=".85" y2="1"><stop stop-color="#fff5cc"/><stop offset=".28" stop-color="#dcbc7c"/><stop offset=".62" stop-color="#a9855a"/><stop offset="1" stop-color="#5e4c52"/></linearGradient>
 <linearGradient id="glass3" x2=".8" y2="1"><stop stop-color="#fff6dd" stop-opacity=".82"/><stop offset=".34" stop-color="#d9c9a8" stop-opacity=".42"/><stop offset=".7" stop-color="#7a6b8c" stop-opacity=".38"/><stop offset="1" stop-color="#ffe9bd" stop-opacity=".6"/></linearGradient>
+<linearGradient id="wood3" x2=".8" y2="1"><stop stop-color="#c79b6d"/><stop offset=".34" stop-color="#8a6f57"/><stop offset=".7" stop-color="#5a4636"/><stop offset="1" stop-color="#3a2c20"/></linearGradient>
 <radialGradient id="ember3"><stop stop-color="#fffdf2"/><stop offset=".3" stop-color="#ffdc9a"/><stop offset=".66" stop-color="#e5854e"/><stop offset="1" stop-color="#8a3f55"/></radialGradient>
 <radialGradient id="cold3"><stop stop-color="#f4fffa"/><stop offset=".34" stop-color="#cfeadb"/><stop offset=".7" stop-color="#6fa698"/><stop offset="1" stop-color="#2b4a4f"/></radialGradient>
-<radialGradient id="void3"><stop stop-color="#312a4c"/><stop offset=".55" stop-color="#191434"/><stop offset="1" stop-color="#161230"/></radialGradient>
-<pattern id="hatch3" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(32)"><path d="M0 0V6" stroke="#fff4dc" stroke-opacity=".12" stroke-width="1"/></pattern>
+<radialGradient id="L0 3"><stop stop-color="#312a4c"/><stop offset=".55" stop-color="#191434"/><stop offset="1" stop-color="#161230"/></radialGradient>
+<pattern id="hatch3" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(32)"><path d="M0 0 L0 6" stroke="#fff4dc" stroke-opacity=".12" stroke-width="1"/></pattern>
 <filter id="softglow3" x="-120%" y="-120%" width="340%" height="340%"><feGaussianBlur stdDeviation="2.1" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>`;
 
@@ -45,48 +46,53 @@ function asset(id,body,boss=false){
 /* Garde-mèche : candélabre vivant. Corps de cire vu du dessus, six bras
    rayonnants terminés par une flamme, dôme de verre au centre. */
 asset('wickWarden',`
-<ellipse cx="0" cy="2" rx="34" ry="30" fill="#0d0b18" opacity=".35"/>
-<path d="M0-34 26-22 34 4 22 28 0 36 -22 28 -34 4 -26-22Z" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1.8"/>
-<path d="M0-28 21-18 28 3 18 23 0 30 -18 23 -28 3 -21-18Z" fill="#cbb49b" opacity=".45"/>
-<path d="M-30-10Q-40-16-44-6M30-10Q40-16 44-6M-32 10Q-44 12-46 22M32 10Q44 12 46 22M-14 32Q-18 42-10 46M14 32Q18 42 10 46" stroke="url(#bronze3)" stroke-width="3.4"/>
-<circle cx="-45" cy="-5" r="4" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1"/>
-<circle cx="45" cy="-5" r="4" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1"/>
-<circle cx="-47" cy="23" r="4" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1"/>
-<circle cx="47" cy="23" r="4" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1"/>
-<circle cx="-10" cy="47" r="4" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1"/>
-<circle cx="10" cy="47" r="4" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1"/>
-<path d="M-24-14Q-28-4-24 4M24-14Q28-4 24 4M-12-26Q-16-18-12-12M12-26Q16-18 12-12" stroke="#fff8e8" stroke-opacity=".55" stroke-width="2.2"/>
-<circle cx="0" cy="2" r="16" fill="url(#glass3)" stroke="#f2e4c4" stroke-width="1.6"/>
-<circle cx="0" cy="2" r="16" fill="url(#void3)" opacity=".35"/>
-<circle cx="0" cy="2" r="11" fill="url(#ember3)" opacity=".55" filter="url(#softglow3)"/>
-<path d="M-6-4Q-2-8 2-4" stroke="#fff8e0" stroke-opacity=".7" stroke-width="1.4"/>
-<path d="M0 18Q-7 24-5 31 0 34 5 31 7 24 0 18Z" fill="#1a1428" stroke="#8d7a80" stroke-width="1.2"/>
-<circle cx="-3" cy="26" r="1.6" fill="url(#ember3)"/><circle cx="3" cy="26" r="1.6" fill="url(#ember3)"/>
-<path d="M0-34 26-22 34 4 22 28 0 36 -22 28 -34 4 -26-22Z" fill="url(#hatch3)"/>`);
+<ellipse cx="0" cy="4" rx="34" ry="30" fill="#0d0b18" opacity=".35"/>
+<path d="M-28-12Q-40-18-44-8Q-46-2-40-2M28-12Q40-18 44-8Q46-2 40-2M-30 12Q-42 16-44 26Q-45 32-39 31M30 12Q42 16 44 26Q45 32 39 31" stroke="#4a4054" stroke-width="3.6"/>
+<path d="M-28-12Q-40-18-44-8M28-12Q40-18 44-8M-30 12Q-42 16-44 26M30 12Q42 16 44 26" stroke="#8d8496" stroke-width="1.4" stroke-opacity=".7"/>
+<path d="M-47 -12 L-40 -12 L-40 -2 L-47 -2 Z M40 -12 L47 -12 L47 -2 L40 -2 Z M-47 21 L-40 21 L-40 31 L-47 31 Z M40 21 L47 21 L47 31 L40 31 Z" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1.2"/>
+<path d="M-43.5 -12 L-43.5 -16 M43.5 -12 L43.5 -16 M-43.5 21 L-43.5 17 M43.5 21 L43.5 17" stroke="#4a3b46" stroke-width="1.4"/>
+<path d="M-13 34Q-17 44-11 47M13 34Q17 44 11 47" stroke="#4a4054" stroke-width="3.2"/>
+<path d="M-15 40 L-7 40 L-7 49 L-15 49 Z M7 40 L15 40 L15 49 L7 49 Z" fill="url(#wax3)" stroke="#6d5a63" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="31" fill="#3a3244" stroke="#241d33" stroke-width="2"/>
+<path d="M0-31A31 31 0 0 1 31 0A31 31 0 0 1 0 31A31 31 0 0 1-31 0A31 31 0 0 1 0-31Z" fill="url(#wax3)" fill-opacity=".22"/>
+<path d="M-31 0Q-26-8-21 0Q-16-8-11 0M11 0Q16-8 21 0Q26-8 31 0" stroke="#6d5a63" stroke-opacity=".5" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="24" fill="url(#glass3)" stroke="#e8d6b0" stroke-width="1.8"/>
+<circle cx="0" cy="0" r="24" fill="url(#void3)" opacity=".45"/>
+<path d="M-24 0 L24 0 M0 -24 L0 24 M-17 -17 L17 17 M17 -17 L-17 17" stroke="#4a4054" stroke-width="1.6" stroke-opacity=".85"/>
+<path d="M-16-13Q-20-4-16 5" stroke="#fff8e8" stroke-opacity=".5" stroke-width="2.2"/>
+<circle cx="0" cy="0" r="11" fill="#241d33" stroke="#8d8496" stroke-width="1.4"/>
+<path d="M-5 3Q0-9 5 3 3 9 0 9-3 9-5 3Z" fill="#f4c98f" fill-opacity=".9"/>
+<path d="M-22 22Q-24 32-20 36M22 22Q24 32 20 36M0 30Q-2 38 2 42" stroke="#f0dcb6" stroke-opacity=".8" stroke-width="2.4"/>
+<path d="M-9 20Q0 15 9 20 8 31 0 34-8 31-9 20Z" fill="url(#cloak3)" stroke="#a99cc4" stroke-width="1.4"/>
+<ellipse cx="-3.4" cy="26" rx="1.8" ry="2.2" fill="#ffd9a0"/><ellipse cx="3.4" cy="26" rx="1.8" ry="2.2" fill="#ffd9a0"/>
+<path d="M-26 30Q-34 34-33 41" stroke="#4a4054" stroke-width="2.6"/>
+<path d="M-38 38 -28 38 -33 47Z" fill="#5d5468" stroke="#241d33" stroke-width="1.3"/>
+<circle cx="-24" cy="-20" r="2" fill="#cf9f5f"/><circle cx="24" cy="-20" r="2" fill="#cf9f5f"/>
+<circle cx="0" cy="0" r="31" fill="url(#hatch3)"/>`);
 
 /* Facteur de cire : courrier-papillon. Ailes de papier ciré déployées, tête
    bougie au sud, sacoche sur le dos, rubans de cire qui traînent au nord. */
 asset('waxCourier',`
-<ellipse cx="0" cy="4" rx="30" ry="24" fill="#0d0b18" opacity=".32"/>
-<path d="M-6-6Q-34-30-46-14-50 6-30 16-14 20-6 10Z" fill="url(#wax3)" stroke="#8d7a80" stroke-width="1.5"/>
-<path d="M6-6Q34-30 46-14 50 6 30 16 14 20 6 10Z" fill="url(#wax3)" stroke="#8d7a80" stroke-width="1.5"/>
-<path d="M-12-4Q-30-18-40-10M-12 4Q-28 4-36 10M12-4Q30-18 40-10M12 4Q28 4 36 10" stroke="#a1898f" stroke-opacity=".6" stroke-width="1.2"/>
-<path d="M-30-8-24-2M30-8 24-2M-32 8-25 8M32 8 25 8" stroke="#b06a72" stroke-width="1.6"/>
-<path d="M-4-26Q-10-34-6-42M4-26Q10-34 6-42M0-28 0-44" stroke="url(#wax3)" stroke-width="2.4" stroke-opacity=".8"/>
-<path d="M-8-24Q-12 0-8 20 0 30 8 20 12 0 8-24Z" fill="url(#cloak3)" stroke="#9a8ab4" stroke-width="1.6"/>
-<path d="M-6-18 -2-18 -2 16 -6 16ZM2-18 6-18 6 16 2 16Z" fill="#1c1730" opacity=".5"/>
-<path d="M-13-10 13-10 11 2 -11 2Z" fill="#463a55" stroke="url(#bronze3)" stroke-width="1.4"/>
-<circle cx="0" cy="-4" r="3" fill="url(#ember3)" stroke="#6d3f4e" stroke-width="1"/>
-<path d="M-9 18Q0 12 9 18 8 30 0 33 -8 30 -9 18Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.4"/>
-<path d="M-9 22Q-12 28-10 32M9 22Q12 28 10 32" stroke="#fff8e8" stroke-opacity=".7" stroke-width="1.6"/>
-<circle cx="-3.4" cy="24" r="1.5" fill="#4b3a4a"/><circle cx="3.4" cy="24" r="1.5" fill="#4b3a4a"/>
-<path d="M0 33 0 38" stroke="#4a3b46" stroke-width="1.6"/>
-<path d="M-8-24Q-12 0-8 20 0 30 8 20 12 0 8-24Z" fill="url(#hatch3)"/>
-<path d="M-11-8 11-8 9-3 -9-3Z" fill="#5a4a68" stroke="#cf9f5f" stroke-width="1"/>
-<circle cx="-7" cy="-6" r="2.4" fill="#b06a72" stroke="#6d3f4e" stroke-width=".8"/>
-<path d="M3-10 11-10 11-3 3-3Z" fill="#f0dcb6" fill-opacity=".85"/>
-<path d="M3-10 7-6 11-10" stroke="#8d7a80" stroke-width=".9"/>
-<circle cx="-44" cy="-6" r="2" fill="#f0dcb6" fill-opacity=".7"/><circle cx="44" cy="-6" r="2" fill="#f0dcb6" fill-opacity=".7"/>`);
+<ellipse cx="0" cy="6" rx="30" ry="24" fill="#0d0b18" opacity=".32"/>
+<path d="M-7-8Q-30-30-44-16Q-52 0-40 12Q-30 20-20 16Q-12 12-7 6Z" fill="url(#wax3)" stroke="#8d7a80" stroke-width="1.5"/>
+<path d="M7-8Q30-30 44-16Q52 0 40 12Q30 20 20 16Q12 12 7 6Z" fill="url(#wax3)" stroke="#8d7a80" stroke-width="1.5"/>
+<path d="M-40 12Q-36 18-31 15Q-28 21-23 17M40 12Q36 18 31 15Q28 21 23 17" fill="url(#wax3)" stroke="#8d7a80" stroke-width="1.2"/>
+<path d="M-12-6Q-28-16-38-10M-12 2Q-26 2-34 8M12-6Q28-16 38-10M12 2Q26 2 34 8" stroke="#a1898f" stroke-opacity=".65" stroke-width="1.2"/>
+<path d="M-30-9Q-27-3-31 2M30-9Q27-3 31 2" stroke="#b06a72" stroke-opacity=".7" stroke-width="1.4"/>
+<path d="M-6-22Q-14-30-19-27M-16-28-19-32M-13-26-16-31M6-22Q14-30 19-27M16-28 19-32M13-26 16-31" stroke="#8d7a80" stroke-width="1.3"/>
+<path d="M-9-22Q-13 0-9 18 0 28 9 18 13 0 9-22Z" fill="url(#cloak3)" stroke="#9a8ab4" stroke-width="1.6"/>
+<path d="M-7 -30 L7 -30 L7 -14 L-7 -14 Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.4"/>
+<path d="M-7-30Q-9-24-6-20M7-30Q9-24 6-20" stroke="#fff8e8" stroke-opacity=".7" stroke-width="1.6"/>
+<path d="M0 -30 L0 -35" stroke="#4a3b46" stroke-width="1.6"/>
+<path d="M-12-8 12-8 10 6-10 6Z" fill="#5a4636" stroke="#cf9f5f" stroke-width="1.4"/>
+<path d="M-12-8 12-8 11-2-11-2Z" fill="#6d5540" stroke="#cf9f5f" stroke-width="1.1"/>
+<path d="M4 0 12-2 13 5 5 6Z" fill="#f0dcb6" stroke="#8d7a80" stroke-width=".9"/>
+<circle cx="0" cy="0" r="3.6" fill="#b06a72" stroke="#6d3f4e" stroke-width="1"/>
+<path d="M-1.6-1 1.6 1M1.6-1-1.6 1" stroke="#f0dcb6" stroke-width=".8"/>
+<path d="M-9 16Q0 11 9 16 8 28 0 31-8 28-9 16Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.4"/>
+<circle cx="-3.4" cy="22" r="1.6" fill="#4b3a4a"/><circle cx="3.4" cy="22" r="1.6" fill="#4b3a4a"/>
+<path d="M0 31 L0 36" stroke="#4a3b46" stroke-width="1.5"/>
+<path d="M-9-22Q-13 0-9 18 0 28 9 18 13 0 9-22Z" fill="url(#hatch3)"/>`);
 
 /* Corbeau de bronze : oiseau riveté vu du dessus, ailes déployées à plat,
    bec pointé vers le joueur, queue de tôles à l'arrière. */
@@ -203,7 +209,7 @@ asset('hollowFlame',`
 <path d="M0-18 16-9 16 9 0 18 -16 9 -16-9Z" fill="none" stroke="#fff6dd" stroke-opacity=".35" stroke-width="1.2"/>
 <path d="M-14-8Q-17 0-14 8" stroke="#fff6dd" stroke-opacity=".45" stroke-width="1.6"/>
 <circle cx="0" cy="0" r="10" fill="url(#void3)" stroke="#6d5a7d" stroke-width="1.2"/>
-<path d="M-5 2Q0-7 5 2 3 8 0 8 -3 8 -5 2Z" fill="none" stroke="#f4c98f" stroke-opacity=".6" stroke-width="1.3" stroke-dasharray="3 3"/>
+<path d="M-5 2Q0-7 5 2 3 8 0 8 -3 8 -5 2Z" fill="none" stroke="#f4c98f" stroke-opacity=".75" stroke-width="1.5"/>
 <circle cx="0" cy="2" r="1.8" fill="#f4c98f" fill-opacity=".55"/>
 <circle cx="-21" cy="-12" r="2.4" fill="url(#bronze3)"/><circle cx="21" cy="-12" r="2.4" fill="url(#bronze3)"/>
 <circle cx="-21" cy="12" r="2.4" fill="url(#bronze3)"/><circle cx="21" cy="12" r="2.4" fill="url(#bronze3)"/>
@@ -237,25 +243,23 @@ asset('unnamedDigit',`
 /* Écho sans visage : ton propre double vu du dessus — même balai, même
    chapeau, mais sans traits et cerclé de pointillé. Lecture immédiate. */
 asset('facelessEcho',`
-<ellipse cx="0" cy="4" rx="22" ry="30" fill="#0d0b18" opacity=".3"/>
-<path d="M0-42 0 34" stroke="#241d33" stroke-width="7"/>
-<path d="M0-40 0 32" stroke="#8d7a80" stroke-width="3.4" stroke-opacity=".8"/>
-<path d="M-8 26Q-14 34-10 42L0 38 10 42Q14 34 8 26Z" fill="url(#wax3)" fill-opacity=".55" stroke="#b9a7c9" stroke-width="1.2"/>
-<path d="M-6 28-8 40M0 28 0 40M6 28 8 40" stroke="#8d7a80" stroke-width="1.2"/>
-<path d="M-14-6Q-22 12-16 26L0 20 16 26Q22 12 14-6Z" fill="url(#cloak3)" fill-opacity=".85" stroke="#b9a7c9" stroke-width="1.5" stroke-dasharray="6 4"/>
-<path d="M-10 0Q-14 12-10 22M10 0Q14 12 10 22" stroke="#b9a7c9" stroke-opacity=".4" stroke-width="1.2"/>
-<ellipse cx="0" cy="-10" rx="19" ry="13" fill="url(#night3)" stroke="#c0aed0" stroke-width="1.5"/>
-<ellipse cx="0" cy="-11" rx="10" ry="7" fill="url(#salt3)" fill-opacity=".22" stroke="#d8c9e4" stroke-width="1.2"/>
-<path d="M-18-12Q0-18 18-12" stroke="url(#gold3)" stroke-width="2" stroke-opacity=".7"/>
-<path d="M0-24Q-5-30-1-36 4-30 0-24Z" fill="url(#night3)" stroke="#b9a7c9" stroke-width="1.2"/>
-<path d="M-14 2-22 8M14 2 22 8" stroke="url(#cloak3)" stroke-width="3" stroke-opacity=".8"/>
-<circle cx="0" cy="-11" r="22" fill="none" stroke="#b9a7c9" stroke-opacity=".35" stroke-width="1.2" stroke-dasharray="4 5"/>
-<path d="M-14-6Q-22 12-16 26L0 20 16 26Q22 12 14-6Z" fill="url(#hatch3)"/>
-<ellipse cx="0" cy="-10" rx="24" ry="16" fill="none" stroke="#b9a7c9" stroke-opacity=".3" stroke-width="1" stroke-dasharray="3 6"/>
-<path d="M-10 30-13 42M10 30 13 42" stroke="#8d7a80" stroke-opacity=".8" stroke-width="1.1"/>
-<path d="M-5-12-3-9M5-12 3-9" stroke="#d8c9e4" stroke-opacity=".55" stroke-width="1.2"/>
-<path d="M-4-5Q0-3 4-5" stroke="#d8c9e4" stroke-opacity=".4" stroke-width="1"/>
-<circle cx="-20" cy="-20" r="1.6" fill="#b9a7c9" fill-opacity=".6"/><circle cx="20" cy="-18" r="1.4" fill="#b9a7c9" fill-opacity=".55"/><circle cx="-18" cy="16" r="1.4" fill="#b9a7c9" fill-opacity=".5"/>`);
+<ellipse cx="0" cy="6" rx="22" ry="30" fill="#0d0b18" opacity=".3"/>
+<path d="M-2.6 -42 L2.6 -42 L2.6 34 L-2.6 34 Z" fill="#6d5a63"/>
+<path d="M-1.2 -42 L1.2 -42 L1.2 34 L-1.2 34 Z" fill="#a1898f" fill-opacity=".8"/>
+<path d="M-9 26Q-15 34-11 43L-5 39 0 44 5 39 11 43Q15 34 9 26Z" fill="url(#wax3)" fill-opacity=".7" stroke="#8d7a80" stroke-width="1.2"/>
+<path d="M-7 28-10 41M-2 28-3 42M2 28 3 42M7 28 10 41" stroke="#8d7a80" stroke-width="1.2"/>
+<path d="M-15-6Q-23 12-17 27L-11 22-6 28 0 22 6 28 11 22 17 27Q23 12 15-6Z" fill="url(#cloak3)" fill-opacity=".92" stroke="#b9a7c9" stroke-width="1.5"/>
+<path d="M-10 0Q-14 13-10 23M10 0Q14 13 10 23M0-2V22" stroke="#b9a7c9" stroke-opacity=".45" stroke-width="1.3"/>
+<path d="M-14 2-23 9M14 2 23 9" stroke="url(#cloak3)" stroke-width="3.4"/>
+<path d="M-23 9-27 13M23 9 27 13" stroke="#b9a7c9" stroke-width="1.6"/>
+<ellipse cx="0" cy="-11" rx="21" ry="14" fill="url(#night3)" stroke="#c0aed0" stroke-width="1.6"/>
+<ellipse cx="0" cy="-12" rx="13" ry="8.5" fill="#2a2447" stroke="#a99cc4" stroke-width="1.2"/>
+<path d="M-19-13Q0-20 19-13" stroke="url(#gold3)" stroke-width="2.2" stroke-opacity=".75"/>
+<path d="M0-25Q-6-32-1-39 5-32 0-25Z" fill="url(#night3)" stroke="#b9a7c9" stroke-width="1.3"/>
+<ellipse cx="0" cy="-11" rx="8.5" ry="6" fill="url(#salt3)" fill-opacity=".3"/>
+<path d="M-4-13Q0-15 4-13" stroke="#d8c9e4" stroke-opacity=".5" stroke-width="1.1"/>
+<circle cx="-19" cy="-19" r="1.6" fill="#b9a7c9" fill-opacity=".55"/><circle cx="19" cy="-17" r="1.4" fill="#b9a7c9" fill-opacity=".5"/>
+<path d="M-15-6Q-23 12-17 27L-11 22-6 28 0 22 6 28 11 22 17 27Q23 12 15-6Z" fill="url(#hatch3)"/>`);
 
 /* ---------------- GARDIENS : vues du dessus, silhouettes larges ---------- */
 
@@ -306,7 +310,7 @@ asset('sonneur',`
 <ellipse cx="-5" cy="-2" rx="3" ry="3.6" fill="url(#cold3)"/><ellipse cx="5" cy="-2" rx="3" ry="3.6" fill="url(#cold3)"/>
 <path d="M-5 7-2 10 1 7 4 10" stroke="#cfe6d8" stroke-width="1.4"/>
 <path d="M0 14 0 22" stroke="#cf9f5f" stroke-width="2.4"/>
-<circle cx="0" cy="26" r="5" fill="none" stroke="#8fa39b" stroke-width="1.6" stroke-dasharray="3 3"/>
+<circle cx="0" cy="26" r="5" fill="none" stroke="#8fa39b" stroke-opacity=".8" stroke-width="1.6"/>
 <circle cx="0" cy="0" r="42" fill="url(#hatch3)"/>
 <circle cx="-36" cy="-20" r="2.4" fill="#cf9f5f"/><circle cx="36" cy="-20" r="2.4" fill="#cf9f5f"/>
 <circle cx="-24" cy="34" r="2.4" fill="#cf9f5f"/><circle cx="24" cy="34" r="2.4" fill="#cf9f5f"/>
@@ -333,7 +337,7 @@ asset('passeur',`
 <ellipse cx="-5" cy="31" rx="3.2" ry="4" fill="#1b2530"/><ellipse cx="5" cy="31" rx="3.2" ry="4" fill="#1b2530"/>
 <path d="M0 36 0 39M-4 41 4 41M-3 43 3 43" stroke="#5b6068" stroke-width="1.3"/>
 <path d="M-13-30Q-18 0-12 22 0 32 12 22 18 0 13-30Q0-38-13-30Z" fill="url(#hatch3)"/>
-<ellipse cx="0" cy="8" rx="46" ry="30" fill="none" stroke="#cfe0ea" stroke-opacity=".18" stroke-width="1.4" stroke-dasharray="7 9"/>
+<ellipse cx="0" cy="8" rx="46" ry="30" fill="none" stroke="#cfe0ea" stroke-opacity=".16" stroke-width="1.4"/>
 <circle cx="-5" cy="31" r="1.4" fill="#cfe6d8"/><circle cx="5" cy="31" r="1.4" fill="#cfe6d8"/>
 <path d="M-44-50Q-38-54-34-49" stroke="#ffffff" stroke-opacity=".5" stroke-width="1.2"/>
 <path d="M0-8 0 2" stroke="#f0dcb6" stroke-width="1.4"/>
@@ -415,7 +419,123 @@ function ticks(g,x,y,r,angle,color,count=12){
 }
 /* Bout des six bras du garde-mèche, coupelles de la veilleuse, lanternes de
    l'abdomen : les flammes sont posées exactement sur le dessin. */
-const WARDEN_ARMS=[[-45,-5],[45,-5],[-47,23],[47,23],[-10,47],[10,47]];
+asset('shutterImp',`
+<ellipse cx="0" cy="4" rx="30" ry="27" fill="#0d0b18" opacity=".34"/>
+<path d="M-22-16Q-38-24-46-14M22-16Q38-24 46-14M-24 14Q-40 20-44 32M24 14Q40 20 44 32" stroke="#4a4054" stroke-width="3.4"/>
+<path d="M-46-14-52-18M-46-14-50-8M46-14 52-18M46-14 50-8M-44 32-50 36M-44 32-42 40M44 32 50 36M44 32 42 40" stroke="#8d8496" stroke-width="1.8"/>
+<path d="M-26 -26 L-1 -26 L-1 26 L-26 26 Z" fill="url(#wood3)" stroke="#2f2419" stroke-width="1.8"/>
+<path d="M1 -26 L26 -26 L26 26 L1 26 Z" fill="url(#wood3)" stroke="#2f2419" stroke-width="1.8"/>
+<path d="M-20 -24 L-20 24 M-13 -24 L-13 24 M-6 -24 L-6 24 M7 -24 L7 24 M14 -24 L14 24 M21 -24 L21 24" stroke="#5a4636" stroke-opacity=".8" stroke-width="1.2"/>
+<path d="M-26 -14 L-1 -14 M-26 12 L-1 12 M1 -14 L26 -14 M1 12 L26 12" stroke="#3a2f3c" stroke-width="2.6"/>
+<path d="M-26 -14 L-16 -14 M1 12 L11 12" stroke="#8d8496" stroke-width="1.4"/>
+<circle cx="-22" cy="-14" r="1.8" fill="#8d8496"/><circle cx="-22" cy="12" r="1.8" fill="#8d8496"/>
+<circle cx="22" cy="-14" r="1.8" fill="#8d8496"/><circle cx="22" cy="12" r="1.8" fill="#8d8496"/>
+<path d="M-4 -4 L4 -4 L4 6 L-4 6 Z" fill="#3a2f3c" stroke="#cf9f5f" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="2.2" fill="#cf9f5f"/>
+<path d="M-9 26Q0 21 9 26 8 37 0 40-8 37-9 26Z" fill="url(#wood3)" stroke="#2f2419" stroke-width="1.5"/>
+<circle cx="0" cy="30" r="3.4" fill="#1d160f" stroke="#cf9f5f" stroke-width="1.1"/>
+<path d="M0 33 L0 37" stroke="#cf9f5f" stroke-width="1.6"/>
+<path d="M-26 -26 L-1 -26 L-1 26 L-26 26 Z" fill="url(#hatch3)"/>`);
+asset('waxMimic',`
+<ellipse cx="0" cy="6" rx="26" ry="22" fill="#0d0b18" opacity=".32"/>
+<path d="M-16-4Q-30 0-32 12M16-4Q30 0 32 12" stroke="url(#wax3)" stroke-width="4"/>
+<path d="M-32 12-38 16M-32 12-30 20M32 12 38 16M32 12 30 20" stroke="#f0dcb6" stroke-width="2"/>
+<path d="M-18 -22 L18 -22 L18 18 L-18 18 Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.8"/>
+<path d="M-18-22Q-22-12-18-4M18-22Q22-12 18-4M-8-22Q-11-14-8-8M8-22Q11-14 8-8" stroke="#fff8e8" stroke-opacity=".65" stroke-width="2"/>
+<ellipse cx="0" cy="-22" rx="18" ry="6" fill="#f0dcb6" stroke="#7d6a72" stroke-width="1.4"/>
+<ellipse cx="0" cy="-23" rx="11" ry="3.4" fill="#b39a8c"/>
+<path d="M0 -23 L0 -31" stroke="#4a3b46" stroke-width="1.8"/>
+<path d="M-14 2Q0-4 14 2 12 14 0 16-12 14-14 2Z" fill="#4a3b46"/>
+<path d="M-11 3-8 9-5 3-2 9 1 3 4 9 7 3 10 9" stroke="#f0dcb6" stroke-width="1.8"/>
+<ellipse cx="-7" cy="-9" rx="3" ry="3.6" fill="#4b3a4a"/><ellipse cx="7" cy="-9" rx="3" ry="3.6" fill="#4b3a4a"/>
+<circle cx="-6.2" cy="-10" r="1.1" fill="#ffd9a0"/><circle cx="7.8" cy="-10" r="1.1" fill="#ffd9a0"/>
+<circle cx="0" cy="24" r="7" fill="#b06a72" stroke="#6d3f4e" stroke-width="1.4"/>
+<path d="M-3 21 3 27M3 21-3 27" stroke="#f0dcb6" stroke-width="1.3"/>
+<path d="M-18 -22 L18 -22 L18 18 L-18 18 Z" fill="url(#hatch3)"/>`);
+asset('snufferHand',`
+<ellipse cx="0" cy="4" rx="28" ry="28" fill="#0d0b18" opacity=".34"/>
+<path d="M0-40Q-8-30 0-20Q8-10 0 0" stroke="#445563" stroke-width="5"/>
+<path d="M0-40Q-8-30 0-20Q8-10 0 0" stroke="#8399a9" stroke-width="2" stroke-opacity=".8"/>
+<circle cx="0" cy="-40" r="4" fill="#5d7183" stroke="#33414f" stroke-width="1.3"/>
+<circle cx="-4" cy="-25" r="3.2" fill="#5d7183" stroke="#33414f" stroke-width="1.2"/>
+<circle cx="4" cy="-11" r="3.2" fill="#5d7183" stroke="#33414f" stroke-width="1.2"/>
+<path d="M-20-14Q-34-8-36 4M20-14Q34-8 36 4" stroke="#445563" stroke-width="3.2"/>
+<path d="M-36 4-42 8M-36 4-34 12M36 4 42 8M36 4 34 12" stroke="#8399a9" stroke-width="1.8"/>
+<circle cx="0" cy="8" r="24" fill="url(#steel3)" stroke="#33414f" stroke-width="2"/>
+<circle cx="0" cy="8" r="17" fill="#33414f" stroke="#8399a9" stroke-width="1.5"/>
+<circle cx="0" cy="8" r="10" fill="#1b2530"/>
+<path d="M-17-4Q-8-12 4-13" stroke="#d8e8f1" stroke-opacity=".5" stroke-width="2.2"/>
+<path d="M-24 8 L-28 8 M24 8 L28 8 M0 -16 L0 -20 M0 32 L0 36" stroke="#8399a9" stroke-width="1.6"/>
+<circle cx="-17" cy="-9" r="1.8" fill="#cf9f5f"/><circle cx="17" cy="-9" r="1.8" fill="#cf9f5f"/>
+<circle cx="-17" cy="25" r="1.8" fill="#cf9f5f"/><circle cx="17" cy="25" r="1.8" fill="#cf9f5f"/>
+<path d="M-11 26Q0 21 11 26 10 38 0 41-10 38-11 26Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.5"/>
+<path d="M-7 30-9 36M-2 30-2 37M3 30 4 37M8 30 10 35" stroke="#b39a8c" stroke-width="1.3"/>
+<ellipse cx="-4" cy="28" rx="1.8" ry="2.2" fill="#4b3a4a"/><ellipse cx="4" cy="28" rx="1.8" ry="2.2" fill="#4b3a4a"/>
+<circle cx="0" cy="8" r="24" fill="url(#hatch3)"/>`);
+asset('minuteToken',`
+<circle cx="0" cy="5" r="30" fill="#0d0b18" opacity=".3"/>
+<path d="M-5-38 L5-38 L5-30 L-5-30 Z" fill="url(#gold3)" stroke="#5e4c52" stroke-width="1.3"/>
+<circle cx="0" cy="-42" r="5" fill="none" stroke="#dcbc7c" stroke-width="2.6"/>
+<circle cx="0" cy="0" r="31" fill="url(#gold3)" stroke="#5e4c52" stroke-width="2"/>
+<circle cx="0" cy="0" r="27" fill="#8d6d49" stroke="#fff5cc" stroke-width="1.2"/>
+<circle cx="0" cy="0" r="24" fill="#f4ead2" stroke="#a9855a" stroke-width="1.4"/>
+<path d="M0-24 L0-18" stroke="#3a2f2a" stroke-width="2.6"/>
+<path d="M24 0 L18 0" stroke="#3a2f2a" stroke-width="2.6"/>
+<path d="M0 24 L0 18" stroke="#3a2f2a" stroke-width="2.6"/>
+<path d="M-24 0 L-18 0" stroke="#3a2f2a" stroke-width="2.6"/>
+<path d="M12-20.8 L9.5-16.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M20.8-12 L16.5-9.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M20.8 12 L16.5 9.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M12 20.8 L9.5 16.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M-12 20.8 L-9.5 16.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M-20.8 12 L-16.5 9.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M-20.8-12 L-16.5-9.5" stroke="#5a4636" stroke-width="1.8"/>
+<path d="M-12-20.8 L-9.5-16.5" stroke="#5a4636" stroke-width="1.8"/>
+<circle cx="0" cy="10" r="6" fill="none" stroke="#a9855a" stroke-width="1.1"/>
+<path d="M0 10 L0 6" stroke="#5a4636" stroke-width="1.2"/>
+<path d="M0 2 L0-16" stroke="#2b2320" stroke-width="3"/>
+<circle cx="0" cy="0" r="3.2" fill="#8d6d49" stroke="#3a2f2a" stroke-width="1"/>
+<path d="M-17-14 Q-8-21 3-20" stroke="#ffffff" stroke-opacity=".55" stroke-width="3"/>
+<path d="M14 16 Q19 11 20 5" stroke="#ffffff" stroke-opacity=".25" stroke-width="2"/>`);
+asset('waxCierge',`
+<ellipse cx="0" cy="8" rx="20" ry="18" fill="#0d0b18" opacity=".3"/>
+<path d="M-13 -20 L13 -20 L13 20 L-13 20 Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.6"/>
+<path d="M-13-20Q-17-10-13 0M13-20Q17-10 13 0" stroke="#fff8e8" stroke-opacity=".7" stroke-width="2"/>
+<ellipse cx="0" cy="-20" rx="13" ry="4.6" fill="#f0dcb6" stroke="#7d6a72" stroke-width="1.3"/>
+<ellipse cx="0" cy="-21" rx="8" ry="2.6" fill="#b39a8c"/>
+<path d="M0 -21 L0 -28" stroke="#4a3b46" stroke-width="1.7"/>
+<path d="M-5-30Q0-42 5-30 3-24 0-24-3-24-5-30Z" fill="#f4c98f" fill-opacity=".95"/>
+<path d="M-2.4-31Q0-37 2.4-31 1.4-27 0-27-1.4-27-2.4-31Z" fill="#fff8e8"/>
+<path d="M-13 20Q-18 26-12 30M13 20Q18 26 12 30" stroke="#f0dcb6" stroke-width="2.4"/>
+<circle cx="0" cy="8" r="7.5" fill="#b06a72" stroke="#6d3f4e" stroke-width="1.5"/>
+<path d="M-3.4 4.6 3.4 11.4M3.4 4.6-3.4 11.4" stroke="#f0dcb6" stroke-width="1.4"/>
+<path d="M-13-6 Q-17 2-13 10 M13-6 Q17 2 13 10" stroke="#fff8e8" stroke-opacity=".55" stroke-width="1.6"/>
+<path d="M-8-20 L-8-13 M8-20 L8-13" stroke="#b39a8c" stroke-width="1.2"/>
+<circle cx="-9" cy="16" r="1.6" fill="#b39a8c"/><circle cx="9" cy="16" r="1.6" fill="#b39a8c"/>
+<path d="M-13 20 L13 20" stroke="#7d6a72" stroke-width="1.6"/>
+<circle cx="0" cy="8" r="10" fill="none" stroke="#6d3f4e" stroke-opacity=".5" stroke-width="1.2"/>
+<path d="M-13 -20 L13 -20 L13 20 L-13 20 Z" fill="url(#hatch3)"/>`);
+
+asset('mecheToken',`
+<ellipse cx="0" cy="8" rx="20" ry="18" fill="#0d0b18" opacity=".3"/>
+<path d="M-13 -20 L13 -20 L13 20 L-13 20 Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.6"/>
+<path d="M-13-20Q-17-10-13 0M13-20Q17-10 13 0" stroke="#fff8e8" stroke-opacity=".7" stroke-width="2"/>
+<ellipse cx="0" cy="-20" rx="13" ry="4.6" fill="#f0dcb6" stroke="#7d6a72" stroke-width="1.3"/>
+<ellipse cx="0" cy="-21" rx="8" ry="2.6" fill="#b39a8c"/>
+<path d="M0 -21 L0 -28" stroke="#4a3b46" stroke-width="1.7"/>
+<path d="M-5-30Q0-42 5-30 3-24 0-24-3-24-5-30Z" fill="#f4c98f" fill-opacity=".95"/>
+<path d="M-2.4-31Q0-37 2.4-31 1.4-27 0-27-1.4-27-2.4-31Z" fill="#fff8e8"/>
+<path d="M-13 20Q-18 26-12 30M13 20Q18 26 12 30" stroke="#f0dcb6" stroke-width="2.4"/>
+<path d="M-13 4 L13 4 L13 12 L-13 12Z" fill="url(#gold3)" stroke="#5e4c52" stroke-width="1.2"/>
+<path d="M-6 8 L6 8" stroke="#fff5cc" stroke-width="1.6"/>
+<path d="M-13-6 Q-17 2-13 10 M13-6 Q17 2 13 10" stroke="#fff8e8" stroke-opacity=".55" stroke-width="1.6"/>
+<path d="M-8-20 L-8-13 M8-20 L8-13" stroke="#b39a8c" stroke-width="1.2"/>
+<circle cx="-9" cy="16" r="1.6" fill="#b39a8c"/><circle cx="9" cy="16" r="1.6" fill="#b39a8c"/>
+<path d="M-13 20 L13 20" stroke="#7d6a72" stroke-width="1.6"/>
+<circle cx="0" cy="-21" r="12" fill="none" stroke="#fff5cc" stroke-opacity=".35" stroke-width="1.2"/>
+<path d="M-13 -20 L13 -20 L13 20 L-13 20 Z" fill="url(#hatch3)"/>`);
+
+const WARDEN_ARMS=[[-43.5,-16],[43.5,-16],[-43.5,17],[43.5,17],[-11,36],[11,36]];
 const VEILLEUSE_CUPS=[[0,-44],[42,-16],[24,43],[-24,43],[-42,-16]];
 const PICKER_WICKS=[[-12,-30],[-4,-33],[4,-33],[12,-30]];
 const QUEEN_CELLS=[[-15,-26],[0,-32],[15,-26]];
@@ -441,7 +561,13 @@ function drawBehind(g,e,t){
  }else if(k==='unnamedDigit'){
   g.save();g.globalAlpha=.32;ticks(g,0,0,32,t*.35,'#dcbc7c',16);g.restore();
  }else if(k==='facelessEcho'){
-  g.save();g.globalAlpha=.18;g.setLineDash([5,5]);circle(g,Math.sin(t)*3,0,34,'','#b9a7c9',1.4);g.setLineDash([]);g.restore();
+  const halo=g.createRadialGradient(0,0,4,0,0,36);halo.addColorStop(0,'#b9a7c922');halo.addColorStop(1,'#b9a7c900');
+  g.fillStyle=halo;g.fillRect(-36,-36,72,72);
+ }else if(k==='snufferHand'&&e.stolen>0){
+  const halo=g.createRadialGradient(0,8,4,0,8,40);halo.addColorStop(0,'#f4c98f3a');halo.addColorStop(1,'#f4c98f00');
+  g.fillStyle=halo;g.fillRect(-40,-32,80,80);
+ }else if(k==='shutterImp'){
+  g.save();g.globalAlpha=.2;for(let i=0;i<3;i++){const a=t*.9+i*2.1;circle(g,Math.cos(a)*32,-20+Math.sin(a*1.2)*7,1.8,'#c79b6d')}g.restore();
  }else if(k==='veilleuse'){
   const halo=g.createRadialGradient(0,-6,6,0,-6,66);halo.addColorStop(0,'#ffd9a02e');halo.addColorStop(1,'#ffd9a000');
   g.fillStyle=halo;g.fillRect(-66,-72,132,132);
@@ -463,7 +589,14 @@ function drawFront(g,e,t){
   flame(g,0,2,7,4);
   for(const [x,y] of WARDEN_ARMS)flame(g,x,y-4,4.4,2.4);
  }else if(k==='waxCourier'){
-  flame(g,0,36,5,2.8);glow(g,0,-4,1.8+Math.sin(t*3)*.5,'#e5854e');
+  flame(g,0,-36,5.4,3);glow(g,0,0,1.6+Math.sin(t*3)*.4,'#b06a72');
+ }else if(k==='waxMimic'){
+  if(e.disguise)flame(g,0,-31,6,3.2);else flame(g,0,-32,4.4,2.4);
+ }else if(k==='snufferHand'){
+  if(e.stolen>0)for(let i=0;i<e.stolen;i++)flame(g,-6+i*6,8,5,2.8);
+  else glow(g,0,8,2,'#33414f');
+ }else if(k==='shutterImp'){
+  glow(g,0,30,2.2+Math.sin(t*2.4)*.5,'#cf9f5f');
  }else if(k==='bronzeCrow'){
   glow(g,-4.5,20,1.4,'#f4fffa');glow(g,4.5,20,1.4,'#f4fffa');
   if(!reduceMotion){g.save();g.globalAlpha=.35;const f=Math.sin(t*5.4)*3;line(g,-40,-6+f,-26,0,'#dff3e6',1.2);line(g,40,-6+f,26,0,'#dff3e6',1.2);g.restore()}
@@ -513,7 +646,8 @@ function drawFront(g,e,t){
 
 function drawActor(g,e,x,y,scale=1,time=0,hit=0){
  if(window.Campaign?.activeWorld!==3||!e||!kinds.has(e.kind))return false;
- const image=window.MinuitArt?.[e.kind];if(!image?.complete||!image.naturalWidth)return false;
+ const shown=(e.kind==='waxMimic'&&e.disguise)?'waxCierge':e.kind;
+ const image=window.MinuitArt?.[shown];if(!image?.complete||!image.naturalWidth)return false;
  const boss=bossKinds.has(e.kind),t=reduceMotion?0:time,seed=e.seed||e.seqSeed||0;
  const bw=boss?86:({bronzeCrow:80,hollowFlame:72,crackedBell:78,wickWarden:82}[e.kind]||78),bh=bw*image.naturalHeight/image.naturalWidth;
  const bob=reduceMotion?0:Math.sin(t*(e.kind==='bronzeCrow'?4:2)+seed)*(boss?1.2:1.6);

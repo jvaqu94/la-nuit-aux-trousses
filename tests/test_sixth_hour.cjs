@@ -105,7 +105,10 @@ function freshWave(w){
 }
 freshWave(1);out.rule1=SH.RULES[0];
 freshWave(2);out.wave2Blocks=SH.waveBlocks();
-freshWave(3);waveTime=0;out.wave3Blocks=SH.waveBlocks();waveTime=23;out.wave3After=SH.waveBlocks();
+freshWave(3);waveTime=0;out.wave3Blocks=SH.waveBlocks();waveTime=23;out.wave3Held=SH.waveBlocks();
+SH.tick(0.02);out.wave3Minute=!!SH.minute;
+if(SH.minute){player.x=SH.minute.x;player.y=SH.minute.y;SH.tick(0.02)}
+out.wave3After=SH.waveBlocks();
 freshWave(4);out.wave4={blocks:SH.waveBlocks(),seals:enemies.filter(e=>e.seal).length};
 
 /* 5 · Plafond d'ennemis : on tente d'en faire apparaître beaucoup plus */
@@ -533,6 +536,171 @@ for(const index of [0,1,2,3,4]){
 out.labyrinth.loop={crashes:labCrashes,maxWalls};
 Camp.beginWorld(3);
 
+/* 18 · BUTIN DANS LES MURS : le sceau est visible, le tirage est réel. */
+const Lab2=window.SixthLabyrinth;
+function bonusScene(index){
+  Camp.beginWorld(3);stage=index;world=worlds[index];wave=1;state='play';
+  enemies=[];hostile=[];shots=[];drops=[];obstacles=[];hazards=[];
+  player.x=400;player.y=650;player.inv=99;player.dash=0;lives=9;score=0;
+  scrollVelocity=120;Lab2.reset();Lab2.tick(0);
+}
+out.loot={kinds:Lab2.BONUS.map(b=>b.kind),chance:Lab2.BONUS_CHANCE};
+bonusScene(0);
+const rolls={none:0};
+for(let i=0;i<4000;i++){
+  const b=Lab2.rollBonus();
+  if(!b){rolls.none++;continue}
+  rolls[b.kind]=(rolls[b.kind]||0)+1;
+}
+out.loot.rolls=rolls;
+// Un bloc scellé libère exactement son bonus ; un bloc nu ne libère rien.
+Lab2.spawnRow();
+const sealed=Lab2.walls[0];sealed.bonus=Lab2.BONUS.find(b=>b.kind==='shield');
+const bare=Lab2.walls[1];bare.bonus=null;
+drops=[];Lab2.damageBlock(bare,99);
+out.loot.bareDrops=drops.length;
+drops=[];Lab2.damageBlock(sealed,99);
+out.loot.sealedDrops=drops.map(d=>d.kind);
+out.loot.sealedAt=drops.length?Math.round(drops[0].x)===Math.round(sealed.x):false;
+// Chaque sorte de sceau produit le bon objet, et l'arsenal retombe sur un trésor.
+const produced={};
+for(const b of Lab2.BONUS){
+  bonusScene(2);Lab2.spawnRow();
+  const w=Lab2.walls[0];w.bonus=b;drops=[];
+  Lab2.damageBlock(w,99);
+  produced[b.kind]=drops.map(d=>d.kind);
+}
+out.loot.produced=produced;
+// En partie, les rangées portent vraiment des sceaux.
+bonusScene(1);
+for(let i=0;i<12;i++)Lab2.spawnRow();
+out.loot.onRows={blocks:Lab2.walls.length,sealed:Lab2.walls.filter(w=>w.bonus).length};
+let sealPainted=0;
+const realFill2=gfx.fillRect.bind(gfx);gfx.fillRect=function(...a){sealPainted++;return realFill2(...a)};
+for(const w of Lab2.walls)w.y=300;
+Lab2.draw(gfx);gfx.fillRect=realFill2;
+out.loot.painted=sealPainted;
+
+/* 19 · VOLET CLAQUEUR : il bouche la route, et sa mort annule le claquement. */
+function trickScene(index,w){
+  Camp.beginWorld(3);stage=index;world=worlds[index];wave=w;state='play';
+  enemies=[];hostile=[];shots=[];drops=[];marks=[];obstacles=[];
+  SH.marks.length=0;SH.salt.length=0;SH.start();
+  player.x=400;player.y=650;player.inv=0;player.dash=0;player.slow=0;lives=9;score=0;
+  scrollVelocity=120;Lab2.reset();Lab2.tick(0);newWave();
+}
+trickScene(0,1);
+spawnEnemy({kind:'shutterImp',x:400,y:300,group:1,index:0,pattern:99});
+const imp=enemies[enemies.length-1];
+imp.y=300;imp.homeY=300;imp.timer=0;
+SH.moveEnemy(imp,1/60);
+out.shutter={announced:SH.slams.length,warn:SH.slams[0]&&SH.slams[0].warn};
+const wallsBefore=Lab2.walls.length;
+SH.tick(0.5);out.shutter.earlyWalls=Lab2.walls.length-wallsBefore;
+SH.tick(1.0);
+out.shutter.panel=Lab2.walls.filter(w=>w.panel).length;
+out.shutter.solid=Lab2.walls.filter(w=>w.panel).map(w=>w.max)[0];
+// Tué avant l'échéance, le volet ne claque pas.
+trickScene(0,1);
+spawnEnemy({kind:'shutterImp',x:400,y:300,group:1,index:0,pattern:99});
+const imp2=enemies[enemies.length-1];imp2.y=300;imp2.homeY=300;imp2.timer=0;
+SH.moveEnemy(imp2,1/60);
+reward(imp2);
+SH.tick(1.6);
+out.shutter.cancelled=Lab2.walls.filter(w=>w.panel).length;
+// Le panneau se casse comme le reste du mur.
+trickScene(0,1);
+const panel=Lab2.addPanel(400,400);
+const panelHp=panel.hp;
+shots.push({x:panel.x,y:panel.y,damage:1,life:1,vx:0,vy:0,r:4});
+Lab2.tick(0.001);
+out.shutter.breakable={hp0:panelHp,hp1:panel.hp};
+
+/* 20 · MOUCHEUR : il vole une mèche, s'en sert de halo, et la rend à sa mort. */
+trickScene(3,1);
+player.x=400;player.y=650;
+spawnEnemy({kind:'snufferHand',x:400,y:400,group:1,index:0,pattern:99});
+const snuffer=enemies[enemies.length-1];
+snuffer.y=400;snuffer.homeY=400;snuffer.timer=0;
+SH.moveEnemy(snuffer,1/60);
+const snuffMark=SH.marks[SH.marks.length-1];
+out.snuffer={mark:!!snuffMark&&snuffMark.snuff===true,flame0:SH.flame};
+player.x=snuffMark.x;player.y=snuffMark.y;
+SH.tick(1.3);
+out.snuffer.flame1=SH.flame;out.snuffer.stolen=snuffer.stolen;
+// Sa flamme volée protège les autres, comme le halo du Garde-mèche.
+player.x=720;player.y=820;
+spawnEnemy({kind:'waxCourier',x:400,y:400,group:2,index:0,pattern:99});
+const shielded=enemies[enemies.length-1];
+shielded.x=snuffer.x;shielded.y=snuffer.y;shielded.hp=100;shielded.max=100;
+damageEnemy(shielded,10);
+out.snuffer.protected=100-shielded.hp;
+// Le tuer rend les mèches.
+const flameBefore=SH.flame;
+reward(snuffer);
+out.snuffer.returned=SH.flame-flameBefore;
+out.snuffer.haloGone=!!(snuffer.dead);
+
+/* 21 · FAUX-CIERGE : le leurre se paie si on le ramasse, le tir le perce. */
+trickScene(0,1);
+spawnEnemy({kind:'waxMimic',x:400,y:400,group:1,index:0,pattern:99});
+const mimic=enemies[enemies.length-1];
+mimic.y=400;mimic.homeY=400;
+out.mimic={disguised:mimic.disguise===true,art:!!window.MinuitArt.waxCierge};
+const livesBefore=lives;
+player.x=mimic.x;player.y=mimic.y;player.inv=0;
+SH.tick(0.02);
+out.mimic.bitten=livesBefore-lives;out.mimic.revealed=mimic.disguise===false;
+// Tirer de loin le démasque sans mordre, et double les dégâts.
+trickScene(0,1);
+spawnEnemy({kind:'waxMimic',x:400,y:400,group:1,index:0,pattern:99});
+const mimic2=enemies[enemies.length-1];
+mimic2.y=400;mimic2.homeY=400;mimic2.hp=100;mimic2.max=100;
+player.x=700;player.y=820;player.inv=0;
+const lives2=lives;
+damageEnemy(mimic2,10);
+out.mimic.shot={hp:100-mimic2.hp,revealed:mimic2.disguise===false,lives:lives2-lives};
+// Percé encore déguisé, il paie.
+trickScene(0,1);
+spawnEnemy({kind:'waxMimic',x:400,y:400,group:1,index:0,pattern:99});
+const mimic3=enemies[enemies.length-1];mimic3.y=400;mimic3.homeY=400;
+const scoreBefore=score;reward(mimic3);
+out.mimic.bounty=score-scoreBefore;
+
+/* 22 · MINUTES : trois par univers, quinze réellement ramassables. */
+Camp.progress.minutesKept=0;
+const minutesPerStage=[];
+for(let index=0;index<5;index++){
+  const before=Camp.progress.minutesKept;
+  for(const w of [2,3,4]){
+    trickScene(index,w);
+    if(w===2){for(const e of enemies)if(e.kind==='wickWarden')e.dead=true}
+    if(w===3)waveTime=23;
+    if(w===4)SH.mission.seals=2;
+    SH.tick(0.02);
+    if(SH.minute){player.x=SH.minute.x;player.y=SH.minute.y;SH.tick(0.02)}
+  }
+  minutesPerStage.push(Camp.progress.minutesKept-before);
+}
+out.minuteRun={perStage:minutesPerStage,total:Camp.progress.minutesKept,token:!!window.MinuitArt.minuteToken};
+trickScene(1,3);waveTime=0;SH.tick(0.02);
+out.minuteRun.lockedBeforeHold=!SH.minute;
+waveTime=23;SH.tick(0.02);
+out.minuteRun.freeAfterHold=!!SH.minute;
+out.minuteRun.label=SH.minute?SH.minute.index:0;
+trickScene(1,2);
+out.minuteRun.guardActive=!!(SH.minute&&SH.minute.guard);
+out.minuteRun.objective=SH.objectiveText();
+
+/* 23 · Plus aucun sprite en mode esquisse. */
+out.sketch=Art.kinds.filter(k=>{
+  const svg=decodeURIComponent(window.MinuitArt[k].src);
+  return svg.slice(svg.indexOf('</defs>')).includes('stroke-dasharray');
+});
+out.faubourg={foes:Camp.thirdWorlds[0].foes.slice(),
+  names:Camp.thirdWorlds[0].foes.map(k=>SH.foeNames[k]),
+  sprites:Camp.thirdWorlds[0].foes.every(k=>!!window.MinuitArt[k])};
+
 /* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
@@ -549,7 +717,7 @@ const r = globalThis.__RESULT__;
 /* --- Assertions --------------------------------------------------------- */
 assert.equal(r.thirdWorlds.length, 5, 'le monde 3 doit avoir cinq univers');
 assert.equal(new Set(r.thirdWorlds.map(w => w.kind)).size, 5, 'cinq gardiens distincts');
-assert.equal(new Set(r.thirdWorlds.flatMap(w => w.foes)).size, 10, 'dix formes nouvelles, aucune réutilisée');
+assert.equal(new Set(r.thirdWorlds.flatMap(w => w.foes)).size, 13, 'treize formes nouvelles, aucune réutilisée');
 for (const w of r.thirdWorlds) assert.ok(w.hour && w.short && w.name, 'chaque univers porte son heure');
 
 assert.equal(r.unlock.world3Unlocked, true, 'finir le monde 2 doit ouvrir le monde 3');
@@ -565,7 +733,9 @@ assert.equal(r.apply.runId, 'world3-normal', 'records séparés du monde 3');
 
 assert.equal(r.wave2Blocks, true, 'vague 2 : la minute doit être rendue');
 assert.equal(r.wave3Blocks, true, 'vague 3 : tenue de 22 s');
-assert.equal(r.wave3After, false);
+assert.equal(r.wave3Held, true, 'vague 3 : la minute libérée doit encore être ramassée');
+assert.equal(r.wave3Minute, true, 'vague 3 : la minute se libère après la tenue');
+assert.equal(r.wave3After, false, 'vague 3 : minute rendue, la vague peut finir');
 assert.equal(r.wave4.blocks, true, 'vague 4 : deux sceaux à éteindre');
 assert.equal(r.wave4.seals, 2, 'vague 4 : deux sceaux à éteindre');
 assert.equal(r.wave4.seals, 2);
@@ -653,11 +823,11 @@ assert.equal(r.code.playing.character, 'hunter', 'le Veilleur est jouable au mon
 assert.equal(r.code.monde2StillWorks, true, 'le code Monde2 continue de fonctionner');
 assert.equal(r.code.finale, true, 'Monde2 ouvre toujours sa rencontre');
 
-assert.equal(r.art.kinds, 15, '10 formes + 5 gardiens doivent avoir leur silhouette');
-assert.equal(r.art.foes, 10);
+assert.equal(r.art.kinds, 18, '13 formes + 5 gardiens doivent avoir leur silhouette');
+assert.equal(r.art.foes, 13);
 assert.equal(r.art.bosses, 5);
-assert.equal(r.art.registered, 15, 'chaque silhouette doit être enregistrée dans MinuitArt');
-assert.equal(r.art.unique, 15, 'aucune silhouette ne doit être réutilisée entre formes');
+assert.equal(r.art.registered, 18, 'chaque silhouette doit être enregistrée dans MinuitArt');
+assert.equal(r.art.unique, 18, 'aucune silhouette ne doit être réutilisée entre formes');
 assert.equal(r.art.ownPalette, true, 'les sprites doivent utiliser la palette du monde 3');
 assert.equal(r.art.coversBestiary, true, 'tout le bestiaire et les 5 gardiens sont couverts');
 assert.equal(r.art.noDegenerateGradient, true, 'un dégradé sur un trait plat ne s’affiche pas');
@@ -727,9 +897,69 @@ assert.ok(r.labyrinth.draw.painted > 20, 'les blocs doivent être réellement pe
 assert.equal(r.labyrinth.loop.crashes, 0, 'la boucle complète doit tenir avec le labyrinthe : ' + r.labyrinth.crashMessage);
 assert.ok(r.labyrinth.loop.maxWalls > 8, 'le labyrinthe doit vraiment se remplir en partie');
 
+/* Butin caché dans les murs : sceau visible, tirage réel, bons objets. */
+assert.deepEqual(r.loot.kinds, ['points', 'shield', 'candy', 'heal', 'upgrade'], 'le mur doit donner les bonus du jeu principal');
+assert.ok(r.loot.chance > .3 && r.loot.chance < .45, 'taux de sceau raisonnable');
+assert.ok(r.loot.rolls.none > 1800 && r.loot.rolls.none < 3000, 'la plupart des blocs restent vides : ' + r.loot.rolls.none);
+for (const kind of r.loot.kinds) assert.ok(r.loot.rolls[kind] > 60, 'le sort ' + kind + ' ne sort jamais');
+assert.equal(r.loot.bareDrops, 0, 'un bloc sans sceau ne doit rien lâcher');
+assert.deepEqual(r.loot.sealedDrops, ['shield'], 'le bloc scellé lâche exactement son bonus');
+assert.equal(r.loot.sealedAt, true, 'le bonus tombe là où le bloc a cassé');
+for (const kind of r.loot.kinds) {
+  const got = r.loot.produced[kind];
+  assert.equal(got.length, 1, kind + ' doit produire un seul objet');
+  assert.ok(got[0] === kind || (kind === 'upgrade' && got[0] === 'points'), kind + ' produit le mauvais objet : ' + got);
+}
+assert.ok(r.loot.onRows.sealed > 8, 'les rangées doivent vraiment porter des sceaux');
+assert.ok(r.loot.onRows.sealed < r.loot.onRows.blocks, 'tous les blocs ne sont pas scellés');
+assert.ok(r.loot.painted > 100, 'les sceaux doivent être dessinés');
+
+/* Volet claqueur : annoncé, solide, destructible, annulable. */
+assert.equal(r.shutter.announced, 1, 'le volet annonce son claquement');
+assert.equal(r.shutter.warn, 1.3, 'le délai doit rester lisible');
+assert.equal(r.shutter.earlyWalls, 0, 'rien ne doit claquer avant l’annonce');
+assert.equal(r.shutter.panel, 1, 'le volet doit poser un panneau solide');
+assert.equal(r.shutter.solid, 2, 'le panneau a sa solidité propre');
+assert.equal(r.shutter.cancelled, 0, 'tuer le volet annule le claquement');
+assert.equal(r.shutter.breakable.hp1, r.shutter.breakable.hp0 - 1, 'le panneau se casse comme le mur');
+
+/* Moucheur : vol de mèche, halo protecteur, restitution à sa mort. */
+assert.equal(r.snuffer.mark, true, 'le mouchage doit être télégraphié');
+assert.ok(r.snuffer.flame0 > 0, 'le scénario doit partir avec une flamme');
+assert.equal(r.snuffer.flame1, r.snuffer.flame0 - 1, 'le Moucheur souffle une mèche');
+assert.equal(r.snuffer.stolen, 1, 'la mèche volée doit être portée');
+assert.equal(r.snuffer.protected, 5.5, 'la flamme volée protège les autres (dégâts ×0,55)');
+assert.equal(r.snuffer.returned, 1, 'tuer le Moucheur rend la mèche');
+
+/* Faux-cierge : le ramasser mord, le tirer perce. */
+assert.equal(r.mimic.disguised, true, 'le Faux-cierge arrive déguisé');
+assert.equal(r.mimic.art, true, 'le cierge-appât a son visuel');
+assert.equal(r.mimic.bitten, 1, 'ramasser le faux cierge doit coûter une vie');
+assert.equal(r.mimic.revealed, true, 'la morsure tombe le déguisement');
+assert.equal(r.mimic.shot.hp, 20, 'tirer sur le leurre double les dégâts');
+assert.equal(r.mimic.shot.revealed, true, 'le tir démasque le Faux-cierge');
+assert.equal(r.mimic.shot.lives, 0, 'tirer de loin ne doit pas mordre');
+assert.ok(r.mimic.bounty >= 250, 'percer le leurre paie : ' + r.mimic.bounty);
+
+/* Minutes : trois par univers, quinze réellement ramassables, bel objet. */
+assert.deepEqual(r.minuteRun.perStage, [3, 3, 3, 3, 3], 'trois minutes par univers');
+assert.equal(r.minuteRun.total, 15, 'les quinze minutes annoncées doivent être atteignables');
+assert.equal(r.minuteRun.token, true, 'la minute doit avoir son propre visuel');
+assert.equal(r.minuteRun.lockedBeforeHold, true, 'la minute attend la fin de la tenue');
+assert.equal(r.minuteRun.freeAfterHold, true, 'la minute se libère après la tenue');
+assert.equal(r.minuteRun.label, 2, 'chaque minute porte son rang dans l’univers');
+assert.equal(r.minuteRun.guardActive, true, 'la première minute reste sous garde');
+assert.ok(r.minuteRun.objective.includes('MINUTE 1/3'), 'le bandeau doit compter les minutes');
+
+/* Plus aucun sprite en mode esquisse, et le Faubourg a son bestiaire. */
+assert.deepEqual(r.sketch, [], 'silhouettes encore en pointillés de brouillon : ' + r.sketch.join(', '));
+assert.equal(r.faubourg.foes.length, 4, 'le Faubourg gagne deux formes');
+assert.equal(r.faubourg.sprites, true, 'chaque forme du Faubourg a sa silhouette');
+assert.ok(r.faubourg.names.includes('Volet claqueur') && r.faubourg.names.includes('Faux-cierge'), 'les nouvelles formes sont nommées en français');
+
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
-console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 15 silhouettes et 5 décors vus de dessus, labyrinthe destructible (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
+console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 
 /* journey.js arme des minuteurs de fin de partie : on sort explicitement. */
 process.exit(0);
