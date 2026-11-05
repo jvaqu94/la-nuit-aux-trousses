@@ -468,6 +468,8 @@
       hostMatch = Core.createMatch({
         id: duel.id,
         mode: duel.mode,
+        mapId: duel.mapId,
+        difficulty: duel.difficulty,
         wager: duel.wager,
         creatorPerks: duel.creatorPerks,
         opponentPerks: duel.opponentPerks,
@@ -481,6 +483,8 @@
       const preview = Core.createMatch({
         id: duel.id,
         mode: duel.mode,
+        mapId: duel.mapId,
+        difficulty: duel.difficulty,
         wager: duel.wager,
         creatorPerks: duel.creatorPerks,
         opponentPerks: duel.opponentPerks,
@@ -1166,6 +1170,7 @@
         <div class="eyebrow">☾ ${esc(modeLabel.toUpperCase())}${esc(wagerLabel.toUpperCase())} · BEST OF 3</div>
         <h2>CHOISIS 3 ATOUTS DE NUIT</h2>
         <p>Catalogue commun de 10 atouts · Aucun équipement de campagne, compagnon ou bonus quotidien ne s’applique.</p>
+        <small class="duel-map-note">Map : <b>${esc(Core.getDuelMap?.(duel?.mapId)?.name || 'Clairière silencieuse')}</b> · ${esc(Core.getDuelMap?.(duel?.mapId)?.tagline || 'Duel pur · aucun monstre')}</small>
       </div>
       <div class="duel-versus-strip">
         <div class="duel-fighter-pill">
@@ -1271,6 +1276,7 @@
         <div class="eyebrow">☾ DUEL DE LA NUIT NOIRE · 1 CONTRE 1 EN DIRECT</div>
         <h2>SALON DES OMBRES</h2>
         <p> Sorcière : <b>${esc(pseudo)}</b> · Manches de 90 s en 2 manches gagnantes · Visibilité limitée au halo et aux éclats.</p>
+        <small class="duel-map-note">Map jouée : <b>${esc(Core.getDuelMap?.(duel?.mapId)?.name || 'Clairière silencieuse')}</b> · ${esc(Core.getDuelMap?.(duel?.mapId)?.tagline || 'Duel pur · aucun monstre')}. Les sentinelles restent réservées aux maps hantées.</small>
       </div>
       <div class="duel-summary-grid">
         <div class="duel-stat-box"><small>COTE DUEL</small><b>${Number(p.rating) || 1000}</b></div>
@@ -1523,7 +1529,8 @@
       } else if (renderSnap.roundTime >= Core.ZONE_SHRINK_START) {
         bannerEl.textContent = 'La brume se resserre vers le centre !';
       } else {
-        bannerEl.textContent = duel?.mode === 'ranked' ? 'Duel classé en direct' : 'Duel amical en direct';
+        const mapName = Core.getDuelMap?.(renderSnap.mapId || duel?.mapId)?.name || 'Clairière silencieuse';
+        bannerEl.textContent = `${duel?.mode === 'ranked' ? 'Duel classé' : 'Duel amical'} · ${mapName}`;
       }
     }
 
@@ -2799,7 +2806,7 @@
     button.id = 'nightDuelEntry';
     button.className = 'secondary menu-card-button';
     button.innerHTML =
-      '<span class="menu-card-icon">☾</span><span>Duel de la Nuit noire<small>1v1 en direct · brouillard & éclats</small></span>';
+      '<span class="menu-card-icon">☾</span><span>Duel de la Nuit noire<small>1v1 en direct · duel sans monstre</small></span>';
     button.onclick = () => openHub();
     grid.insertBefore(button, grid.firstChild);
   }
@@ -2856,6 +2863,8 @@
     .duel-header{text-align:center}
     .duel-header h2{margin:4px 0 6px;font-size:clamp(22px,3.6vw,34px);color:#f7e9ff}
     .duel-header p{margin:0 auto;max-width:660px;font-size:11px;line-height:1.55;color:#c3b2d4}
+    .duel-map-note{display:block;margin:7px auto 0;max-width:660px;font-size:10px;line-height:1.5;color:#cbbad9}
+    .duel-map-note b{color:#ffd596}
     .duel-invite-banner{padding:10px 12px;border:1px dashed #d8b574aa;border-radius:10px;background:#2e233cdd;text-align:center}
     .duel-invite-banner span{display:block;font-size:9px;letter-spacing:1.1px;color:#ffd28e}
     .duel-invite-banner b{display:block;margin:4px 0;font:700 13px ui-monospace,monospace;color:#fff2d6;overflow-wrap:anywhere}

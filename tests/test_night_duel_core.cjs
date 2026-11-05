@@ -396,15 +396,15 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.ok(guestAfter.projectiles.every(p => p.ownerRole !== 'opponent' || p.vy < 0), 'Les tirs invités montent à l’écran');
 }
 
-// 8. Monde vaste (5×), caméra, décor, pièges, bombes, caisses, sentinelles, atouts.
+// 8. Monde vaste (5×) sur la map peuplée : caméra, décor, pièges, bombes, caisses, sentinelles, atouts.
 {
   assert.equal(Core.WORLD_WIDTH * Core.WORLD_HEIGHT, 5 * Core.VIEW_WIDTH * Core.VIEW_HEIGHT, 'Le monde fait exactement 5× la surface du viewport');
   assert.equal(Core.VIEW_WIDTH, 800);
   assert.equal(Core.VIEW_HEIGHT, 900);
 
-  const match = Core.createMatch({ id: 'world-test' });
-  const other = Core.createMatch({ id: 'world-test-other' });
-  const again = Core.createMatch({ id: 'world-test' });
+  const match = Core.createMatch({ id: 'world-test', mapId: 'foret-hantee' });
+  const other = Core.createMatch({ id: 'world-test-other', mapId: 'foret-hantee' });
+  const again = Core.createMatch({ id: 'world-test', mapId: 'foret-hantee' });
   assert.ok(match.spawns && other.spawns, 'Spawns aléatoires générés');
   assert.notDeepEqual(match.spawns.creator, other.spawns.creator, 'Deux matches ont des spawns différents');
   assert.deepEqual(match.spawns, again.spawns, 'Spawns déterministes pour un même id');
@@ -565,4 +565,62 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   console.log('  ✓ vitesse du duel adoucie pour la visée');
 }
 
-console.log('Duel de la Nuit noire — cœur déterministe, monde 5×, caméra, brouillard de guerre, ronde/sommeil des sentinelles, décor/pièges/bombes/caisses, tir manuel, visée curseur, orientation, visibilité, snapshots, mort subite et cotes : OK');
+// ---------------------------------------------------------------------------
+// 12. Maps du duel : par défaut aucun monstre (plus simple à viser au doigt),
+//     mais les sentinelles sont conservées pour la Forêt hantée et les
+//     difficultés, prêtes pour le futur choix de map.
+// ---------------------------------------------------------------------------
+{
+  assert.ok(Core.DUEL_MAPS.length >= 2, 'Le catalogue propose au moins deux maps');
+  assert.equal(Core.DEFAULT_DUEL_MAP_ID, 'clairiere', 'La map par défaut est la clairière sans monstre');
+  assert.equal(Core.getDuelMap('inconnue').id, 'clairiere', 'Une map inconnue retombe sur la map par défaut');
+  assert.equal(Core.getDuelMap('foret-hantee').enemyPairs > 0, true, 'La forêt hantée garde ses sentinelles');
+
+  const calm = Core.createMatch({ id: 'map-duel' });
+  const haunted = Core.createMatch({ id: 'map-duel', mapId: 'foret-hantee' });
+  assert.equal(calm.mapId, 'clairiere');
+  assert.equal(calm.difficulty, 'normale');
+  assert.equal(calm.world.enemies.length, 0, 'Duel par défaut : aucun monstre généré');
+  assert.ok(haunted.world.enemies.length >= 6, 'Forêt hantée : les sentinelles sont toujours générées');
+  assert.ok(haunted.world.enemies.every(e => e.state === 'sleep'), 'Les sentinelles démarrent endormies');
+
+  // Le décor et les cibles à dégommer ne changent pas : sans monstre, on garde
+  // exactement les mêmes caisses / bombes / pièges / rochers.
+  assert.ok(calm.world.crates.length >= 8, 'Les caisses à atouts restent là');
+  assert.ok(calm.world.bombs.length >= 6, 'Les bombes restent là');
+  assert.ok(calm.world.traps.length >= 6, 'Les pièges restent là');
+  assert.deepEqual(calm.world.crates, haunted.world.crates, 'Retirer les monstres ne décale pas le décor');
+  assert.deepEqual(calm.world.obstacles, haunted.world.obstacles, 'Le décor solide est identique entre les maps');
+  assert.deepEqual(calm.spawns, haunted.spawns, 'Les spawns restent identiques entre les maps');
+
+  const calmSnap = Core.createSnapshotFor(calm, 'creator');
+  assert.equal(calmSnap.mapId, 'clairiere', 'La map voyage dans le snapshot');
+  assert.equal(calmSnap.world.enemies.length, 0, 'Aucune créature transmise au client');
+
+  // Une vraie partie qui bouge et tire ne fait apparaître ni créature, ni tir
+  // de créature, ni événement de monstre.
+  const seenEvents = [];
+  const target = Core.ARENA_CENTER;
+  for (let i = 0; i < 600; i += 1) {
+    Core.applyCommand(calm, 'creator', { moveX: 0.7, moveY: -0.7, fire: true, hasAim: true, aimX: target.x, aimY: target.y });
+    Core.applyCommand(calm, 'opponent', { moveX: -0.7, moveY: 0.7, fire: true, hasAim: true, aimX: target.x, aimY: target.y });
+    Core.stepMatch(calm, 1 / 30);
+    seenEvents.push(...calm.events.map(ev => ev.type));
+    if (calm.roundPhase === 'intermission') Core.startNextRound(calm);
+  }
+  assert.equal(calm.world.enemies.length, 0, 'Toujours aucun monstre après une partie complète');
+  assert.ok(calm.projectiles.every(pr => pr.ownerRole !== 'enemy'), 'Aucun projectile de monstre');
+  assert.ok(!seenEvents.some(type => String(type).startsWith('enemy')), 'Aucun réveil / tir / mort de monstre');
+
+  // Difficulté : elle ne mord que sur les maps peuplées.
+  const soft = Core.createMatch({ id: 'diff-map', mapId: 'foret-hantee', difficulty: 'douce' });
+  const nightmare = Core.createMatch({ id: 'diff-map', mapId: 'foret-hantee', difficulty: 'cauchemar' });
+  assert.ok(soft.world.enemies.length < nightmare.world.enemies.length, 'La difficulté règle le nombre de sentinelles');
+  assert.ok(soft.enemySpeedFactor < nightmare.enemySpeedFactor, 'La difficulté règle la vitesse des sentinelles');
+  const calmNightmare = Core.createMatch({ id: 'diff-map', difficulty: 'cauchemar' });
+  assert.equal(calmNightmare.world.enemies.length, 0, 'La difficulté ne fait pas réapparaître de monstre en duel pur');
+  assert.equal(calmNightmare.enemySpeedFactor, 1);
+  console.log('  ✓ duel sans monstre par défaut, sentinelles gardées pour la forêt hantée');
+}
+
+console.log('Duel de la Nuit noire — cœur déterministe, maps (duel sans monstre / forêt hantée), monde 5×, caméra, brouillard de guerre, ronde/sommeil des sentinelles, décor/pièges/bombes/caisses, tir manuel, visée curseur, orientation, visibilité, snapshots, mort subite et cotes : OK');
