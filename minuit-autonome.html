@@ -11107,6 +11107,9 @@ var qrcode = function() {
   const AIM_ASSIST_SNAP_RADIUS = 46;
   const AIM_ASSIST_FIRE_RANGE = 460;
   const AIM_ASSIST_FIRE_COS = 0.82;
+  // Flèches = pilotage relatif au balai : haut avance dans l'axe du balai,
+  // bas recule, gauche/droite font pivoter le balai (quand la souris ne vise pas).
+  const ARROW_TURN_RATE = 3.4; // rad/s
 
   let channel = null;
   let pollTimer = null;
@@ -11126,6 +11129,8 @@ var qrcode = function() {
   let padDashHeld = false;
   let padPauseHeld = false;
   let fireButtonHeld = false;
+  let keyboardHeading = null; // angle écran du balai piloté aux flèches
+  let lastControlDt = 1 / 60;
   const duelCamera = { x: 0, y: 0 };
 
   const pointerState = {
@@ -12650,6 +12655,7 @@ var qrcode = function() {
     pointerState.aimY = Core.ARENA_CENTER.y;
     pointerState.moveCurrentX = 0;
     pointerState.moveCurrentY = 0;
+    keyboardHeading = null;
     if (typeof moveInput === 'object' && moveInput) {
       for (const key of Object.keys(moveInput)) delete moveInput[key];
     }
@@ -12747,6 +12753,12 @@ var qrcode = function() {
     if (keyIsDown(right) || keyIsDown('d')) kx += 1;
     if (keyIsDown(up) || keyIsDown('w') || keyIsDown('z')) ky -= 1;
     if (keyIsDown(down) || keyIsDown('s')) ky += 1;
+    // Les flèches physiques ne sont plus un déplacement « haut de carte » :
+    // elles pilotent le balai (voir plus bas). On retire leur contribution absolue.
+    if (left.toLowerCase() === 'arrowleft' && keyIsDown('arrowleft')) kx += 1;
+    if (right.toLowerCase() === 'arrowright' && keyIsDown('arrowright')) kx -= 1;
+    if (up.toLowerCase() === 'arrowup' && keyIsDown('arrowup')) ky += 1;
+    if (down.toLowerCase() === 'arrowdown' && keyIsDown('arrowdown')) ky -= 1;
 
     let moveX = kx;
     let moveY = ky;
@@ -12789,6 +12801,47 @@ var qrcode = function() {
       hasAim = assisted.hasAim;
       pointerState.aimX = aimX;
       pointerState.aimY = aimY;
+    }
+
+    // Flèches = pilotage relatif au balai : haut avance vers le devant du balai,
+    // bas recule, gauche/droite pivotent le balai si la souris ne vise pas.
+    const arrowTurn = (keyIsDown('arrowright') ? 1 : 0) - (keyIsDown('arrowleft') ? 1 : 0);
+    const arrowThrottle = (keyIsDown('arrowup') ? 1 : 0) - (keyIsDown('arrowdown') ? 1 : 0);
+    if ((arrowTurn !== 0 || arrowThrottle !== 0) && renderSnap) {
+      const snapSelf = Core.orientSnapshotForViewer(renderSnap, myRole()).self;
+      if (snapSelf) {
+        const mouseAiming = pointerState.mouseAimActive || pointerState.aimTouchId !== null;
+        let heading = Number.isFinite(keyboardHeading)
+          ? keyboardHeading
+          : (Number.isFinite(snapSelf.aimAngle) ? snapSelf.aimAngle : -Math.PI / 2);
+        if (mouseAiming && Number.isFinite(aimX) && Number.isFinite(aimY)) {
+          const dx = aimX - snapSelf.x, dy = aimY - snapSelf.y;
+          if (Math.hypot(dx, dy) > 4) heading = Math.atan2(dy, dx);
+        } else if (arrowTurn !== 0) {
+          heading += arrowTurn * ARROW_TURN_RATE * Math.min(0.05, Math.max(0.001, lastControlDt));
+        }
+        keyboardHeading = heading;
+        if (!mouseAiming) {
+          // On envoie le cap au moteur pour que le balai reste orienté où on le tourne.
+          aimX = clampNum(snapSelf.x + Math.cos(heading) * 260, 0, Core.WORLD_WIDTH);
+          aimY = clampNum(snapSelf.y + Math.sin(heading) * 260, 0, Core.WORLD_HEIGHT);
+          hasAim = true;
+          pointerState.aimX = aimX;
+          pointerState.aimY = aimY;
+        }
+        if (arrowThrottle !== 0) {
+          moveX += Math.cos(heading) * arrowThrottle;
+          moveY += Math.sin(heading) * arrowThrottle;
+        }
+        if (mouseAiming && arrowTurn !== 0) {
+          // Souris active : gauche/droite deviennent un pas de côté relatif au balai.
+          const side = heading + Math.PI / 2;
+          moveX += Math.cos(side) * arrowTurn;
+          moveY += Math.sin(side) * arrowTurn;
+        }
+      }
+    } else if (!pointerState.mouseAimActive && pointerState.aimTouchId === null) {
+      keyboardHeading = null;
     }
 
     if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
@@ -12858,6 +12911,7 @@ var qrcode = function() {
 
   function stepDuelFrame(dt) {
     if (!combatActive || !duel) return;
+    lastControlDt = Number(dt) > 0 ? Number(dt) : lastControlDt;
     computeDuelCamera();
     applyTouchLayoutPreference();
     pollDuelGamepadActions();
@@ -13736,7 +13790,7 @@ var qrcode = function() {
       };
     }
     const hint = el('hint');
-    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser = déplacer · 2e doigt = viser direct · Tir = accroche ce qui est visible devant · F/clic gauche · Espace/E esquive · Maj précision · La lumière révèle caisses, pièges, bombes et sentinelles';
+    if (hint) hint.textContent = 'DUEL · Flèches ↑/↓ = avancer/reculer dans l’axe du balai, ←/→ = pivoter · ZQSD = déplacement libre · souris = viser · Tir/F · Espace/E esquive · Maj précision · Mobile : glisser + 2e doigt';
     if (bar) bar.style.display = 'flex';
   }
 
