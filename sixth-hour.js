@@ -10,13 +10,13 @@ const active=()=>window.Campaign?.activeWorld===3;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const near=(ax,ay,bx,by,r)=>Math.hypot(ax-bx,ay-by)<r;
 
-const BUDGET={foes:6,volley:2,cadence:4.2,shotSpeed:150,adds:2};
+const BUDGET={foes:12,volley:4,cadence:1.9,shotSpeed:190,adds:3};
 const TUNING=[
- {foes:4,volley:1,cadence:4.6,speed:130,axes:1},
- {foes:5,volley:2,cadence:4.4,speed:135,axes:2},
- {foes:5,volley:2,cadence:4.4,speed:140,axes:2},
- {foes:6,volley:2,cadence:4.2,speed:145,axes:3},
- {foes:6,volley:2,cadence:4.2,speed:150,axes:3}
+ {foes:8,volley:2,cadence:2.8,speed:150,axes:1},
+ {foes:9,volley:3,cadence:2.6,speed:160,axes:2},
+ {foes:10,volley:3,cadence:2.4,speed:170,axes:2},
+ {foes:11,volley:4,cadence:2.2,speed:180,axes:3},
+ {foes:12,volley:4,cadence:2.0,speed:190,axes:3}
 ];
 const tune=()=>TUNING[clamp(stage,0,4)];
 
@@ -31,19 +31,29 @@ const foeKinds=new Set(Object.keys(foeNames));
 const bossKinds=new Set(['veilleuse','sonneur','passeur','cueilleuse','chasseur']);
 /* Une condition de victoire par gardien : aucune n'est « vider la barre ». */
 const VICTORY={
- veilleuse:'Éteindre les cinq mèches en même temps',
- sonneur:'Frapper trois fois le battant',
- passeur:'Briser trois fois la boucle de sable',
- cueilleuse:'Forcer trois cueillettes',
- chasseur:'Accomplir le geste qu’il n’a pas pu copier'
+ veilleuse:'Éteins les 5 mèches',
+ sonneur:'Frappe 3 fois le battant',
+ passeur:'Brise 3 fois le sable',
+ cueilleuse:'Force 3 cueillettes',
+ chasseur:'Réussis 3 gestes non copiés'
 };
+/* Une phrase par univers, écrite comme une consigne de jeu, pas comme une
+   énigme : ce qu'il faut faire, et ce qui arrive si on ne le fait pas. */
 const RULES=[
- 'VEILLES · le halo protège aussi tes cibles : plein = réel, pointillé = leurre',
- 'SILENCE · briser une cloche fige les tirs de sa jumelle',
- 'TRACES · le sel reprend tes positions passées : ne te répète pas',
- 'PRÊT · allumer une lanterne coûte de la flamme, donc de la cadence',
- 'EMPRUNT · le cadran ne garde que les chiffres qu’il montre'
+ 'TUE le Garde-mèche : son halo protège les autres monstres, tes tirs y font moitié dégâts.',
+ 'CASSE une des deux cloches : sa jumelle arrête de tirer pendant 1,5 seconde.',
+ 'ÉVITE le sel blanc : il te ralentit. Il tombe là où tu étais, pas là où tu es.',
+ 'ALLUME les lanternes en les touchant : ça coûte de la flamme et ralentit un peu ton tir.',
+ 'VISE le chiffre affiché en FAIBLE : il prend deux fois plus de dégâts.'
 ];
+/* Comment battre chaque gardien, en une consigne concrète. */
+const HOWTO={
+ veilleuse:'Tire sur une mèche quand son anneau s’ouvre.',
+ sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
+ passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
+ cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
+ chasseur:'Fais le geste écrit à l’écran : il ne sait pas le copier.'
+};
 const HABITS={relays:'relais brisés',halos:'halos fréquentés',salt:'sable intact foulé',flames:'flammes rendues'};
 
 let marks=[],salt=[],trail=[],mission={},habits=freshHabits(),boss=null,minute=null,meche=null;
@@ -71,13 +81,13 @@ function pastPlayer(seconds=1.2){
 
 /* --- Télégraphes : plein = réel, pointillé = leurre (langage du monde 1) --- */
 function addMark(data){
- if(marks.length>=6)return null;
+ if(marks.length>=10)return null;
  const mark={x:clamp(data.x,60,740),y:clamp(data.y,300,820),r:data.r||74,warn:data.warn||1.35,
   life:data.life||.45,age:0,real:data.real!==false,source:data.source||null,label:data.label||'',
   kind:data.kind||'strike',graze:data.graze===true,grazed:false,struck:false};
  marks.push(mark);return mark;
 }
-const isReal=m=>mission.inverted?!m.real:m.real;
+const isReal=m=>m.real===true;
 
 /* Le halo du Garde-mèche : protection du monde 1, lumière du monde 2. */
 function wardenAt(x,y){
@@ -120,8 +130,8 @@ makeSchedule=function(){
  if(!active())return baseSchedule();
  const forms=world.foes,list=[];
  if(wave===5){list.push({time:1,x:260,kind:forms[0],pattern:99,group:1,index:0},{time:1.4,x:540,kind:forms[1],pattern:99,group:1,index:1});return list}
- const count=8+wave*2;
- for(let i=0;i<count;i++)list.push({time:1+i*2.4,x:i%2?600:200,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
+ const count=16+wave*3;
+ for(let i=0;i<count;i++)list.push({time:1+i*1.5,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
  return list;
 };
 
@@ -130,12 +140,12 @@ newWave=function(...args){
  const result=baseNewWave(...args);
  if(!active())return result;
  marks=[];salt=[];minute=null;meche=null;frozen=[];boss=null;gesture=null;haloTime=0;
- mission={key:stage+':'+wave,minuteTaken:false,seals:0,inverted:wave===4,digit:1,digitTimer:5,tenure:0};
+ mission={key:stage+':'+wave,minuteTaken:false,seals:0,digit:1,digitTimer:5,tenure:0};
  if(wave===1)say(RULES[clamp(stage,0,4)],3.4);
- if(wave===2){minute={x:400,y:330,guard:true,taken:false,age:0};say('RENDRE UNE MINUTE · éteins sa garde, puis prends-la',3.2)}
- if(wave===3)say('TENUE · 22 secondes avec deux règles actives',2.6);
+ if(wave===2){minute={x:400,y:330,guard:true,taken:false,age:0};say('PRENDS LA MINUTE ◷ · tue d’abord le Garde-mèche qui la protège, puis marche dessus',3.4)}
+ if(wave===3)say('TIENS 22 SECONDES · survis, rien d’autre à faire',2.6);
  if(wave===4){
-  say('INVERSION · le plein devient leurre, le pointillé devient réel',3.4);
+  say('ÉTEINS LES 2 SCEAUX · tire sur les deux flammes creuses marquées SCEAU',3.4);
   spawnFoe('hollowFlame',240,300,0);spawnFoe('hollowFlame',560,300,1);
   for(const e of enemies)if(e.kind==='hollowFlame'&&!e.dead){e.seal=true;e.lit=true}
  }
@@ -158,12 +168,16 @@ function moveEnemy(e,dt){
  if(e.y<e.homeY)e.y=Math.min(e.homeY,e.y+58*dt);
  else e.y=e.homeY+Math.sin(e.age*.7+e.seed)*16;
  e.x=clamp(e.baseX+Math.sin(e.age*.55+e.seed)*(e.kind==='wickWarden'?55:95),50,750);
- if(e.seal)return true;
  e.timer-=dt;
  if(e.kind==='printThief')trackDash(e);
  if(e.timer>0)return true;
  e.timer=t.cadence;
  const aim=Math.atan2(player.y-e.y,player.x-e.x);
+ const volley=Math.max(1,Math.min(t.volley,BUDGET.volley));
+ const angles=Array.from({length:volley},(_,i)=>(i-(volley-1)/2)*.22);
+ shootHostile(e,'spirit',angles,Math.min(t.speed,BUDGET.shotSpeed),aim);
+ e.shotCycle=(e.shotCycle||0)+1;
+ if(e.shotCycle%2===0)return true;
  if(e.kind==='waxCourier'){
   /* Leurre du vampire (M1) × écho annulable du facteur d’ombre (M2). */
   const side=rng()<.5?-1:1,source=enemies.find(o=>!o.dead&&o.kind==='wickWarden')||e;
@@ -172,8 +186,6 @@ function moveEnemy(e,dt){
  }else if(e.kind==='bronzeCrow'){
   /* Écho du chiffre creux (M2) × frôlement récompensé (M1). */
   addMark({x:player.x,y:player.y,r:66,warn:1.3,source:e,graze:true,label:'BRONZE'});
- }else if(e.kind==='crackedBell'){
-  shootHostile(e,'spirit',[0],Math.min(t.speed,BUDGET.shotSpeed),aim);
  }else if(e.kind==='saltWalker'){
   /* Traînée d’ossements (M1) × mémoire du joueur (M2). */
   const past=pastPlayer(1.2);
@@ -190,8 +202,6 @@ function moveEnemy(e,dt){
   const lamp=enemies.find(o=>!o.dead&&o.kind==='hollowFlame'&&o.lit);
   if(lamp){lamp.lit=false;particle(lamp.x,lamp.y,'#f4c98f',12);addMark({x:player.x,y:player.y,r:70,warn:1.25,source:e,label:'PRISME'})}
   else e.timer=t.cadence*.6;
- }else if(e.kind==='hollowFlame'){
-  if(e.lit)shootHostile(e,'spirit',[0],Math.min(t.speed,BUDGET.shotSpeed),aim);
  }else if(e.kind==='unnamedDigit'){
   addMark({x:player.x,y:player.y,r:68,warn:1.35,source:e,label:'CHIFFRE '+e.digit});
  }else if(e.kind==='facelessEcho'){
@@ -255,6 +265,7 @@ function tick(dt){
  if(wave===2&&minute&&!minute.guard&&!enemies.some(e=>!e.dead&&e.kind==='wickWarden')&&!minute.spawned){
   minute.spawned=true;spawnFoe('wickWarden',400,270,0);
  }
+ if(boss)boss.hintCd=Math.max(0,(boss.hintCd||0)-dt);
  mission.digitTimer=(mission.digitTimer||0)-dt;
  if(mission.digitTimer<=0){mission.digitTimer=5;mission.digit=1+((mission.digit||1)%5)}
  for(const m of marks){
@@ -288,9 +299,13 @@ function tick(dt){
  if(gesture)gesture.tick(dt);
 }
 
-/* La flamme est une ressource : la dépenser réduit la cadence de tir. */
+/* La flamme ralentit le tir, elle ne le coupe JAMAIS. Le facteur est appliqué
+   par game.js au moment où le prochain tir est armé : toucher player.fire
+   pendant l'attente empêchait définitivement de tirer. */
+function fireDelay(){
+ return active()&&state==='play'?1+(3-flame)*.22:1;
+}
 function tickFlame(dt){
- if(active()&&flame<3&&state==='play')player.fire=Math.max(player.fire,(3-flame)*.14);
  if(meche){
   meche.age+=dt;meche.y+=42*dt;
   if(near(player.x,player.y,meche.x,meche.y,44)){flame=Math.min(3,flame+1);meche=null;say('MÈCHE REPRISE · flamme '+flame+'/3',2)}
@@ -302,9 +317,13 @@ function tickFlame(dt){
 const baseDamageEnemy=damageEnemy;
 damageEnemy=function(e,n,...rest){
  if(!active())return baseDamageEnemy(e,n,...rest);
- if(e.boss&&bossKinds.has(e.kind)){e.blockHit=.12;return}
- if(e.kind==='unnamedDigit'&&e.digit!==mission.digit){e.blockHit=.12;return}
+ if(e.boss&&bossKinds.has(e.kind)){
+  e.blockHit=.12;
+  if((e.hintCd||0)<=0){e.hintCd=4;say('INSENSIBLE · '+HOWTO[e.kind],2.4)}
+  return;
+ }
  let value=n;
+ if(e.kind==='unnamedDigit'&&e.digit===mission.digit)value*=2;
  if(wardenAt(e.x,e.y))value*=.55;
  if(playerInHalo())value*=.55;
  if(e.kind==='hollowFlame'&&e.lit&&stage===2)value*=.55;
@@ -560,7 +579,14 @@ function draw(g){
   if(e.kind==='wickWarden'){g.save();g.globalAlpha=.16;g.fillStyle=world.moon;g.beginPath();g.arc(e.x,e.y,e.halo||150,0,Math.PI*2);g.fill();g.restore();ring(g,e.x,e.y,e.halo||150,world.moon+'88')}
   if(e.kind==='hollowFlame')ring(g,e.x,e.y,e.r+9,e.lit?world.moon:'#6b5a7d',!e.lit);
   if(e.kind==='crackedBell'&&e.twin&&!e.twin.dead){g.save();g.strokeStyle='#cfe6d877';g.lineWidth=1.5;g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.twin.x,e.twin.y);g.stroke();g.restore()}
-  if(e.kind==='unnamedDigit'){g.save();g.fillStyle=e.digit===mission.digit?'#ffd9a0':'#7c6a8f';g.font='bold 16px Georgia';g.textAlign='center';g.fillText(String(e.digit),e.x,e.y-30);g.restore()}
+  if(e.kind==='unnamedDigit'){
+   const weak=e.digit===mission.digit;
+   g.save();g.textAlign='center';g.fillStyle=weak?'#ffd9a0':'#7c6a8f';g.font='bold 16px Georgia';
+   g.fillText(String(e.digit),e.x,e.y-30);
+   if(weak){g.fillStyle='#ffe6bd';g.font='bold '+(compactView()?'14px':'10px')+' Arial';g.fillText('FAIBLE ×2',e.x,e.y-44)}
+   g.restore();
+  }
+  if(!e.boss&&e.kind!=='wickWarden'&&wardenAt(e.x,e.y)){g.save();g.textAlign='center';g.fillStyle='#ffd9a0';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText('PROTÉGÉ ½ dégâts',e.x,e.y+e.r+16);g.restore()}
   if(e.kind==='printThief'&&e.dashRun){g.save();g.fillStyle='#e8dcc0';g.font='11px Arial';g.textAlign='center';g.fillText('◆'.repeat(Math.min(3,e.dashRun)),e.x,e.y-28);g.restore()}
  }
  for(const s of salt){g.save();g.globalAlpha=Math.min(.5,.15+s.age*.2);g.fillStyle='#e8dcc0';g.beginPath();g.arc(s.x,s.y,s.r,0,Math.PI*2);g.fill();g.restore()}
@@ -570,7 +596,13 @@ function draw(g){
   if(real){g.beginPath();g.arc(m.x,m.y,m.r*progress,0,Math.PI*2);g.fill()}
   g.restore();
   ring(g,m.x,m.y,m.r,real?'#ffd9a0':'#b9a7c9',!real);
-  if(m.label&&m.age<m.warn){g.save();g.fillStyle=real?'#ffe6bd':'#c8b8d8';g.font=(compactView()?'15px':'11px')+' Arial';g.textAlign='center';g.fillText(m.label,m.x,m.y-m.r-8);g.restore()}
+  if(m.age<m.warn){
+   g.save();g.textAlign='center';
+   g.fillStyle=real?'#ff9d7a':'#9d8fb5';g.font='bold '+(compactView()?'19px':'14px')+' Arial';
+   g.fillText(real?'DANGER':'LEURRE',m.x,m.y-m.r-10);
+   if(m.label){g.fillStyle=real?'#ffe6bd':'#c8b8d8';g.font=(compactView()?'14px':'10px')+' Arial';g.fillText(m.label,m.x,m.y-m.r+6)}
+   g.restore();
+  }
  }
  if(minute&&!minute.taken){
   ring(g,minute.x,minute.y,30,'#ffd9a0',minute.guard);
@@ -624,13 +656,14 @@ drawBossHealth=function(g,e){
 const baseUpdateHUD=updateHUD;
 updateHUD=function(...args){
  const result=baseUpdateHUD(...args);
+ refreshObjective();
  if(!active())return result;
  const e=enemies.find(v=>v.boss&&!v.dead);
  if(e&&bossKinds.has(e.kind)){
   $('bossbar').classList.remove('hidden');
   $('bossname').textContent=world.boss;
   $('bosshp').style.width=Math.round(clamp(e.value||0,0,1)*100)+'%';
-  $('bossphase').textContent=(e.label||'')+' · '+VICTORY[e.kind];
+  $('bossphase').textContent=(e.label||'')+' · '+HOWTO[e.kind];
  }
  return result;
 };
@@ -678,12 +711,33 @@ function restore(data){
  mission={...mission,...(data.mission||{})};
 }
 
+/* Bandeau d'objectif : une consigne permanente, hors du canvas, pour ne pas
+   avoir à mémoriser un message qui disparaît. */
+const objectiveBar=document.createElement('div');
+objectiveBar.id='sixthObjective';objectiveBar.className='sixth-objective hidden';
+objectiveBar.setAttribute('role','status');
+(document.getElementById('gameStatus')||document.body).appendChild(objectiveBar);
+function objectiveText(){
+ if(!active()||state!=='play')return '';
+ const e=enemies.find(v=>v.boss&&!v.dead);
+ if(e&&bossKinds.has(e.kind))return 'GARDIEN · '+(VICTORY[e.kind]||'')+' — '+(HOWTO[e.kind]||'');
+ if(wave===2)return mission.minuteTaken?'MINUTE RENDUE · continue jusqu’à la fin de la vague':'MINUTE ◷ · tue le Garde-mèche qui la protège, puis marche sur le cercle';
+ if(wave===3)return 'TENUE · survis '+Math.max(0,Math.ceil(22-waveTime))+' s';
+ if(wave===4)return 'SCEAUX · tire sur les 2 flammes creuses marquées SCEAU ('+(mission.seals||0)+'/2)';
+ return RULES[clamp(stage,0,4)];
+}
+function refreshObjective(){
+ const text=objectiveText();
+ objectiveBar.textContent=text;
+ objectiveBar.classList.toggle('hidden',!text);
+}
+
 const style=document.createElement('style');
-style.textContent='body.sixth-hour-theme{background:radial-gradient(ellipse at 22% 0,#2a2440,#12101f 68%)}body.sixth-hour-theme .home-hero{border-color:#d9a05f77}body.sixth-hour-theme .home-world-route{color:#ffd9a0}.sixth-hour-home .menu-kicker{color:#ffd9a0}';
+style.textContent='body.sixth-hour-theme{background:radial-gradient(ellipse at 22% 0,#2a2440,#12101f 68%)}body.sixth-hour-theme .home-hero{border-color:#d9a05f77}body.sixth-hour-theme .home-world-route{color:#ffd9a0}.sixth-hour-home .menu-kicker{color:#ffd9a0}.sixth-objective{margin:8px 0 0;padding:9px 12px;border:1px solid #d9a05f66;border-left:3px solid #ffd9a0;border-radius:8px;background:#1d1830cc;color:#ffe6bd;font-size:13px;line-height:1.35;letter-spacing:.2px}.sixth-objective.hidden{display:none}@media(max-width:720px){.sixth-objective{font-size:12px}}';
 document.head.appendChild(style);
 
 window.SixthHour={
- BUDGET,TUNING,foeNames,VICTORY,RULES,HABITS,
+ BUDGET,TUNING,foeNames,VICTORY,RULES,HOWTO,HABITS,fireDelay,objectiveText,
  moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,
  isFoeKind:k=>foeKinds.has(k),isBossKind:k=>bossKinds.has(k),
  get boss(){return boss},get mission(){return mission},get habits(){return habits},

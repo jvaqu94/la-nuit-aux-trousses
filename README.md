@@ -154,9 +154,21 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
 | Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
 
+#### Lisibilité : des consignes, plus des énigmes
+
+Retour en jeu : le mécanisme était incompréhensible. Il a été simplifié et rendu explicite.
+
+- **Bandeau d’objectif permanent**, hors de la zone de jeu, qui dit quoi faire maintenant et compte la progression (« MINUTE ◷ · tue le Garde-mèche qui la protège, puis marche sur le cercle », « TENUE · survis 12 s », « SCEAUX · 1/2 »).
+- Les cercles annoncés portent le mot **DANGER** ou **LEURRE** écrit dessus. L’**inversion** plein/pointillé de la vague 4 est **supprimée** : c’était la principale source d’incompréhension.
+- Le Chiffre sans nom n’est plus immunisé : le chiffre affiché **FAIBLE ×2** prend simplement deux fois plus de dégâts.
+- Un monstre protégé par un halo porte la mention **PROTÉGÉ ½ dégâts**.
+- Tirer sur un gardien ne fait plus « rien » en silence : il répond **INSENSIBLE ·** suivi de la marche à suivre. Chaque gardien a sa consigne (`HOWTO`).
+
+**La flamme ralentit le tir, elle ne le coupe jamais.** Un bug rendait la sorcière muette dès la première flamme dépensée : le tick remontait le délai de tir à chaque image, si bien qu’il n’atteignait jamais zéro. Le facteur est désormais appliqué au moment où le tir est armé, borné à ×1,66. Un test de régression rejoue 240 images flamme épuisée et exige que les tirs continuent.
+
 #### Décors et silhouettes propres au monde 3
 
-Le monde 3 ne réutilise **aucun décor du monde 1** : chaque univers a sa peinture
+Le monde 3 ne réutilise **aucun décor du monde 1** : chaque univers a sa peinture **vue de dessus** (caméra à la verticale, sans horizon ni perspective, pour un défilement vertical)
 (`scenery/sixth-*.jpg`, embarquée en base64 par `sixth-scenery.js`, régénérable avec
 `python3 tools/build_sixth_scenery.py` — nécessite Pillow). `SixthScenery.pick(stage)`
 ne renvoie une image que lorsque le monde 3 est actif ; les mondes 1 et 2 et les
@@ -181,19 +193,21 @@ Aperçu : `docs/apercu-monde-3.jpg` (décors réels + acteurs dessinés par le c
 
 **Aucun de ces cinq gardiens n’a de barre de vie.** Chacun possède sa jauge, sa condition de victoire et sa langue d’annonce ; trois d’entre eux ne tirent jamais. Les dégâts du joueur ne les entament pas : ils servent à agir sur le décor du combat (mèches, battant, boucle, lanternes).
 
-**La difficulté ne monte pas avec le nombre.** Les budgets sont plafonnés aux valeurs du monde 2 et parfois inférieurs :
+**Le monde 3 est un vrai shoot.** Après retour en jeu, les budgets ont été relevés : plus de monstres, et **toutes les formes tirent des projectiles** à chaque cycle. Leur mécanique signature revient un cycle sur deux, pour rester lisible au lieu de remplacer le combat.
 
-| Quantité | Monde 2 (référence) | Monde 3 |
+| Quantité | Monde 2 | Monde 3 |
 |---|---|---|
-| Ennemis non-boss simultanés | 6 | 4 → 6 selon l’univers, jamais plus de 6 |
-| Projectiles par salve | 1 à 2 | 2 maximum |
-| Cadence de tir d’un monstre | 3,5 à 5,6 s | 4,2 s minimum |
-| Vitesse des projectiles | 125 à 155 | 150 maximum |
+| Ennemis non-boss simultanés | 6 | 8 → 12 selon l’univers |
+| Projectiles par salve | 1 à 2 | 2 → 4 |
+| Cadence de tir d’un monstre | 3,5 à 5,6 s | 2,8 → 2,0 s |
+| Vitesse des projectiles | 125 à 155 | 150 → 190 |
 | PV des monstres | référence par forme | identiques, aucune inflation |
+
+En partie réelle mesurée par le test : jusqu’à **10 monstres** et **70 projectiles** à l’écran.
 
 Ce qui progresse, c’est le **nombre de décisions simultanées** : 1, 2, 2, 3, 3. Chaque forme hérite d’une mécanique du monde 1 et d’une du monde 2 — le halo protecteur réduit aussi vos dégâts, le télégraphe plein est réel et le pointillé est un leurre, tuer la source annule son attaque, briser une cloche fige les tirs de sa jumelle, le sel reprend vos positions passées.
 
-Les cinq vagues de chaque univers suivent la même progression : **lecture** de la règle, **minute à rendre**, **tenue** de 22 secondes, **inversion** de la règle apprise, puis gardien. Les **minutes rendues** (3 par univers, 15 au total) sont persistées : elles décideront de l’issue du voyage. Aucune nouvelle commande n’est nécessaire : déplacement, visée, sort spécial et esquive suffisent.
+Les cinq vagues de chaque univers suivent la même progression : **consigne** de l’univers, **minute à prendre**, **tenue** de 22 secondes, **deux sceaux à éteindre**, puis gardien. Les **minutes rendues** (3 par univers, 15 au total) sont conservées pour l’épilogue du monde 5.
 
 Le monde 3 se termine sur une révélation — l’heure manquante est habitée — et ouvre le monde 4, **La Veillée**. Les records du monde 3 sont séparés. Comme au monde 2, les événements de territoire, apparitions surprises, formations coopératives, reliquaires et le Veilleur rival sont désactivés pour tenir les budgets.
 

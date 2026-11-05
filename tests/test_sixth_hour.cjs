@@ -2,8 +2,8 @@
 /* Monde 3 · La Sixième Heure.
    Ce test charge les VRAIS game.js, journey.js, nemesis.js, sequel.js et
    sixth-hour.js. Il verrouille le cahier des charges :
-   1. budgets plafonnés (jamais plus de monstres ni de tirs qu'au monde 2) ;
-   2. dificultad portée par les décisions, pas par les quantités ;
+   1. budgets tenus ( davantage de monstres et de tirs, demandés explicitement ) ;
+   2. règles lisibles : mots écrits à l'écran, objectif permanent ;
    3. cinq gardiens SANS barre de vie, aux conditions de victoire distinctes ;
    4. héritage réel des mécaniques des mondes 1 et 2 ;
    5. chaîne de déblocage 1 → 2 → 3 et minutes rendues persistées. */
@@ -106,7 +106,7 @@ function freshWave(w){
 freshWave(1);out.rule1=SH.RULES[0];
 freshWave(2);out.wave2Blocks=SH.waveBlocks();
 freshWave(3);waveTime=0;out.wave3Blocks=SH.waveBlocks();waveTime=23;out.wave3After=SH.waveBlocks();
-freshWave(4);out.wave4={blocks:SH.waveBlocks(),inverted:SH.mission.inverted,seals:enemies.filter(e=>e.seal).length};
+freshWave(4);out.wave4={blocks:SH.waveBlocks(),seals:enemies.filter(e=>e.seal).length};
 
 /* 5 · Plafond d'ennemis : on tente d'en faire apparaître beaucoup plus */
 freshWave(1);
@@ -135,14 +135,18 @@ out.lureLanguage=!!(realMark&&lureMark);
 reward(courier);SH.tick(1/60);
 out.relays=SH.habits.relays;
 
-/* 8 · Inversion de la règle en vague 4 : le plein devient leurre */
+/* 8 · Vague 4 : plus d'inversion. DANGER blesse, LEURRE ne blesse pas,
+   dans toutes les vagues — c'était la principale source d'incompréhension. */
 freshWave(4);
 spawnEnemy({kind:'waxCourier',x:400,y:300,group:1,index:0,pattern:99});
-const c4=enemies[enemies.length-1];c4.y=300;c4.homeY=300;c4.timer=0;SH.moveEnemy(c4,1/60);
-const filled=SH.marks.find(m=>m.real);
+const c4=enemies[enemies.length-1];c4.y=300;c4.homeY=300;c4.timer=0;c4.shotCycle=0;SH.moveEnemy(c4,1/60);
+const filled=SH.marks.find(m=>m.real),lure4=SH.marks.find(m=>!m.real);
 player.x=filled.x;player.y=filled.y;player.inv=0;player.dash=0;player.shield=0;lives=3;
 filled.age=filled.warn;SH.tick(1/60);
-out.inversionLives=lives;
+out.dangerHurts=lives;
+lives=3;player.x=lure4.x;player.y=lure4.y;player.inv=0;lure4.age=lure4.warn;SH.tick(1/60);
+out.lureHarmless=lives;
+out.noInversion=SH.mission.inverted===undefined;
 
 /* 9 · Cloches fêlées : briser l'une fige les tirs de l'autre */
 freshWave(1);
@@ -214,7 +218,8 @@ let c=bossFor(3);
 out.cueilleuse={flameBefore:SH.flame};
 player.x=c.lanterns[0].x;player.y=c.lanterns[0].y;SH.moveBoss(c,1/60);SH.tick(1/60);
 out.cueilleuse.flameAfter=SH.flame;out.cueilleuse.lit=c.lanterns.filter(l=>l.lit).length;
-player.fire=0;SH.tick(1/60);out.cueilleuse.cadence=player.fire>0;
+player.fire=0;SH.tick(1/60);out.cueilleuse.fireUntouched=player.fire===0;
+out.cueilleuse.delay=SH.fireDelay();
 
 /* 11e · Le Chasseur : il lit les habitudes et emprunte les plus utilisées */
 let h=bossFor(4);
@@ -243,6 +248,44 @@ for(const index of [0,1,3,4]){
   perStage.push({index,foes,shotsMax,cap:SH.tune().foes});
 }
 out.loop={crashes,maxFoes,maxHostile,perStage};
+
+/* 11f-bis · RÉGRESSION du bug « la sorcière ne tire plus ».
+   tickFlame remontait player.fire à chaque image : flamme < 3 = tir mort. */
+Camp.beginWorld(3);stage=3;world=worlds[3];wave=1;state='play';
+enemies=[];hostile=[];shots=[];SH.marks.length=0;newWave();
+const lamp=SH.isFoeKind('hollowFlame')&&(spawnEnemy({kind:'hollowFlame',x:400,y:300,group:1,index:0,pattern:99}),enemies[enemies.length-1]);
+if(lamp){lamp.lit=true;reward(lamp)}
+out.shootBug={flame:SH.flame,delay:SH.fireDelay()};
+let fired=0,seen=0;
+for(let i=0;i<240;i++){
+  player.inv=99;player.x=400;player.y=700;
+  const before=shots.length;
+  update(1/60);
+  if(shots.length>before)fired++;
+  seen=Math.max(seen,shots.length);
+}
+out.shootBug.fired=fired;out.shootBug.seen=seen;
+out.shootBug.flameEnd=SH.flame;
+
+/* 11f-ter · Toutes les formes tirent vraiment des projectiles. */
+const shooters={};
+for(const kind of Object.keys(SH.foeNames)){
+  freshWave(1);
+  spawnEnemy({kind,x:400,y:300,group:1,index:0,pattern:99});
+  const foe=enemies[enemies.length-1];
+  foe.y=300;foe.homeY=300;foe.timer=0;hostile=[];
+  SH.moveEnemy(foe,1/60);
+  shooters[kind]=hostile.length;
+}
+out.shooters=shooters;
+
+/* 11f-quater · Lisibilité : consigne permanente et marche à suivre par gardien. */
+freshWave(2);out.clarity={wave2:SH.objectiveText()};
+freshWave(3);out.clarity.wave3=SH.objectiveText();
+freshWave(4);out.clarity.wave4=SH.objectiveText();
+stage=0;world=worlds[0];freshWave(1);out.clarity.wave1=SH.objectiveText();
+out.clarity.howto=Object.keys(SH.HOWTO);
+out.clarity.plainRules=SH.RULES.every(r=>r.length>25&&!/^[A-ZÉÈÀ]+ ·/.test(r)&&/[a-zéèàù]{4,}/.test(r));
 
 /* 11g · Un gardien dans la boucle réelle : sa jauge remplace la barre de vie. */
 stage=0;world=worlds[0];wave=5;state='play';enemies=[];hostile=[];shots=[];
@@ -386,7 +429,7 @@ assert.equal(r.wave2Blocks, true, 'vague 2 : la minute doit être rendue');
 assert.equal(r.wave3Blocks, true, 'vague 3 : tenue de 22 s');
 assert.equal(r.wave3After, false);
 assert.equal(r.wave4.blocks, true, 'vague 4 : deux sceaux à éteindre');
-assert.equal(r.wave4.inverted, true, 'vague 4 : la règle apprise est inversée');
+assert.equal(r.wave4.seals, 2, 'vague 4 : deux sceaux à éteindre');
 assert.equal(r.wave4.seals, 2);
 
 assert.ok(r.foeCap.live <= r.foeCap.max, 'plafond d’ennemis dépassé : ' + JSON.stringify(r.foeCap));
@@ -403,7 +446,9 @@ assert.ok(r.wardIn < r.wardOut && r.wardIn > 0, 'le halo protecteur doit réduir
 assert.equal(r.marksBefore, 2, 'le facteur de cire annonce un réel et un leurre');
 assert.equal(r.lureLanguage, true);
 assert.ok(r.relays >= 1, 'tuer la source doit compter comme relais brisé');
-assert.equal(r.inversionLives, 3, 'en vague 4 le télégraphe plein devient inoffensif');
+assert.equal(r.noInversion, true, 'l’inversion plein/pointillé est supprimée');
+assert.ok(r.dangerHurts < 3, 'un cercle DANGER doit blesser, y compris en vague 4');
+assert.equal(r.lureHarmless, 3, 'un cercle LEURRE ne doit jamais blesser');
 assert.equal(r.twin, true, 'les cloches doivent être liées');
 assert.equal(r.freeze.frozen, true, 'briser une cloche fige les tirs de sa jumelle');
 assert.equal(r.freeze.vy, 0);
@@ -431,14 +476,18 @@ assert.equal(r.passeur.fresh, 3);
 assert.equal(r.passeur.breaks, 1, 'la brisure ne compte que pendant l’ouverture');
 assert.equal(r.cueilleuse.flameAfter, r.cueilleuse.flameBefore - 1, 'allumer coûte une charge de flamme');
 assert.equal(r.cueilleuse.lit, 1);
-assert.equal(r.cueilleuse.cadence, true, 'la flamme dépensée doit réduire la cadence');
+assert.equal(r.cueilleuse.fireUntouched, true, 'le tick ne doit plus remonter player.fire');
+assert.ok(r.cueilleuse.delay > 1, 'la flamme dépensée ralentit le tir');
+assert.ok(r.cueilleuse.delay <= 2, 'le ralentissement reste borné, le tir n’est jamais coupé');
 assert.equal(r.chasseur.borrow.length, 3, 'trois emprunts');
 assert.ok(r.chasseur.borrow.includes(r.chasseur.least) === false || r.chasseur.least, 'le geste non copié est identifié');
 assert.equal(r.chasseur.after.naming, true, 'après trois emprunts il n’a plus de visage');
 
 assert.equal(r.loop.crashes, 0, 'exception dans la boucle de jeu : ' + r.crashMessage);
 assert.ok(r.loop.maxFoes <= r.budget.foes, 'la boucle réelle dépasse le plafond d’ennemis : ' + r.loop.maxFoes);
-assert.ok(r.loop.maxHostile <= 24, 'la boucle réelle accumule trop de projectiles : ' + r.loop.maxHostile);
+assert.ok(r.loop.maxHostile <= 90, 'la boucle réelle accumule trop de projectiles : ' + r.loop.maxHostile);
+assert.ok(r.loop.maxHostile >= 6, 'les monstres doivent tirer davantage : ' + r.loop.maxHostile);
+assert.ok(r.loop.maxFoes >= 6, 'il doit y avoir plus de monstres : ' + r.loop.maxFoes);
 for (const s of r.loop.perStage) assert.ok(s.foes <= s.cap, 'plafond dépassé dans l’univers ' + (s.index + 1));
 assert.ok(r.loop.perStage.some(s => s.shotsMax > 0), 'les univers armés doivent bien tirer');
 assert.equal(r.loopBoss.crashes, 0, 'exception avec un gardien du monde 3 : ' + r.bossCrashMessage);
@@ -488,9 +537,22 @@ assert.equal(r.scenery.painted, true, 'décors peints embarqués, aucune requêt
 assert.equal(r.scenery.distinctFromWorld1, true, 'aucun décor du monde 1 n’est réutilisé');
 assert.equal(r.scenery.world1, null, 'les mondes 1 et 2 gardent leurs décors');
 
+/* Le bug bloquant : flamme épuisée, la sorcière doit continuer à tirer. */
+assert.ok(r.shootBug.flame < 3, 'le scénario doit bien épuiser une flamme');
+assert.ok(r.shootBug.fired > 3, 'la sorcière ne tire plus quand la flamme est dépensée : ' + r.shootBug.fired);
+assert.ok(r.shootBug.seen > 0, 'aucun tir joueur n’a été créé');
+for (const [kind, count] of Object.entries(r.shooters)) assert.ok(count > 0, kind + ' ne tire aucun projectile');
+assert.ok(Object.values(r.shooters).every(n => n <= r.budget.volley), 'salve au-dessus du budget');
+assert.ok(r.clarity.wave1.length > 25, 'la consigne d’univers doit être une phrase');
+assert.ok(r.clarity.wave2.includes('Garde-mèche'), 'la vague 2 doit dire quoi tuer');
+assert.ok(/\d+ s/.test(r.clarity.wave3), 'la vague 3 doit afficher le temps restant');
+assert.ok(r.clarity.wave4.includes('/2'), 'la vague 4 doit compter les sceaux');
+assert.equal(r.clarity.howto.length, 5, 'une marche à suivre par gardien');
+assert.equal(r.clarity.plainRules, true, 'des consignes, plus des énigmes en capitales');
+
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
-console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets plafonnés (≤6 ennemis, ≤2 tirs, cadence ≥4,2 s), décisions 1→3, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, 15 silhouettes et 5 décors peints distincts, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
+console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 15 silhouettes et 5 décors vus de dessus, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 
 /* journey.js arme des minuteurs de fin de partie : on sort explicitement. */
 process.exit(0);
