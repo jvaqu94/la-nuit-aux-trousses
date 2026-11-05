@@ -21,7 +21,7 @@ const event=Journey.event;Journey.event=function(m,n){if(training)return;event(m
 function worldClear(){if(!training&&Arsenal.active)League.event('world_'+Arsenal.active.broom,1)}
 function trail(e,ox,oy){e.trailDistance=(e.trailDistance||0)+Math.hypot(e.x-ox,e.y-oy);if(e.trailDistance<85)return;e.trailDistance=0;trails.push({x:e.x,y:e.y,age:0,life:4.5});trails=trails.slice(-12)}
 function riskActive(){return !!risk&&risk.y<1000}
-function createRisk(){if(training||wave<2||!Journey.run||riskActive()||gates.length||obstacles.some(o=>!o.dead&&o.y<500))return false;const right=rng()>.5,cx=right?610:190;
+function createRisk(){if(training||window.Campaign?.activeWorld===3||wave<2||!Journey.run||riskActive()||gates.length||obstacles.some(o=>!o.dead&&o.y<500))return false;const right=rng()>.5,cx=right?610:190;
  risk={x:cx,y:-70,side:right?'right':'left',age:0,breached:false,points:800+stage*200,xp:40+stage*10,guards:[]};
  for(const dx of [-66,0,66])risk.guards.push(spawnObstacle(cx+dx,70,{kind:'rock',r:32,breakable:true,hp:4+stage*2,max:4+stage*2,riskGuard:true,warn:1.2}));
  risk.seal=spawnObstacle(cx,-70,{kind:'rock',r:36,breakable:true,hp:20+stage*5,max:20+stage*5,riskSeal:true,riskChest:true,points:risk.points,riskXP:risk.xp,warn:1.2});

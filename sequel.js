@@ -2,13 +2,16 @@
 (()=>{
 'use strict';
 const KEY='minuit-campaign-v1';
-const blank=()=>({version:1,world1Completed:false,world2Unlocked:false,world2Completed:false,cardOath:false,lastWorld:1,choice:'',character:'witch',world2Started:false});
+const blank=()=>({version:1,world1Completed:false,world2Unlocked:false,world2Completed:false,cardOath:false,lastWorld:1,choice:'',character:'witch',world2Started:false,world3Unlocked:false,world3Started:false,world3Completed:false,cardSixthHour:false,minutesKept:0});
 function normalize(value){
  const source=value&&typeof value==='object'?value:{},result={...blank()};
- for(const key of ['world1Completed','world2Unlocked','world2Completed','cardOath','world2Started'])result[key]=source[key]===true;
+ for(const key of ['world1Completed','world2Unlocked','world2Completed','cardOath','world2Started','world3Unlocked','world3Started','world3Completed','cardSixthHour'])result[key]=source[key]===true;
  if(result.world2Completed)result.world2Unlocked=true;
  if(result.world2Unlocked){result.world1Completed=true;result.cardOath=true}
- result.lastWorld=result.world2Unlocked?2:1;
+ if(result.world3Completed)result.world3Unlocked=true;
+ if(result.world3Unlocked){result.world2Completed=true;result.cardSixthHour=true}
+ result.minutesKept=Math.max(0,Math.min(15,Math.floor(Number(source.minutesKept)||0)));
+ result.lastWorld=result.world3Unlocked?3:result.world2Unlocked?2:1;
  result.choice=['dawn','night'].includes(source.choice)?source.choice:'';
  result.character=['witch','hunter'].includes(source.character)?source.character:'witch';
  return result;
@@ -24,6 +27,14 @@ const secondWorlds=[
  {name:'L’Express du soleil',short:'EXPRESS DU SOLEIL',colors:['#3b2947','#151a2c','#72505b'],moon:'#ffca91',boss:'Le Contrôleur céleste',kind:'conductor',foes:['railImp','sunLuggage'],hour:'L’heure du voyage'},
  {name:'Le Palais de l’aube',short:'PALAIS DE L’AUBE',colors:['#30384e','#141a2b','#696174'],moon:'#fff0bd',boss:'L’Horloger de l’Aube',kind:'clockmaker',foes:['needleWraith','hourHollow'],hour:'L’heure du grand cadran'}
 ];
+/* Monde 3 · La Sixième Heure : cinq univers, cinq veilles, cinq gardiens sans barre de vie. */
+const thirdWorlds=[
+ {name:'Le Faubourg des veilles',short:'FAUBOURG',colors:['#2a2440','#141327','#4a3a5c'],moon:'#ffd9a0',boss:'La Veilleuse',kind:'veilleuse',foes:['wickWarden','waxCourier'],hour:'L’heure des fenêtres'},
+ {name:'Le Clocher muet',short:'CLOCHER',colors:['#1f3340','#101c26','#3c5a63'],moon:'#cfe6d8',boss:'Le Sonneur sans battant',kind:'sonneur',foes:['bronzeCrow','crackedBell'],hour:'L’heure qui n’a pas sonné'},
+ {name:'L’Estran des pas perdus',short:'ESTRAN',colors:['#26333f','#111a24','#465a63'],moon:'#e8dcc0',boss:'Le Passeur sans ombre',kind:'passeur',foes:['saltWalker','printThief'],hour:'L’heure des traces'},
+ {name:'Le Bois des lanternes rendues',short:'LANTERNES RENDUES',colors:['#2b2338','#141020','#4b3a55'],moon:'#f4c98f',boss:'La Cueilleuse de flammes',kind:'cueilleuse',foes:['wickPicker','hollowFlame'],hour:'L’heure des flambeaux rendus'},
+ {name:'Le Cadran noir',short:'CADRAN NOIR',colors:['#1a1730','#0d0b1a','#3a2f52'],moon:'#fff0bd',boss:'Le Chasseur sans visage',kind:'chasseur',foes:['unnamedDigit','facelessEcho'],hour:'L’heure aux trousses'}
+];
 function save(){
  if(window.MinuitImporting)return;
  try{localStorage.setItem(KEY,JSON.stringify(progress));window.MinuitCloud?.schedule?.()}catch{}
@@ -32,7 +43,10 @@ function validateSave(bundle){
  const value=bundle.saves[KEY];
  if(value==null)return bundle;
  const booleans=['world1Completed','world2Unlocked','world2Completed','cardOath','world2Started'];
- if(value.version!==1||booleans.some(key=>typeof value[key]!=='boolean')||![1,2].includes(value.lastWorld)||!['','dawn','night'].includes(value.choice)||!['witch','hunter'].includes(value.character))throw Error('Progression des mondes invalide.');
+ const optionalBooleans=['world3Unlocked','world3Started','world3Completed','cardSixthHour'];
+ const minutes=value.minutesKept;
+ if(minutes!=null&&(!Number.isInteger(minutes)||minutes<0||minutes>15))throw Error('Minutes rendues invalides.');
+ if(value.version!==1||booleans.some(key=>typeof value[key]!=='boolean')||optionalBooleans.some(key=>value[key]!=null&&typeof value[key]!=='boolean')||![1,2,3].includes(value.lastWorld)||!['','dawn','night'].includes(value.choice)||!['witch','hunter'].includes(value.character))throw Error('Progression des mondes invalide.');
  return bundle;
 }
 function unlockFirstWorld(){
@@ -48,18 +62,41 @@ function world2Clears(){
  if(progress.world2Completed)return 5;
  try{const cp=checkpoint();return cp?.campaign===2?Math.max(0,Math.min(5,Number(cp.clears)||0)):0}catch{return 0}
 }
+function unlockSecondWorld(){
+ const fresh=!progress.world3Unlocked;
+ progress.world2Completed=true;progress.world3Unlocked=true;progress.cardSixthHour=true;progress.lastWorld=3;menuWorld=3;
+ save();return fresh;
+}
+function completeThirdWorld(){
+ if(progress.world3Completed)return;
+ progress.world3Completed=true;progress.lastWorld=3;save();
+}
+function keepMinutes(n){
+ const before=progress.minutesKept;
+ progress.minutesKept=Math.max(0,Math.min(15,before+Math.max(0,Math.floor(Number(n)||0))));
+ if(progress.minutesKept!==before)save();
+ return progress.minutesKept;
+}
+function world3Clears(){
+ if(progress.world3Completed)return 5;
+ try{const cp=checkpoint();return cp?.campaign===3?Math.max(0,Math.min(5,Number(cp.clears)||0)):0}catch{return 0}
+}
 function applyWorld(id){
- activeWorld=id===2?2:1;
- const source=activeWorld===2?secondWorlds:firstWorlds;
+ activeWorld=[2,3].includes(id)?id:1;
+ const source=activeWorld===3?thirdWorlds:activeWorld===2?secondWorlds:firstWorlds;
  worlds.splice(0,worlds.length,...source.map(item=>({...item})));
  backgroundGradientCache=[];terrainCache=[];sequelGradientCache=[];
  stage=Math.max(0,Math.min(4,Number(stage)||0));world=worlds[stage];
  document.body.classList.toggle('sequel-theme',activeWorld===2);
+ document.body.classList.toggle('sixth-hour-theme',activeWorld===3);
  audioSignature='';
 }
-function hunterActive(){return activeWorld===2&&progress.character==='hunter'&&['play','pause','choice'].includes(state)&&!window.Adventure?.training&&!window.WeeklySprint?.active}
+function hunterActive(){return [2,3].includes(activeWorld)&&progress.character==='hunter'&&['play','pause','choice'].includes(state)&&!window.Adventure?.training&&!window.WeeklySprint?.active}
 let hourObjective={stage:-1,got:0,spawned:0,next:0,shards:[]};
-function sequelHUD(){if(activeWorld===2&&state==='play')$('modeLabel').textContent='✦ Les Cinq Heures Perdues · '+(progress.character==='hunter'?'Le Veilleur':'La sorcière')+' · Fragments '+hourObjective.got+'/3'}
+function sequelHUD(){
+ if(activeWorld===3&&state==='play'){$('modeLabel').textContent='◷ La Sixième Heure · '+(progress.character==='hunter'?'Le Veilleur':'La sorcière')+' · Minutes rendues '+progress.minutesKept+'/15';return}
+ if(activeWorld===2&&state==='play')$('modeLabel').textContent='✦ Les Cinq Heures Perdues · '+(progress.character==='hunter'?'Le Veilleur':'La sorcière')+' · Fragments '+hourObjective.got+'/3';
+}
 function resetHourObjective(){hourObjective={stage,got:0,spawned:0,next:gameTime+3,shards:[]};sequelHUD()}
 function tickHourObjective(dt){
  if(hourObjective.stage!==stage)resetHourObjective();
@@ -140,8 +177,8 @@ drawBackground=function(t){if(activeWorld===2)drawSecondBackground(t);else baseB
 /* Le Veilleur ne chasse plus pendant la seconde campagne. */
 if(window.Nemesis){
  const wants=Nemesis.wants,tick=Nemesis.tick;
- Nemesis.wants=function(...args){return activeWorld===2?false:wants(...args)};
- Nemesis.tick=function(...args){if(activeWorld!==2)return tick(...args)};
+ Nemesis.wants=function(...args){return [2,3].includes(activeWorld)?false:wants(...args)};
+ Nemesis.tick=function(...args){if(![2,3].includes(activeWorld))return tick(...args)};
 }
 
 /* Style du Veilleur jouable : plus lent, tir en éventail et lanterne de départ. */
@@ -169,24 +206,26 @@ const baseSaveCheckpoint=saveCheckpoint;
 saveCheckpoint=function(...args){
  const result=baseSaveCheckpoint(...args);
  if(window.SandboxMode)return result;
- try{const cp=JSON.parse(localStorage.getItem('minuit-checkpoint')||'null');if(cp&&state==='play'){cp.campaign=activeWorld;cp.character=progress.character;if(activeWorld===2)cp.hourObjective={got:hourObjective.got};localStorage.setItem('minuit-checkpoint',JSON.stringify(cp))}}catch{}
+ try{const cp=JSON.parse(localStorage.getItem('minuit-checkpoint')||'null');if(cp&&state==='play'){cp.campaign=activeWorld;cp.character=progress.character;if(activeWorld===2)cp.hourObjective={got:hourObjective.got};if(activeWorld===3)cp.sixthHour=window.SixthHour?.checkpoint?.()||null;localStorage.setItem('minuit-checkpoint',JSON.stringify(cp))}}catch{}
  return result;
 };
 const baseResume=resumeCheckpoint;
 resumeCheckpoint=function(...args){
- const cp=checkpoint();applyWorld(cp?.campaign===2?2:1);
+ const cp=checkpoint();applyWorld([2,3].includes(cp?.campaign)?cp.campaign:1);
  if(cp?.character)progress.character=cp.character;
  const result=baseResume(...args);
  if(state==='play'&&activeWorld===2){const got=Math.max(0,Math.min(3,Number(cp?.hourObjective?.got)||0));hourObjective={stage,got,spawned:got,next:gameTime+2,shards:[]};runId='world2-'+prefs.difficulty;sequelHUD();updateHUD();refreshBoard();saveCheckpoint()}
+ if(state==='play'&&activeWorld===3){runId='world3-'+prefs.difficulty;window.SixthHour?.restore?.(cp?.sixthHour);sequelHUD();updateHUD();refreshBoard();saveCheckpoint()}
  return result;
 };
 const baseChallenge=LocalLeague.challenge;
 LocalLeague.challenge=function(...args){applyWorld(1);return baseChallenge(...args)};
 const baseDifficultyName=difficultyName;
-difficultyName=function(value){return String(value).startsWith('world2-')?'Monde 2 · '+baseDifficultyName(String(value).slice(7)):baseDifficultyName(value)};
+difficultyName=function(value){return String(value).startsWith('world3-')?'Monde 3 · '+baseDifficultyName(String(value).slice(7)):String(value).startsWith('world2-')?'Monde 2 · '+baseDifficultyName(String(value).slice(7)):baseDifficultyName(value)};
 
 const leaguePlay=LocalLeague.play;
 function startWorld(id){
+ if(id===3&&!progress.world3Unlocked)return false;
  if(id===2&&!progress.world2Unlocked)return false;
  if(window.GuidedTraining?.required?.()){applyWorld(1);leaguePlay();return true}
  applyWorld(id);leaguePlay();
@@ -198,9 +237,15 @@ function startWorld(id){
   resetHourObjective();
   updateHUD();refreshBoard();saveCheckpoint();say(world.name+' · '+(progress.character==='hunter'?'La veille recommence':'Une nouvelle expédition'),3);
  }
+ if(id===3){
+  progress.world3Started=true;save();runId='world3-'+prefs.difficulty;recordAtStart=getHighScore();
+  if(Journey.run)Journey.run.record=recordAtStart;
+  window.SixthHour?.start?.();
+  updateHUD();sequelHUD();refreshBoard();saveCheckpoint();say(world.name+' · '+thirdWorlds[stage].hour,3);
+ }
  return true;
 }
-LocalLeague.play=function(){if(window.SandboxMode||window.Adventure?.training)applyWorld(1);return startWorld(activeWorld===2&&progress.world2Unlocked?2:1)};
+LocalLeague.play=function(){if(window.SandboxMode||window.Adventure?.training)applyWorld(1);return startWorld([2,3].includes(activeWorld)&&progress.world2Unlocked?activeWorld:1)};
 const startTransient=LocalLeague.startTransient;
 LocalLeague.startTransient=function(...args){applyWorld(1);return startTransient(...args)};
 function briefing(){
@@ -211,33 +256,34 @@ function briefing(){
  $('chooseHunter').onclick=()=>{progress.character='hunter';save();startWorld(2)};
  $('sequelBriefBack').onclick=()=>LocalLeague.menu();
 }
-function requestWorld(id){if(id===2&&!progress.world2Started)return briefing();return startWorld(id)}
+function requestWorld(id){if(id===3&&!progress.world3Started){const screen=window.SixthHour?.briefing?.();return screen===undefined?startWorld(id):screen}if(id===2&&!progress.world2Started)return briefing();return startWorld(id)}
 
 /* Accueil évolutif : le monde le plus avancé reste le point de reprise par défaut. */
 function customizeHome(){
  const home=document.querySelector('.home-menu');if(!home)return;
- home.classList.toggle('sequel-home',menuWorld===2);home.classList.toggle('first-complete-home',menuWorld===1);
+ home.classList.toggle('sequel-home',menuWorld===2);home.classList.toggle('sixth-hour-home',menuWorld===3);home.classList.toggle('first-complete-home',menuWorld===1);
  const copy=home.querySelector('.menu-copy'),route=home.querySelector('.home-world-route');
  if(!copy||!route)return;
- const second=menuWorld===2;
- home.querySelector('.menu-kicker').textContent=second?'DEUXIÈME CAMPAGNE · L’AUBE EST FIGÉE':'PREMIÈRE CAMPAGNE · MONDE ACCOMPLI';
- home.querySelector('.menu-copy p').textContent=second?'Retrouve les cinq heures volées et affronte les gardiens de l’Horloger. La première nuit reste acquise.':'Rejoue Halloween à ta guise. Ton accès aux Cinq Heures Perdues reste définitivement acquis.';
- route.innerHTML=second?'<span>5 nouveaux mondes</span><i>·</i><span>25 vagues</span><i>·</i><span>'+world2Clears()+'/5 heures</span>':'<span>Monde 1 terminé ✓</span><i>·</i><span>Rejouable librement</span>';
+ const second=menuWorld===2,third=menuWorld===3;
+ home.querySelector('.menu-kicker').textContent=third?'TROISIÈME CAMPAGNE · LA SIXIÈME HEURE':second?'DEUXIÈME CAMPAGNE · L’AUBE EST FIGÉE':'PREMIÈRE CAMPAGNE · MONDE ACCOMPLI';
+ home.querySelector('.menu-copy p').textContent=third?'Le cycle est réparé, mais une heure sans chiffre se réveille. Cinq gardiens, cinq règles à comprendre : ici on ne gagne pas en tirant plus.':'Retrouve les cinq heures volées et affronte les gardiens de l’Horloger. La première nuit reste acquise.';
+ route.innerHTML=third?'<span>5 univers</span><i>·</i><span>'+world3Clears()+'/5 veilles</span><i>·</i><span>'+progress.minutesKept+'/15 minutes rendues</span>':second?'<span>5 nouveaux mondes</span><i>·</i><span>25 vagues</span><i>·</i><span>'+world2Clears()+'/5 heures</span>':'<span>Monde 1 terminé ✓</span><i>·</i><span>Rejouable librement</span>';
  let subtitle=home.querySelector('.sequel-menu-subtitle');
  if(!subtitle){subtitle=document.createElement('div');subtitle.className='sequel-menu-subtitle';home.querySelector('h1').insertAdjacentElement('afterend',subtitle)}
- subtitle.textContent=second?'Les Cinq Heures Perdues':'La Nuit aux Trousses · Halloween';
+ subtitle.textContent=third?'La Sixième Heure':second?'Les Cinq Heures Perdues':'La Nuit aux Trousses · Halloween';
  let switcher=home.querySelector('.campaign-switch');
  if(!switcher){switcher=document.createElement('div');switcher.className='campaign-switch';route.insertAdjacentElement('afterend',switcher)}
- switcher.innerHTML=`<button type="button" id="campaignWorld1" class="${second?'':'active'}">1 · Halloween ✓</button><button type="button" id="campaignWorld2" class="${second?'active':''}">2 · Heures perdues</button>${second?'<button type="button" id="campaignCharacter">'+(progress.character==='hunter'?'Veilleur':'Sorcière')+' · changer</button>':''}`;
+ switcher.innerHTML=`<button type="button" id="campaignWorld1" class="${menuWorld===1?'active':''}">1 · Halloween ✓</button><button type="button" id="campaignWorld2" class="${second?'active':''}">2 · Heures perdues ✓</button>${progress.world3Unlocked?'<button type="button" id="campaignWorld3" class="'+(third?'active':'')+'">3 · Sixième heure</button>':''}${second||third?'<button type="button" id="campaignCharacter">'+(progress.character==='hunter'?'Veilleur':'Sorcière')+' · changer</button>':''}`;
  $('campaignWorld1').onclick=()=>{menuWorld=1;applyWorld(1);Journey.menu()};
  $('campaignWorld2').onclick=()=>{menuWorld=2;applyWorld(2);Journey.menu()};
- if($('campaignCharacter'))$('campaignCharacter').onclick=briefing;
+ if($('campaignWorld3'))$('campaignWorld3').onclick=()=>{menuWorld=3;applyWorld(3);Journey.menu()};
+ if($('campaignCharacter'))$('campaignCharacter').onclick=third?()=>window.SixthHour?.briefing?.():briefing;
  const play=$('playAdventure');
- if(play){play.innerHTML='<span class="button-icon">✦</span><span>'+(second?(progress.world2Completed?'Rejouer le monde 2':'Continuer'):'Rejouer le monde 1')+'<small>'+(second?'Les Cinq Heures Perdues':'La première nuit · progression conservée')+'</small></span>';play.onclick=()=>requestWorld(menuWorld)}
+ if(play){play.innerHTML='<span class="button-icon">'+(third?'◷':'✦')+'</span><span>'+(third?(progress.world3Completed?'Rejouer le monde 3':'Continuer'):second?(progress.world2Completed?'Rejouer le monde 2':'Continuer'):'Rejouer le monde 1')+'<small>'+(third?'La Sixième Heure':second?'Les Cinq Heures Perdues':'La première nuit · progression conservée')+'</small></span>';play.onclick=()=>requestWorld(menuWorld)}
 }
 const baseHome=Journey.menu;
 Journey.menu=function(...args){
- if(progress.world2Unlocked&&![1,2].includes(menuWorld))menuWorld=progress.lastWorld;
+ if(progress.world2Unlocked&&![1,2,3].includes(menuWorld))menuWorld=progress.lastWorld;
  applyWorld(progress.world2Unlocked?menuWorld:1);
  const result=baseHome(...args);
  if(state==='league-menu'&&progress.world2Unlocked)customizeHome();
@@ -247,7 +293,11 @@ Journey.menu=function(...args){
 /* La carte de campagne ne modifie ni les cosmétiques ni les statistiques. */
 function grimoireCard(){
  const unlocked=progress.cardOath;
- return `<section class="campaign-grimoire-section"><h3>CARTES DE CAMPAGNE</h3><article class="campaign-grimoire-card ${unlocked?'unlocked':'locked'}"><div class="campaign-card-art" aria-hidden="true"><span class="campaign-card-clock">◷</span><img src="${window.MinuitArt.witch.src}" alt=""><img src="${window.MinuitArt.hunter.src}" alt=""></div><div class="campaign-card-copy"><small>CARTE 01 · ${unlocked?'DÉBLOQUÉE':'VERROUILLÉE'}</small><h3>Le Serment de l’Aube</h3><p>${unlocked?'La chasse est terminée. Cinq heures de la nuit ont disparu. Pour les retrouver, l’ancienne proie et son chasseur devront voler dans la même direction.':'Vaincs les cinq gardiens du premier monde pour dévoiler cette carte.'}</p><b>${unlocked?'Monde 2 débloqué · Les Cinq Heures Perdues':'Premier monde à accomplir'}</b></div></article></section>`;
+ return `<section class="campaign-grimoire-section"><h3>CARTES DE CAMPAGNE</h3><article class="campaign-grimoire-card ${unlocked?'unlocked':'locked'}"><div class="campaign-card-art" aria-hidden="true"><span class="campaign-card-clock">◷</span><img src="${window.MinuitArt.witch.src}" alt=""><img src="${window.MinuitArt.hunter.src}" alt=""></div><div class="campaign-card-copy"><small>CARTE 01 · ${unlocked?'DÉBLOQUÉE':'VERROUILLÉE'}</small><h3>Le Serment de l’Aube</h3><p>${unlocked?'La chasse est terminée. Cinq heures de la nuit ont disparu. Pour les retrouver, l’ancienne proie et son chasseur devront voler dans la même direction.':'Vaincs les cinq gardiens du premier monde pour dévoiler cette carte.'}</p><b>${unlocked?'Monde 2 débloqué · Les Cinq Heures Perdues':'Premier monde à accomplir'}</b></div></article>${sixthCard()}</section>`;
+}
+function sixthCard(){
+ const unlocked=progress.cardSixthHour;
+ return `<article class="campaign-grimoire-card ${unlocked?'unlocked':'locked'}"><div class="campaign-card-art" aria-hidden="true"><span class="campaign-card-clock">◷</span><img src="${window.MinuitArt.witch.src}" alt=""><img src="${window.MinuitArt.hunter.src}" alt=""></div><div class="campaign-card-copy"><small>CARTE 02 · ${unlocked?'DÉBLOQUÉE':'VERROUILLÉE'}</small><h3>La Sixième Heure</h3><p>${unlocked?'La chasse a cessé, mais l’heure qui la faisait courir n’a jamais été comptée. Elle veut un chiffre. Le Veilleur a sa flamme. Il ne reste qu’une nuit pour décider qui paiera.':'Rends les cinq heures volées pour dévoiler cette carte.'}</p><b>${unlocked?'Monde 3 débloqué · '+progress.minutesKept+'/15 minutes rendues':'Deuxième monde à accomplir'}</b></div></article>`;
 }
 
 /* Rencontre finale : pas de dégâts, pas de duel et aucun résultat fabriqué par le code créateur. */
@@ -332,16 +382,27 @@ drawGame=function(){if(finale)drawFinale(ctx);else{baseDrawGame();if(activeWorld
 const baseReward=reward;
 reward=function(e){
  if(e?.boss&&!e.dead&&!window.SandboxMode&&stage===4&&clears===4){
-  if(activeWorld===1)unlockFirstWorld();else if(activeWorld===2)completeSecondWorld();
+  if(activeWorld===1)unlockFirstWorld();else if(activeWorld===2)unlockSecondWorld();else if(activeWorld===3)completeThirdWorld();
  }
  const result=baseReward(e);
  if(e?.boss&&activeWorld===2&&!window.SandboxMode&&clears<5)say('HEURE RÉCUPÉRÉE · '+clears+'/5 · '+worlds[stage].hour,3);
  return result;
 };
 
+/* Écran de déblocage du monde 3, sur le modèle de showUnlockedWorld.
+   Aucun score, aucun résultat de vol n'est fabriqué : seuls les drapeaux de
+   progression sont écrits, exactement comme pour le code Monde2. */
+function showUnlockedThirdWorld(){
+ state='sixth-unlock';applyWorld(3);
+ overlay(`<section class="sequel-unlocked"><div class="eyebrow">DEUXIÈME MONDE ACCOMPLI ✓</div><h2 class="local-title">La Sixième<br>Heure</h2><p>Le monde 3 et la carte <b>La Sixième Heure</b> sont débloqués. Le code de test n’a enregistré aucun score.</p><div class="campaign-unlock-card"><span>◷</span><div><b>Une heure sans chiffre se réveille.</b><small>5 univers · 5 gardiens sans barre de vie · 15 minutes à rendre</small></div></div><div class="local-rule">Ici la difficulté monte par la décision, pas par le nombre : mêmes budgets qu’au monde 2, une règle à lire par univers.</div><div class="local-actions"><button class="primary" id="testWorld3">Tester le monde 3 →</button><button class="secondary" id="unlockMenu3">Menu</button></div></section>`);
+ $('testWorld3').onclick=()=>requestWorld(3);$('unlockMenu3').onclick=()=>LocalLeague.menu();
+}
 function redeemCreatorCode(value){
- if(String(value||'').trim()!=='Monde2'||!window.MinuitCloud?.isTeamAdmin)return false;
- unlockFirstWorld();beginFinale(null,{preview:true});return true;
+ const code=String(value||'').trim().toLowerCase();
+ if(!window.MinuitCloud?.isTeamAdmin)return false;
+ if(code==='monde2'){unlockFirstWorld();beginFinale(null,{preview:true});return true}
+ if(code==='monde3'){unlockFirstWorld();unlockSecondWorld();showUnlockedThirdWorld();return true}
+ return false;
 }
 window.addEventListener('keydown',event=>{if(finale&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();completeFinale()}},true);
 window.addEventListener('pagehide',save);
@@ -357,7 +418,7 @@ style.textContent=`
 @media(prefers-reduced-motion:reduce){.sequel-character{transition:none}}
 `;
 document.head.appendChild(style);
-window.Campaign={validateSave,beginFinale,completeFinale,grimoireCard,redeemCreatorCode,startWorld:requestWorld,briefing,unlockFirstWorld,useClassicWorld:()=>applyWorld(1),get progress(){return progress},get activeWorld(){return activeWorld},get menuWorld(){return menuWorld},get finale(){return finale},get hourObjective(){return hourObjective},get worlds(){return secondWorlds},get key(){return KEY}};
+window.Campaign={validateSave,beginFinale,completeFinale,grimoireCard,redeemCreatorCode,showUnlockedThirdWorld,startWorld:requestWorld,beginWorld:startWorld,briefing,unlockFirstWorld,unlockSecondWorld,completeThirdWorld,keepMinutes,useClassicWorld:()=>applyWorld(1),get progress(){return progress},get activeWorld(){return activeWorld},get menuWorld(){return menuWorld},get finale(){return finale},get hourObjective(){return hourObjective},get worlds(){return activeWorld===3?thirdWorlds:secondWorlds},get secondWorlds(){return secondWorlds},get thirdWorlds(){return thirdWorlds},get key(){return KEY}};
 applyWorld(progress.world2Unlocked?progress.lastWorld:1);
 if(progress.world2Unlocked&&state==='league-menu')Journey.menu();
 })();

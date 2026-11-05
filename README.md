@@ -140,6 +140,38 @@ Cette deuxième campagne conserve le pilotage, l’esquive et le tir du shoot’
 
 Les 25 vagues comportent aussi trois **fragments d’heure à libérer par monde** pour l’exploration. Le joueur peut rester la sorcière ou choisir le **Veilleur**, dont le vol est plus lourd, les carreaux en éventail et la lanterne protectrice au départ. Les records du monde 2 sont séparés de ceux du premier. La carte de campagne est unique, persistante et ne donne aucun bonus de puissance.
 
+### La Sixième Heure (monde 3)
+
+Accomplir **Les Cinq Heures Perdues** débloque la troisième campagne, **La Sixième Heure**, et la carte de Grimoire du même nom. L’épilogue du monde 2 s’affiche sur l’écran de bilan : l’Horloger n’avait volé que cinq heures, il en reste une qu’il n’a jamais trouvée. Le sélecteur de campagne propose alors **1 · Halloween**, **2 · Heures perdues** et **3 · Sixième heure**.
+
+Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où l’on court après quelqu’un. La lanterne du Veilleur brûle avec une de ses flammes.
+
+| Univers | Formes exclusives | Gardien et condition de victoire |
+|---|---|---|
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq mèches en même temps. |
+| Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
+| L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
+| Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
+| Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
+
+**Aucun de ces cinq gardiens n’a de barre de vie.** Chacun possède sa jauge, sa condition de victoire et sa langue d’annonce ; trois d’entre eux ne tirent jamais. Les dégâts du joueur ne les entament pas : ils servent à agir sur le décor du combat (mèches, battant, boucle, lanternes).
+
+**La difficulté ne monte pas avec le nombre.** Les budgets sont plafonnés aux valeurs du monde 2 et parfois inférieurs :
+
+| Quantité | Monde 2 (référence) | Monde 3 |
+|---|---|---|
+| Ennemis non-boss simultanés | 6 | 4 → 6 selon l’univers, jamais plus de 6 |
+| Projectiles par salve | 1 à 2 | 2 maximum |
+| Cadence de tir d’un monstre | 3,5 à 5,6 s | 4,2 s minimum |
+| Vitesse des projectiles | 125 à 155 | 150 maximum |
+| PV des monstres | référence par forme | identiques, aucune inflation |
+
+Ce qui progresse, c’est le **nombre de décisions simultanées** : 1, 2, 2, 3, 3. Chaque forme hérite d’une mécanique du monde 1 et d’une du monde 2 — le halo protecteur réduit aussi vos dégâts, le télégraphe plein est réel et le pointillé est un leurre, tuer la source annule son attaque, briser une cloche fige les tirs de sa jumelle, le sel reprend vos positions passées.
+
+Les cinq vagues de chaque univers suivent la même progression : **lecture** de la règle, **minute à rendre**, **tenue** de 22 secondes, **inversion** de la règle apprise, puis gardien. Les **minutes rendues** (3 par univers, 15 au total) sont persistées : elles décideront de l’issue du voyage. Aucune nouvelle commande n’est nécessaire : déplacement, visée, sort spécial et esquive suffisent.
+
+Le monde 3 se termine sur une révélation — l’heure manquante est habitée — et ouvre le monde 4, **La Veillée**. Les records du monde 3 sont séparés. Comme au monde 2, les événements de territoire, apparitions surprises, formations coopératives, reliquaires et le Veilleur rival sont désactivés pour tenir les budgets.
+
 ### Arsenal et reliques
 
 Le menu **Préparer mon vol** permet de choisir :
@@ -264,7 +296,10 @@ Le menu **Compte & team** permet, après connexion, de créer une team ou de rej
 - Seul l’administrateur peut modifier ces règles, réinitialiser la campagne ou supprimer explicitement la team. S’il quitte la team sans la supprimer, le membre le plus ancien reprend ce rôle.
 - Le créateur dispose aussi d’une page **Statistiques de la team** sur 7, 30, 90 ou 365 jours : synthèse de tous les vols classiques et classés transmis, répartition des parties et des points par mode, activité par jour et par membre, derniers vols et 50 vols récents avec monde, vague et mode. Cette répartition permet de voir qui joue régulièrement et qui oublie de lancer une classée. Les **points gagnés** de cette page mesurent l’activité classique + classée ; ils ne sont pas le score de la team. Les highscores actuels restent affichés séparément. Cette page et son RPC sont réservés à l’administrateur et ne renvoient aucun e-mail ni identifiant de connexion.
 - Dans **Compte & team**, la section **Administration · Campagne** reste directement visible pour l’administrateur, hors du volet repliable des règles. **Remettre les scores et les parties à zéro** demande une confirmation puis supprime toutes les tentatives et tous les highscores de la team pour tous les membres. La team, ses membres, son code et ses règles sont conservés ; les autres appareils voient la remise à zéro après actualisation.
-- L’espace **Test du créateur**, visible uniquement par l’administrateur de la team, contient un champ **Code**. La valeur **`Monde2`** ouvre directement la rencontre de fin et le nouveau monde pour les tester ; ce parcours n’enregistre aucun faux score.
+- L’espace **Test du créateur**, visible uniquement par l’administrateur de la team, contient un champ **Code** :
+  - **`Monde2`** ouvre la rencontre de fin et **Les Cinq Heures Perdues** ;
+  - **`Monde3`** débloque toute la chaîne 1 → 2 → 3, la carte **La Sixième Heure**, puis propose **Tester le monde 3** qui mène au briefing et au choix du personnage (sorcière ou Veilleur).
+  La casse et les espaces sont ignorés. Ces parcours n’enregistrent **aucun faux score**, aucun résultat de vol et ne consomment aucun quota ; seuls les drapeaux de progression sont écrits. Un code inconnu, un champ vide ou un compte non administrateur ne change rien.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team. Après une jointure réussie, le jeu revient automatiquement à l’accueil avec une confirmation ; en cas d’échec, l’erreur et l’invitation restent affichées. Le visiteur peut aussi ignorer l’invitation.
 - Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record. Une partie classique transmet uniquement son activité au suivi privé du créateur : elle ne change ni le highscore, ni le total, ni le quota de la team. Un identifiant unique évite le double comptage en cas de renvoi.
 - **Envoi fiable même si le réseau lâche :** si l’envoi échoue à la fin du vol (réseau indisponible, délai dépassé), le score n’est pas perdu — il est conservé sur l’appareil puis **renvoyé automatiquement** dès que possible (au retour du réseau, à la connexion suivante ou via **Renvoyer maintenant** dans la team). Un échec de chargement de la team ne saute plus silencieusement l’envoi. Seuls les refus « règles » (période terminée, quota atteint, règles non configurées) ne sont pas réessayés, car ils ne changeraient pas. Le bilan et la carte de team indiquent clairement les vols en attente.
@@ -327,6 +362,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, budgets plafonnés, cinq gardiens sans barre de vie, minutes rendues. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
