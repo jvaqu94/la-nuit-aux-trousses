@@ -189,7 +189,36 @@ plus deux couches Canvas qui traduisent l’état réel du combat : flammes des 
 restantes, ailes du corbeau, battant qui balance, sable qui s’écoule, halo emprunté
 du chasseur. Les 15 silhouettes sont distinctes, et les hitboxes sont inchangées.
 
-Aperçu : `docs/apercu-monde-3.jpg` (décors réels + acteurs dessinés par le code du jeu).
+**Toutes les créatures sont dessinées vues de dessus**, dans le même axe que la
+sorcière sur son balai : tête au sud, ailes, pattes et bras rayonnants. La première
+version les montrait de face, ce qui les faisait paraître hors sujet à côté du
+personnage ; la refonte aligne enfin les ennemis sur la référence de qualité.
+
+Aperçu : `docs/apercu-monde-3.jpg` (décor, murs et acteurs dessinés par le code du jeu)
+et `docs/bestiaire-monde-3.jpg` (les 15 silhouettes face à la sorcière).
+
+#### Le labyrinthe destructible
+
+Le monde 3 ne se joue plus comme un simple défilement descendant. `sixth-labyrinth.js`
+ajoute une troisième couche de pression :
+
+- **Défilement ×1,5** (plafonné à 260), uniquement quand `Campaign.activeWorld===3`.
+- Des **rangées de décor solide** descendent vers le joueur : huit cellules, une
+  brèche obligatoire, deux une rangée sur trois. La route alterne sur toute la
+  largeur, donc il faut lire le mur et choisir sa colonne.
+- Chaque bloc a une **solidité de 3 à 7 points** selon l’univers, des **fissures
+  proportionnelles aux dégâts** et une **jauge de solidité** lisible sur téléphone.
+  Les tirs l’entament, le détruire rapporte 30 points.
+- Une **matière par univers** — cire, bronze, sel, bois, obsidienne — pour que le mur
+  appartienne au décor au lieu d’être un à-plat générique.
+- **Sans brèche ni tir, le mur coince** : il pousse le joueur vers le bas, le
+  ralentit, puis le serre contre le bord de l’écran et lui coûte une vie toutes les
+  1,3 s jusqu’à ce qu’il casse le bloc. Une sortie latérale n’est accordée que si
+  elle débouche sur une vraie brèche : impossible de traverser un mur en oscillant
+  entre deux blocs.
+- Le labyrinthe **s’efface pendant les gardiens** (vague 5 ou boss vivant) pour que
+  leur arène reste lisible, et se réinitialise à chaque changement de vague.
+- **Mondes 1 et 2, courses hebdomadaires et duel ne sont pas touchés.**
 
 **Aucun de ces cinq gardiens n’a de barre de vie.** Chacun possède sa jauge, sa condition de victoire et sa langue d’annonce ; trois d’entre eux ne tirent jamais. Les dégâts du joueur ne les entament pas : ils servent à agir sur le décor du combat (mèches, battant, boucle, lanternes).
 
@@ -416,6 +445,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `scenery/` | Images sources des décors, dont `sixth-*.jpg` pour le monde 3. |
 | `sixth-hour-art.js` | Silhouettes SVG et couches d’animation des 10 formes et 5 gardiens du monde 3. |
 | `sixth-scenery.js` | Décors peints du monde 3, embarqués (généré par `tools/build_sixth_scenery.py`). |
+| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, rangées à brèche, coincement du joueur. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
 | `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
 | `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |

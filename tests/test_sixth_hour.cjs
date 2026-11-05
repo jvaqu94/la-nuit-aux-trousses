@@ -69,7 +69,7 @@ global.Audio = class { play() { return Promise.resolve(); } pause() {} addEventL
 
 /* --- Chargement de la chaîne réelle (ordre d'index.html) ----------------- */
 let code = '';
-for (const file of ['game.js', 'online.js', 'journey.js', 'nemesis.js', 'sequel.js', 'sixth-hour.js', 'sixth-hour-art.js', 'sixth-scenery.js']) {
+for (const file of ['game.js', 'online.js', 'journey.js', 'nemesis.js', 'sequel.js', 'sixth-hour.js', 'sixth-hour-art.js', 'sixth-scenery.js', 'sixth-labyrinth.js']) {
   code += `\n;/* ==== ${file} ==== */\n` + read(file);
 }
 
@@ -340,7 +340,9 @@ out.art={kinds:Art.kinds.length,foes:Art.kinds.filter(k=>!Art.isBossKind(k)).len
   registered:Art.kinds.filter(k=>window.MinuitArt[k]?.src).length,
   unique:new Set(Art.kinds.map(k=>window.MinuitArt[k].src)).size,
   ownPalette:Art.kinds.every(k=>window.MinuitArt[k].src.includes('softglow3')),
-  coversBestiary:Camp.thirdWorlds.flatMap(w=>[...w.foes,w.kind]).every(k=>Art.isSixthKind(k))};
+  coversBestiary:Camp.thirdWorlds.flatMap(w=>[...w.foes,w.kind]).every(k=>Art.isSixthKind(k)),
+  detail:Object.fromEntries(Art.kinds.map(k=>[k,(decodeURIComponent(window.MinuitArt[k].src).match(/<(path|circle|ellipse|rect|polygon)/g)||[]).length])),
+  witchDetail:34};
 /* Deux garde-fous de rendu, trouvés en rastérisant vraiment les sprites :
    un dégradé sur une boîte de surface nulle ne s'affiche pas, et une pointe
    hors du viewBox est rognée. */
@@ -360,8 +362,10 @@ out.art.noDegenerateGradient=Art.kinds.every(k=>!(bodyOf(k).match(/<path[^>]+>/g
 out.art.nothingClipped=Art.kinds.every(k=>{
  const view=/viewBox="([^"]+)"/.exec(viewOf(k))[1].split(/\\s+/).map(Number);
  const [vx,vy,vw,vh]=view;
- const paths=bodyOf(k).match(/<path[^>]+>/g)||[];
- if(paths.length<8)return false;
+ const body=bodyOf(k);
+ const shapes=(body.match(/<(path|circle|ellipse|rect|polygon)/g)||[]).length;
+ const paths=body.match(/<path[^>]+>/g)||[];
+ if(shapes<12||paths.length<4)return false;
  return paths.every(el=>{
    const d=/ d="([^"]+)"/.exec(el);if(!d)return true;
    const n=pairs(d[1]),xs=n.filter((_,i)=>i%2===0),ys=n.filter((_,i)=>i%2===1);
@@ -393,6 +397,140 @@ out.scenery={count:Scenery.images.length,
 Camp.useClassicWorld();
 out.art.drawsInWorld1=Art.drawActor(gfx,{kind:'wickWarden'},400,300,1,2,0);
 out.scenery.world1=Scenery.pick(0);
+Camp.beginWorld(3);
+
+/* 17 · LABYRINTHE : le style de jeu change vraiment (monde 3 seulement). */
+const Lab=window.SixthLabyrinth;
+out.labyrinth={present:!!Lab};
+function labScene(index,w){
+  Camp.beginWorld(3);
+  stage=index;world=worlds[index];wave=w;state='play';
+  enemies=[];hostile=[];shots=[];drops=[];hazards=[];obstacles=[];gates=[];
+  SH.marks.length=0;SH.salt.length=0;
+  player.x=400;player.y=650;player.inv=0;player.dash=0;player.slow=0;
+  lives=9;score=0;scrollVelocity=120;
+  Lab.reset();Lab.tick(0);
+}
+
+/* Le défilement est bien plus rapide, et seulement dans le monde 3. */
+labScene(2,1);
+const boosted=targetScrollSpeed();
+Camp.useClassicWorld();stage=2;world=worlds[2];wave=1;
+const classicSpeed=targetScrollSpeed();
+out.labyrinth.speed={boosted,classicSpeed,factor:Lab.speedBoost};
+Camp.beginWorld(2);stage=2;wave=1;state='play';
+out.labyrinth.speedWorld2=targetScrollSpeed();
+Camp.useClassicWorld();
+
+/* Chaque rangée laisse une brèche, et la route zigzague. */
+labScene(0,1);
+const gapsPerRow=[],hpPerStage=[];
+for(let i=0;i<10;i++){
+  const before=Lab.walls.length;Lab.spawnRow();
+  const row=Lab.walls.slice(before);
+  gapsPerRow.push(Lab.COLS-row.length);
+}
+out.labyrinth.rows={count:Lab.walls.length,gaps:gapsPerRow,
+  columns:new Set(Lab.walls.map(w=>Math.round((w.x-Lab.CELL/2)/Lab.CELL))).size};
+for(const index of [0,2,4]){labScene(index,1);Lab.spawnRow();hpPerStage.push(Lab.walls[0].max)}
+out.labyrinth.hpPerStage=hpPerStage;
+out.labyrinth.materials=Lab.MATERIALS.map(m=>m.name);
+
+/* Les tirs cassent le décor : sans tir, pas de sortie. */
+labScene(1,1);Lab.spawnRow();
+const target=Lab.walls[0];
+const hp0=target.hp,score0=score;
+shots.push({x:target.x,y:target.y,damage:1,life:1,vx:0,vy:0,r:4});
+Lab.tick(0.001);
+out.labyrinth.shot={hp0,hp1:target.hp,consumed:shots[0].life<=0};
+let guard=0;
+while(!target.dead&&guard++<20){
+  shots.push({x:target.x,y:target.y,damage:1,life:1,vx:0,vy:0,r:4});
+  Lab.tick(0.001);
+}
+out.labyrinth.shot.broken=target.dead;
+out.labyrinth.shot.score=score-score0;
+out.labyrinth.shot.counter=Lab.broken;
+
+/* COINCEMENT : le mur descend, pousse le joueur, puis le coince et le blesse. */
+labScene(0,1);Lab.spawnRow();
+const wall=Lab.walls.find(w=>Math.abs(w.x-400)<Lab.CELL);
+player.x=wall.x;
+wall.y=player.y-10;
+const lives0=lives;
+let pushed=0,pinned=0;
+for(let i=0;i<400;i++){
+  player.inv=0;player.dash=0;
+  wall.y=Math.min(H-30-Lab.ROW_H/2-15,wall.y+3);
+  Lab.tick(1/60);
+  if(player.slow>0)pushed++;
+  if(Lab.pinTime>0)pinned++;
+}
+out.labyrinth.pin={pushed,pinned,lives:lives0-lives,atFloor:Math.abs(player.y-(H-30))<2,slow:player.slow};
+
+/* Une sortie latérale reste possible : le labyrinthe se joue, il ne piège pas. */
+labScene(0,1);Lab.spawnRow();
+const occupied=new Set(Lab.walls.map(w=>Math.round((w.x-Lab.CELL/2)/Lab.CELL)));
+let gapCol=0;while(occupied.has(gapCol))gapCol++;
+const edge=Lab.walls.filter(w=>w.x<gapCol*Lab.CELL).pop();
+edge.y=600;player.y=600;player.x=edge.x+edge.w/2+13;
+const xBefore=player.x;
+Lab.tick(1/60);
+out.labyrinth.escape={moved:Math.abs(player.x-xBefore)>1,pinTime:Lab.pinTime,gapCol};
+/* Face à un bloc voisin, la sortie latérale est refusée : le mur pousse. */
+labScene(0,1);Lab.spawnRow();
+const pair=Lab.walls.filter(w=>Math.abs(w.x-450)<160);
+for(const w of pair)w.y=600;
+player.y=600;player.x=400;player.slow=0;
+Lab.tick(1/60);
+out.labyrinth.noPhase={slow:player.slow,pinTime:Lab.pinTime};
+
+/* Le labyrinthe s'efface au changement de vague et pendant un gardien. */
+labScene(0,1);Lab.spawnRow();
+const beforeReset=Lab.walls.length;
+wave=2;Lab.tick(1/60);
+out.labyrinth.resetOnWave={before:beforeReset,after:Lab.walls.length};
+labScene(0,5);
+for(let i=0;i<600;i++)Lab.tick(1/60);
+out.labyrinth.bossWave=Lab.walls.length;
+labScene(0,1);
+enemies.push({boss:true,dead:false,x:400,y:200,hp:50});
+for(let i=0;i<600;i++)Lab.tick(1/60);
+out.labyrinth.bossAlive=Lab.walls.length;
+
+/* Mondes 1 et 2 : strictement aucun mur. */
+const foreign=[];
+for(const w of [1,2]){
+  if(w===1)Camp.useClassicWorld();else Camp.beginWorld(2);
+  stage=1;wave=1;state='play';Lab.reset();
+  for(let i=0;i<600;i++)Lab.tick(1/60);
+  foreign.push(Lab.walls.length);
+}
+out.labyrinth.foreign=foreign;
+Camp.useClassicWorld();out.labyrinth.foreignSpeed=targetScrollSpeed();
+
+/* Le rendu ne plante pas et peint vraiment les blocs. */
+labScene(2,1);Lab.spawnRow();
+for(const w of Lab.walls)w.y=300;
+Lab.damageBlock(Lab.walls[0],2);
+let painted=0;const realFill=gfx.fillRect.bind(gfx);
+gfx.fillRect=function(...a){painted++;return realFill(...a)};
+let drawCrash=null;
+try{Lab.draw(gfx);SH.draw(gfx)}catch(err){drawCrash=String(err&&err.message||err)}
+gfx.fillRect=realFill;
+out.labyrinth.draw={crash:drawCrash,painted};
+
+/* La boucle complète doit survivre au labyrinthe sur les cinq univers. */
+let labCrashes=0,maxWalls=0;
+for(const index of [0,1,2,3,4]){
+  labScene(index,1);newWave();
+  for(let i=0;i<600;i++){
+    player.inv=99;player.x=120+(i%560);player.y=620+(i%80);
+    try{update(1/60)}catch(err){labCrashes++;if(labCrashes===1)out.labyrinth.crashMessage=String(err&&err.message||err)}
+    maxWalls=Math.max(maxWalls,Lab.walls.length);
+  }
+}
+out.labyrinth.loop={crashes:labCrashes,maxWalls};
 Camp.beginWorld(3);
 
 /* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
@@ -524,6 +662,10 @@ assert.equal(r.art.ownPalette, true, 'les sprites doivent utiliser la palette du
 assert.equal(r.art.coversBestiary, true, 'tout le bestiaire et les 5 gardiens sont couverts');
 assert.equal(r.art.noDegenerateGradient, true, 'un dégradé sur un trait plat ne s’affiche pas');
 assert.equal(r.art.nothingClipped, true, 'aucune pointe ne doit dépasser du viewBox');
+for (const [kind, count] of Object.entries(r.art.detail)) {
+  const floor = ['veilleuse','sonneur','passeur','cueilleuse','chasseur'].includes(kind) ? 24 : 18;
+  assert.ok(count >= floor, kind + ' est trop pauvre face à la sorcière : ' + count + ' éléments');
+}
 assert.equal(r.art.drawsFoe, true);
 assert.equal(r.art.drawsBoss, true);
 assert.equal(r.art.rejectsForeign, false, 'le module ne touche pas aux formes des autres mondes');
@@ -550,9 +692,44 @@ assert.ok(r.clarity.wave4.includes('/2'), 'la vague 4 doit compter les sceaux');
 assert.equal(r.clarity.howto.length, 5, 'une marche à suivre par gardien');
 assert.equal(r.clarity.plainRules, true, 'des consignes, plus des énigmes en capitales');
 
+/* Le labyrinthe : du décor solide, une brèche, et un vrai risque de coincement. */
+assert.equal(r.labyrinth.present, true, 'le module labyrinthe doit être chargé');
+assert.ok(r.labyrinth.speed.boosted > r.labyrinth.speed.classicSpeed * 1.4, 'le défilement du monde 3 doit être nettement accéléré');
+assert.ok(r.labyrinth.speed.boosted <= 260, 'le défilement reste plafonné');
+assert.equal(r.labyrinth.speedWorld2, r.labyrinth.speed.classicSpeed, 'le monde 2 ne doit pas être accéléré');
+assert.equal(r.labyrinth.foreignSpeed, 74, 'le monde 1 garde sa vitesse');
+assert.deepEqual(r.labyrinth.foreign, [0, 0], 'aucun mur dans les mondes 1 et 2');
+assert.equal(r.labyrinth.rows.count, 67, 'dix rangées pleines moins leurs brèches');
+assert.ok(r.labyrinth.rows.gaps.every(n => n >= 1), 'chaque rangée doit laisser au moins une brèche');
+assert.ok(r.labyrinth.rows.gaps.some(n => n === 2), 'certaines rangées offrent deux brèches');
+assert.equal(r.labyrinth.rows.columns, 8, 'la route doit balayer toute la largeur');
+assert.deepEqual(r.labyrinth.hpPerStage, [3, 5, 7], 'le décor durcit avec les univers');
+assert.deepEqual(r.labyrinth.materials, ['CIRE', 'BRONZE', 'SEL', 'BOIS', 'OBSIDIENNE'], 'une matière par univers');
+assert.equal(r.labyrinth.shot.hp1, r.labyrinth.shot.hp0 - 1, 'un tir doit entamer le bloc');
+assert.equal(r.labyrinth.shot.consumed, true, 'le tir est arrêté par le décor');
+assert.equal(r.labyrinth.shot.broken, true, 'le bloc doit céder sous les tirs');
+assert.equal(r.labyrinth.shot.score, 30, 'casser le décor rapporte des points');
+assert.ok(r.labyrinth.shot.counter > 0, 'les destructions sont comptées');
+assert.ok(r.labyrinth.pin.pushed > 100, 'le mur doit repousser le joueur vers le bas');
+assert.ok(r.labyrinth.pin.pinned > 60, 'sans brèche ni tir, le joueur doit rester coincé');
+assert.equal(r.labyrinth.pin.atFloor, true, 'le coincement se fait contre le bord bas');
+assert.ok(r.labyrinth.pin.lives > 0, 'rester coincé doit coûter des vies');
+assert.ok(r.labyrinth.pin.slow > 0, 'le mur ralentit le joueur');
+assert.equal(r.labyrinth.escape.moved, true, 'une brèche voisine doit rester atteignable');
+assert.equal(r.labyrinth.escape.pinTime, 0, 'sortir par la brèche ne coince pas');
+assert.ok(r.labyrinth.noPhase.slow > 0, 'deux blocs jointifs ne doivent pas laisser passer le joueur');
+assert.equal(r.labyrinth.resetOnWave.after, 0, 'le labyrinthe se vide au changement de vague');
+assert.ok(r.labyrinth.resetOnWave.before > 0, 'la scène de reset devait contenir des murs');
+assert.equal(r.labyrinth.bossWave, 0, 'pas de labyrinthe sur la vague du gardien');
+assert.equal(r.labyrinth.bossAlive, 0, 'l’arène se vide dès qu’un gardien est vivant');
+assert.equal(r.labyrinth.draw.crash, null, 'le rendu du labyrinthe ne doit pas planter');
+assert.ok(r.labyrinth.draw.painted > 20, 'les blocs doivent être réellement peints');
+assert.equal(r.labyrinth.loop.crashes, 0, 'la boucle complète doit tenir avec le labyrinthe : ' + r.labyrinth.crashMessage);
+assert.ok(r.labyrinth.loop.maxWalls > 8, 'le labyrinthe doit vraiment se remplir en partie');
+
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
-console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 15 silhouettes et 5 décors vus de dessus, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
+console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 15 silhouettes et 5 décors vus de dessus, labyrinthe destructible (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 
 /* journey.js arme des minuteurs de fin de partie : on sort explicitement. */
 process.exit(0);

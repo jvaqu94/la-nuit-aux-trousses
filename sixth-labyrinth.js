@@ -1,0 +1,188 @@
+/* Monde 3 · Le labyrinthe de La Sixième Heure.
+   Le style de jeu change : le défilement s'accélère et des rangées de décor
+   solide descendent vers le joueur. Chaque rangée laisse une brèche ; il faut
+   la trouver, ou détruire le bloc à temps. Sans brèche ni tir, le mur pousse
+   le joueur vers le bas et finit par le COINCER contre le bord de l'écran.
+
+   Tout est porté par ce module : SixthHour.tick et SixthHour.draw sont
+   enveloppés, et targetScrollSpeed est relayé. Les mondes 1 et 2, les courses
+   hebdomadaires et le duel ne sont pas touchés. */
+(()=>{
+'use strict';
+const SH=window.SixthHour;
+if(!SH)return;
+const active=()=>window.Campaign?.activeWorld===3&&state==='play';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const TAU=Math.PI*2;
+
+/* Une matière par univers : le mur appartient au décor, pas à un autre monde. */
+const MATERIALS=[
+ {name:'CIRE',fill:'#e8d3ab',shade:'#b39a8c',edge:'#6d5a63',crack:'#4a3b46',glow:'#ffd9a0'},
+ {name:'BRONZE',fill:'#9fc7b4',shade:'#4d8079',edge:'#26403f',crack:'#16292b',glow:'#cfe6d8'},
+ {name:'SEL',fill:'#e6e2d2',shade:'#a9a89b',edge:'#5b6068',crack:'#3b4148',glow:'#ffffff'},
+ {name:'BOIS',fill:'#8a6f57',shade:'#5a4636',edge:'#2f2419',crack:'#1d160f',glow:'#f4c98f'},
+ {name:'OBSIDIENNE',fill:'#4a4568',shade:'#2a2447',edge:'#12101f',crack:'#080711',glow:'#dcbc7c'}
+];
+const CELL=100,COLS=8,ROW_H=46,PLAYER_R=15;
+/* Les brèches alternent : la route dessine un vrai zigzag de labyrinthe. */
+const ROUTE=[1,5,2,6,3,7,4,0,2,5];
+
+let walls=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false;
+
+function reset(){walls=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false}
+
+function material(){return MATERIALS[clamp(stage,0,4)]}
+
+/* Une rangée : huit cellules, une ou deux brèches, le reste est solide. */
+function spawnRow(){
+ const gaps=new Set([ROUTE[rowIndex%ROUTE.length]]);
+ if(rowIndex%3===2)gaps.add((ROUTE[rowIndex%ROUTE.length]+3)%COLS);
+ const hp=3+clamp(stage,0,4);
+ for(let c=0;c<COLS;c++){
+  if(gaps.has(c))continue;
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex});
+ }
+ rowIndex++;
+}
+
+function breakBlock(w){
+ w.dead=true;broken++;
+ score+=30;particle(w.x,w.y,material().glow,14);
+ tone(320,.16,'triangle',.05,1.1);
+}
+
+function damageBlock(w,amount){
+ if(w.dead)return;
+ w.hp-=amount;w.hit=.16;
+ particle(w.x,w.y,material().fill,4);
+ if(w.hp<=0)breakBlock(w);
+}
+
+/* Le mur pousse le joueur vers le bas ; au bord de l'écran il le coince. */
+function resolvePlayer(w,dt){
+ const dx=player.x-w.x,dy=player.y-w.y;
+ const overlapX=w.w/2+PLAYER_R-Math.abs(dx),overlapY=w.h/2+PLAYER_R-Math.abs(dy);
+ if(overlapX<=0||overlapY<=0)return false;
+ // Une sortie latérale n'est offerte que si elle débouche sur une vraie brèche.
+ // Sinon le joueur oscillerait entre deux blocs et traverserait le mur.
+ if(overlapX<overlapY&&overlapX<40){
+  const nx=clamp(player.x+Math.sign(dx||1)*overlapX,20,W-20);
+  const blocked=nx<=20||nx>=W-20||walls.some(o=>o!==w&&!o.dead
+   &&Math.abs(o.y-w.y)<ROW_H*.6&&Math.abs(nx-o.x)<o.w/2+PLAYER_R);
+  if(!blocked){player.x=nx;return false}
+ }
+ const floor=H-30,pushed=w.y+w.h/2+PLAYER_R;
+ player.y=Math.min(floor,pushed);
+ player.slow=Math.max(player.slow,.35);
+ if(pushed>=floor-1){
+  pinTime+=dt;pinHurt-=dt;
+  if(!warned){warned=true;say('COINCÉ · détruis le bloc au-dessus de toi pour te dégager',2.6)}
+  if(pinHurt<=0){pinHurt=1.3;hurt(14,'le mur qui se referme')}
+  return true;
+ }
+ return false;
+}
+
+function tick(dt){
+ if(!active()){if(walls.length)reset();return}
+ const current=stage+':'+wave;
+ if(current!==key){key=current;reset()}
+ // L'arène d'un gardien reste lisible : pas de labyrinthe pendant le boss.
+ if(wave===5||enemies.some(e=>e.boss&&!e.dead)){if(walls.length)walls=[];return}
+ timer-=dt;
+ if(timer<=0){
+  spawnRow();
+  timer=Math.max(2.1,3.4-clamp(stage,0,4)*.22);
+ }
+ const speed=scrollSpeed();
+ let pinned=false;
+ for(const w of walls){
+  if(w.dead)continue;
+  w.y+=speed*dt;
+  w.hit=Math.max(0,w.hit-dt);
+  for(const s of shots){
+   if(s.life<=0)continue;
+   if(Math.abs(s.x-w.x)<w.w/2+4&&Math.abs(s.y-w.y)<w.h/2+4){damageBlock(w,s.damage);s.life=0}
+  }
+  if(!w.dead&&resolvePlayer(w,dt))pinned=true;
+ }
+ if(!pinned){pinTime=0;warned=false}
+ walls=walls.filter(w=>!w.dead&&w.y<H+ROW_H);
+}
+
+function drawBlock(g,w){
+ const m=material(),x=-w.w/2,y=-w.h/2,damage=1-w.hp/w.max;
+ g.save();g.translate(w.x,w.y);
+ if(w.hit>0){g.shadowBlur=14;g.shadowColor=m.glow}
+ const grad=g.createLinearGradient(x,y,x+w.w,y+w.h);
+ grad.addColorStop(0,m.fill);grad.addColorStop(.55,m.shade);grad.addColorStop(1,m.edge);
+ g.fillStyle=grad;g.fillRect(x,y,w.w,w.h);
+ g.strokeStyle=m.edge;g.lineWidth=2;g.strokeRect(x,y,w.w,w.h);
+ // Matière : joints de pierre, coulures de cire ou veines de bronze.
+ g.strokeStyle=m.shade;g.lineWidth=1;g.globalAlpha=.7;
+ g.beginPath();g.moveTo(x,y);g.lineTo(x+w.w,y);g.moveTo(x+6,y+w.h*.5);g.lineTo(x+w.w-6,y+w.h*.5);g.stroke();
+ g.globalAlpha=1;
+ g.fillStyle=m.glow;g.globalAlpha=.18;g.fillRect(x+3,y+3,w.w-6,4);g.globalAlpha=1;
+ // Rivets et biseau : le bloc appartient à la matière de l'univers.
+ g.fillStyle=m.edge;
+ for(const rx of [x+7,x+w.w-7])for(const ry of [y+8,y+w.h-8]){
+  g.beginPath();g.arc(rx,ry,2.6,0,TAU);g.fill();
+ }
+ g.fillStyle=m.fill;g.globalAlpha=.5;
+ for(const rx of [x+6.2,x+w.w-7.8])for(const ry of [y+7.2,y+w.h-8.8]){
+  g.beginPath();g.arc(rx,ry,1.1,0,TAU);g.fill();
+ }
+ g.globalAlpha=1;
+ // Fissures proportionnelles aux dégâts : on voit ce qu'il reste à casser.
+ if(damage>0){
+  g.strokeStyle=m.crack;g.lineWidth=1.6;
+  const n=Math.round(damage*4)+1;
+  for(let i=0;i<n;i++){
+   const px=x+10+i*(w.w-20)/Math.max(1,n);
+   g.beginPath();g.moveTo(px,y+3);g.lineTo(px+6,y+w.h*.45);g.lineTo(px-4,y+w.h-4);g.stroke();
+  }
+ }
+ // Petite jauge de solidité, lisible même sur téléphone.
+ g.fillStyle='#0f0c1acc';g.fillRect(x+8,y+w.h-9,w.w-16,4);
+ g.fillStyle=m.glow;g.fillRect(x+8,y+w.h-9,(w.w-16)*clamp(w.hp/w.max,0,1),4);
+ g.restore();
+}
+
+function draw(g){
+ if(!active()||!walls.length)return;
+ const m=material();
+ for(const w of walls){
+  if(w.dead)continue;
+  if(w.y<0){
+   // Annonce la rangée avant qu'elle n'entre : le joueur a le temps de viser.
+   g.save();g.globalAlpha=.5;g.strokeStyle=m.glow;g.lineWidth=2;g.setLineDash([7,7]);
+   g.beginPath();g.moveTo(w.x-w.w/2,6);g.lineTo(w.x+w.w/2,6);g.stroke();g.restore();
+   continue;
+  }
+  drawBlock(g,w);
+ }
+ if(pinTime>.2){
+  g.save();g.textAlign='center';g.fillStyle='#ff9d7a';
+  g.font='bold '+(compactView()?'20px':'14px')+' Arial';
+  g.fillText('COINCÉ · CASSE LE BLOC',clamp(player.x,120,W-120),player.y-42);
+  g.restore();
+ }
+}
+
+/* --- Branchement : on relaie les points d'entrée existants --------------- */
+const baseTick=SH.tick,baseDraw=SH.draw;
+SH.tick=function(dt){baseTick(dt);tick(dt)};
+SH.draw=function(g){baseDraw(g);draw(g)};
+const baseTarget=targetScrollSpeed;
+targetScrollSpeed=function(){
+ const value=baseTarget();
+ return window.Campaign?.activeWorld===3?Math.min(260,value*1.5):value;
+};
+
+window.SixthLabyrinth={
+ tick,draw,reset,spawnRow,damageBlock,
+ get walls(){return walls},get pinTime(){return pinTime},get broken(){return broken},
+ get speedBoost(){return 1.5},
+ MATERIALS,CELL,COLS,ROW_H
+};
+})();

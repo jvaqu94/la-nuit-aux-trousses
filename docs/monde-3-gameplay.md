@@ -375,6 +375,58 @@ Quatre corrections demandées explicitement, qui **remplacent** les contraintes 
 
 ![Aperçu des cinq univers](apercu-monde-3.jpg)
 
+## 9ter. Refonte après retour en jeu : vue de dessus et labyrinthe
+
+Trois reproches ont été traités : les gardiens n'égalisaient pas la sorcière, les
+monstres ne collaient pas au thème, et la boucle était répétitive.
+
+### Diagnostic graphique
+
+La sorcière (`MinuitArt.witchFlight`) est **vue strictement de dessus** : on voit le
+dessus du chapeau, les épaules et le balai filer vers l'arrière. Les premières
+silhouettes du monde 3 étaient des **portraits de face**. Posés dans un jeu en vue
+du dessus, ils se lisaient comme des vignettes étrangères au décor — d'où l'impression
+de « pas au niveau ». Ce n'était pas seulement une question de détail.
+
+Les quinze corps ont donc été redessinés dans l'axe de la sorcière : **tête au sud**
+(elles descendent vers le joueur), traîne au nord, ailes, pattes et bras rayonnants.
+Les silhouettes sont volontairement différentes les unes des autres : candélabre
+radial, papillon de cire, oiseau riveté, cloche à pattes-battants, squelette de sel,
+gobeline accroupie, araignée-panier, lanterne hexagonale, cadran évidé, double
+pointillé de la sorcière ; et pour les gardiens un lustre à cinq coupelles, un
+titan-cloche et son marteau, un nocher à perche et sablier, une reine-araignée à
+trois lanternes, un veneur à ramure et masque de porcelaine.
+
+La rastérisation a aussi révélé un défaut de lisibilité : les grands corps de bronze
+et de patine se fondaient dans le décor sombre. Les dégradés ont été éclaircis en
+conséquence, sans toucher aux hitboxes.
+
+### Le labyrinthe (`sixth-labyrinth.js`)
+
+| Paramètre | Valeur | Raison |
+| --- | --- | --- |
+| Défilement | ×1,5, plafond 260 | casser la monotonie sans rendre la visée impossible |
+| Grille | 8 cellules de 100 px, rangées de 46 px | lisible sur téléphone |
+| Brèches | 1 par rangée, 2 une fois sur trois | toujours une sortie, parfois un choix |
+| Route | `[1,5,2,6,3,7,4,0,2,5]` | zigzag sur toute la largeur |
+| Solidité | `3 + stage` (3 → 7) | le décor durcit avec les univers |
+| Cadence | `max(2,1 ; 3,4 − 0,22 × stage)` s | pression croissante |
+| Coincement | vie perdue toutes les 1,3 s | ne pas détruire à temps doit coûter |
+
+Le mur pousse le joueur vers le bas et le ralentit ; au bord bas il le coince et le
+blesse jusqu'à ce qu'il casse le bloc. **Une sortie latérale n'est accordée que si
+elle débouche sur une brèche réelle** : la première version laissait le joueur
+osciller entre deux blocs jointifs et traverser la rangée sans rien casser. Le
+défaut a été trouvé par le test, corrigé, et verrouillé par une assertion dédiée.
+
+Le labyrinthe s'efface pendant les gardiens et se vide à chaque changement de vague.
+Il ne s'active que si `Campaign.activeWorld===3` : mondes 1 et 2, courses
+hebdomadaires et duel gardent leur défilement et leur décor d'origine.
+
+![Le labyrinthe de bronze](apercu-monde-3.jpg)
+
+![Les quinze silhouettes vues de dessus](bestiaire-monde-3.jpg)
+
 ## 10. Découpage de livraison (historique)
 
 1. **Socle** : `activeWorld===3`, `thirdWorlds`, jauge de boss alternative, plafonds de budget + tests.
