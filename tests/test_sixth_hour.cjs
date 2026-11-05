@@ -69,7 +69,7 @@ global.Audio = class { play() { return Promise.resolve(); } pause() {} addEventL
 
 /* --- Chargement de la chaîne réelle (ordre d'index.html) ----------------- */
 let code = '';
-for (const file of ['game.js', 'online.js', 'journey.js', 'nemesis.js', 'sequel.js', 'sixth-hour.js']) {
+for (const file of ['game.js', 'online.js', 'journey.js', 'nemesis.js', 'sequel.js', 'sixth-hour.js', 'sixth-hour-art.js', 'sixth-scenery.js']) {
   code += `\n;/* ==== ${file} ==== */\n` + read(file);
 }
 
@@ -287,7 +287,72 @@ out.code.monde2StillWorks=Camp.redeemCreatorCode('Monde2');
 out.code.finale=!!Camp.finale;
 Camp.completeFinale();
 
-/* 15 · Le monde 2 garde son comportement (dispatch non régressé) */
+/* 15 · Direction artistique et décors PROPRES au monde 3.
+   Le monde 3 ne doit plus ni réutiliser les peintures du monde 1, ni dessiner
+   ses monstres avec de simples polygones. */
+const Art=window.SixthHourArt,Scenery=window.SixthScenery;
+const gfx=document.createElement('canvas').getContext('2d');
+out.art={kinds:Art.kinds.length,foes:Art.kinds.filter(k=>!Art.isBossKind(k)).length,
+  bosses:Art.kinds.filter(k=>Art.isBossKind(k)).length,
+  registered:Art.kinds.filter(k=>window.MinuitArt[k]?.src).length,
+  unique:new Set(Art.kinds.map(k=>window.MinuitArt[k].src)).size,
+  ownPalette:Art.kinds.every(k=>window.MinuitArt[k].src.includes('softglow3')),
+  coversBestiary:Camp.thirdWorlds.flatMap(w=>[...w.foes,w.kind]).every(k=>Art.isSixthKind(k))};
+/* Deux garde-fous de rendu, trouvés en rastérisant vraiment les sprites :
+   un dégradé sur une boîte de surface nulle ne s'affiche pas, et une pointe
+   hors du viewBox est rognée. */
+// On n'inspecte que le corps : les <defs> contiennent un motif en notation
+// relative (M0 0V6) qui n'a rien à voir avec la silhouette.
+const svgOf=k=>{const svg=decodeURIComponent(window.MinuitArt[k].src.replace('data:image/svg+xml;charset=utf-8,',''));
+ return svg.slice(0,svg.indexOf('</defs>')+7)+'<body>'+svg.slice(svg.indexOf('</defs>')+7);};
+const bodyOf=k=>svgOf(k).split('<body>')[1];
+const viewOf=k=>svgOf(k).split('<body>')[0];
+const pairs=d=>(d.match(/-?\\d+\\.?\\d*/g)||[]).map(Number);
+out.art.noDegenerateGradient=Art.kinds.every(k=>!(bodyOf(k).match(/<path[^>]+>/g)||[]).some(el=>{
+ if(!el.includes('url(#'))return false;
+ const d=/ d="([^"]+)"/.exec(el);if(!d)return false;
+ const n=pairs(d[1]),xs=n.filter((_,i)=>i%2===0),ys=n.filter((_,i)=>i%2===1);
+ return n.length>0&&(Math.max(...xs)-Math.min(...xs)<.01||Math.max(...ys)-Math.min(...ys)<.01);
+}));
+out.art.nothingClipped=Art.kinds.every(k=>{
+ const view=/viewBox="([^"]+)"/.exec(viewOf(k))[1].split(/\\s+/).map(Number);
+ const [vx,vy,vw,vh]=view;
+ const paths=bodyOf(k).match(/<path[^>]+>/g)||[];
+ if(paths.length<8)return false;
+ return paths.every(el=>{
+   const d=/ d="([^"]+)"/.exec(el);if(!d)return true;
+   const n=pairs(d[1]),xs=n.filter((_,i)=>i%2===0),ys=n.filter((_,i)=>i%2===1);
+   if(n.length<4)return false;
+   return xs.every(x=>x>=vx-1&&x<=vx+vw+1)&&ys.every(y=>y>=vy-1&&y<=vy+vh+1);
+  });
+});
+Camp.beginWorld(3);
+out.art.drawsFoe=Art.drawActor(gfx,{kind:'wickWarden',seed:1},400,300,1,2,0);
+out.art.drawsBoss=Art.drawActor(gfx,{kind:'chasseur',borrowed:1,naming:true},400,300,2.3,2,0);
+out.art.rejectsForeign=Art.drawActor(gfx,{kind:'ghost'},400,300,1,2,0);
+// sprite() doit déléguer au module artistique, plus dessiner de polygones.
+const realDraw=Art.drawActor;let spied=0;
+Art.drawActor=function(...a){spied++;return realDraw.apply(this,a)};
+sprite(gfx,'wickWarden',400,300,1,0,0);
+out.art.spriteDelegates=spied>0;
+Art.drawActor=realDraw;
+// Le décor peint vient bien du monde 3, univers par univers.
+const realPick=Scenery.pick;let picked=[];
+Scenery.pick=function(s){picked.push(s);return realPick(s)};
+drawBackground(0);
+out.art.backgroundUsesWorld3=picked.length>0;
+Scenery.pick=realPick;
+out.scenery={count:Scenery.images.length,
+  unique:new Set(Scenery.images.map(i=>i.src)).size,
+  perStage:[0,1,2,3,4].every((s,i)=>Scenery.pick(s)===Scenery.images[i]),
+  painted:Scenery.images.every(i=>String(i.src).startsWith('data:image/jpeg;base64,')),
+  distinctFromWorld1:Scenery.images.every(i=>!(window.MinuitScenery||[]).some(o=>o.src===i.src))};
+Camp.useClassicWorld();
+out.art.drawsInWorld1=Art.drawActor(gfx,{kind:'wickWarden'},400,300,1,2,0);
+out.scenery.world1=Scenery.pick(0);
+Camp.beginWorld(3);
+
+/* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
 
@@ -401,9 +466,31 @@ assert.equal(r.code.playing.character, 'hunter', 'le Veilleur est jouable au mon
 assert.equal(r.code.monde2StillWorks, true, 'le code Monde2 continue de fonctionner');
 assert.equal(r.code.finale, true, 'Monde2 ouvre toujours sa rencontre');
 
+assert.equal(r.art.kinds, 15, '10 formes + 5 gardiens doivent avoir leur silhouette');
+assert.equal(r.art.foes, 10);
+assert.equal(r.art.bosses, 5);
+assert.equal(r.art.registered, 15, 'chaque silhouette doit être enregistrée dans MinuitArt');
+assert.equal(r.art.unique, 15, 'aucune silhouette ne doit être réutilisée entre formes');
+assert.equal(r.art.ownPalette, true, 'les sprites doivent utiliser la palette du monde 3');
+assert.equal(r.art.coversBestiary, true, 'tout le bestiaire et les 5 gardiens sont couverts');
+assert.equal(r.art.noDegenerateGradient, true, 'un dégradé sur un trait plat ne s’affiche pas');
+assert.equal(r.art.nothingClipped, true, 'aucune pointe ne doit dépasser du viewBox');
+assert.equal(r.art.drawsFoe, true);
+assert.equal(r.art.drawsBoss, true);
+assert.equal(r.art.rejectsForeign, false, 'le module ne touche pas aux formes des autres mondes');
+assert.equal(r.art.spriteDelegates, true, 'sprite() doit déléguer, plus dessiner de polygones');
+assert.equal(r.art.backgroundUsesWorld3, true, 'drawBackground doit demander le décor du monde 3');
+assert.equal(r.art.drawsInWorld1, false, 'hors du monde 3, la direction artistique s’efface');
+assert.equal(r.scenery.count, 5, 'un décor peint par univers');
+assert.equal(r.scenery.unique, 5, 'les cinq décors doivent être distincts');
+assert.equal(r.scenery.perStage, true, 'chaque univers reçoit son propre décor');
+assert.equal(r.scenery.painted, true, 'décors peints embarqués, aucune requête réseau');
+assert.equal(r.scenery.distinctFromWorld1, true, 'aucun décor du monde 1 n’est réutilisé');
+assert.equal(r.scenery.world1, null, 'les mondes 1 et 2 gardent leurs décors');
+
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
-console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets plafonnés (≤6 ennemis, ≤2 tirs, cadence ≥4,2 s), décisions 1→3, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
+console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets plafonnés (≤6 ennemis, ≤2 tirs, cadence ≥4,2 s), décisions 1→3, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, 15 silhouettes et 5 décors peints distincts, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 
 /* journey.js arme des minuteurs de fin de partie : on sort explicitement. */
 process.exit(0);

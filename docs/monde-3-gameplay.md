@@ -348,6 +348,24 @@ colonnes quantitatives restent à la valeur du monde 2 ou en dessous.
 - valide la chaîne 1 → 2 → 3, le briefing sans boucle, les 15 minutes et la rétro-compatibilité des
   sauvegardes.
 
+## 9bis. Direction artistique livrée
+
+- **Cinq décors peints distincts** (`scenery/sixth-*.jpg` → `sixth-scenery.js`) :
+  le monde 3 ne réutilise plus les peintures du monde 1. `SixthScenery.pick(stage)`
+  s'efface hors du monde 3, donc mondes 1 et 2 et courses hebdomadaires sont intacts.
+- `applyWorld` vide déjà `terrainCache` et `backgroundGradientCache` : le changement
+  de monde ne peut pas laisser le décor précédent en mémoire.
+- **Quinze silhouettes SVG** (`sixth-hour-art.js`), une par forme et une par gardien,
+  plus deux couches Canvas pilotées par l'état du combat (`e.lit`, `e.dashRun`,
+  `e.twin`, `boss.windows`, `boss.strikes`, `boss.breaks`, `boss.lanterns`,
+  `boss.borrowed`, `boss.halo`). Aucune hitbox modifiée, aucun anneau de lisibilité
+  supprimé : les télégraphes de jeu restent dessinés par `sixth-hour.js`.
+- Deux défauts de rendu trouvés en rastérisant les sprites, corrigés et verrouillés
+  par le test : pointes rognées par le viewBox, et dégradés dégénérés sur les traits
+  parfaitement horizontaux ou verticaux (invisibles en navigateur).
+
+![Aperçu des cinq univers](apercu-monde-3.jpg)
+
 ## 10. Découpage de livraison (historique)
 
 1. **Socle** : `activeWorld===3`, `thirdWorlds`, jauge de boss alternative, plafonds de budget + tests.
