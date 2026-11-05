@@ -24,6 +24,46 @@ const MATERIALS=[
  {name:'OBSIDIENNE',fill:'#4a4568',shade:'#2a2447',edge:'#12101f',crack:'#080711',glow:'#dcbc7c'}
 ];
 const CELL=100,COLS=8,ROW_H=46,PLAYER_R=15;
+/* Butin caché dans le mur. Le sceau est visible AVANT de casser : le joueur
+   choisit quel bloc ouvrir, au lieu de subir un tirage au sort invisible.
+   Ce sont exactement les bonus du jeu principal, ramassés par le même code. */
+const BONUS=[
+ {kind:'points',weight:34,label:'TRÉSOR',color:'#f4ce83'},
+ {kind:'shield',weight:20,label:'BOUCLIER',color:'#8ee9e2'},
+ {kind:'candy',weight:18,label:'TRIPLE TIR',color:'#ffb0d8'},
+ {kind:'heal',weight:14,label:'VIE',color:'#ff8e7b'},
+ {kind:'upgrade',weight:8,label:'ARSENAL',color:'#c291e7'}
+];
+/* Le pictogramme est tracé, pas écrit : les glyphes Unicode manquent dans
+   beaucoup de polices et le sceau deviendrait un carré vide. */
+function drawSeal(g,kind){
+ g.beginPath();
+ if(kind==='points'){g.moveTo(0,-6);g.lineTo(4.5,0);g.lineTo(0,6);g.lineTo(-4.5,0);g.closePath();g.fill()}
+ else if(kind==='shield'){g.moveTo(-4.5,-5);g.lineTo(4.5,-5);g.lineTo(4.5,1);g.lineTo(0,6);g.lineTo(-4.5,1);g.closePath();g.fill()}
+ else if(kind==='candy'){g.rect(-5,-5,2.4,10);g.rect(-1.2,-5,2.4,10);g.rect(2.6,-5,2.4,10);g.fill()}
+ else if(kind==='heal'){g.rect(-1.7,-5.5,3.4,11);g.rect(-5.5,-1.7,11,3.4);g.fill()}
+ else{g.moveTo(0,-6);g.lineTo(5,2);g.lineTo(1.8,2);g.lineTo(1.8,6);g.lineTo(-1.8,6);g.lineTo(-1.8,2);g.lineTo(-5,2);g.closePath();g.fill()}
+}
+const BONUS_CHANCE=.38;
+function rollBonus(){
+ if(rng()>=BONUS_CHANCE)return null;
+ const total=BONUS.reduce((n,b)=>n+b.weight,0);
+ let roll=rng()*total;
+ for(const b of BONUS){roll-=b.weight;if(roll<0)return b}
+ return BONUS[0];
+}
+function releaseBonus(w){
+ if(!w.bonus)return null;
+ const x=clamp(w.x,40,W-40),y=clamp(w.y,160,H-100);
+ if(w.bonus.kind==='upgrade'){
+  const before=drops.length;dropUpgrade(x,y);
+  if(drops.length===before)drops.push({x,y,kind:'points',points:150+stage*100,age:0});
+ }else if(w.bonus.kind==='points'){
+  drops.push({x,y,kind:'points',points:150+stage*100+wave*20,age:0});
+ }else drops.push({x,y,kind:w.bonus.kind,age:0});
+ say('SCEAU BRISÉ · '+w.bonus.label,2);
+ return w.bonus.kind;
+}
 /* Les brèches alternent : la route dessine un vrai zigzag de labyrinthe. */
 const ROUTE=[1,5,2,6,3,7,4,0,2,5];
 
@@ -40,15 +80,27 @@ function spawnRow(){
  const hp=3+clamp(stage,0,4);
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
-  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex});
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex,bonus:rollBonus()});
  }
  rowIndex++;
+}
+
+/* Panneau posé par un Volet claqueur : il bouche la route que le joueur visait.
+   Même matière, même solidité, mêmes tirs — rien de neuf à apprendre. */
+function addPanel(x,y){
+ if(!active()||wave===5||enemies.some(e=>e.boss&&!e.dead))return null;
+ const hp=2+clamp(stage,0,4);
+ const panel={x:clamp(x,CELL/2,W-CELL/2),y:clamp(y,120,H-160),w:CELL-6,h:ROW_H,
+  hp,max:hp,hit:0,dead:false,row:-1,bonus:null,panel:true};
+ walls.push(panel);return panel;
 }
 
 function breakBlock(w){
  w.dead=true;broken++;
  score+=30;particle(w.x,w.y,material().glow,14);
  tone(320,.16,'triangle',.05,1.1);
+ if(w.bonus){particle(w.x,w.y,w.bonus.color,20);tone(660,.22,'sine',.06,1.3)}
+ releaseBonus(w);
 }
 
 function damageBlock(w,amount){
@@ -145,6 +197,14 @@ function drawBlock(g,w){
  // Petite jauge de solidité, lisible même sur téléphone.
  g.fillStyle='#0f0c1acc';g.fillRect(x+8,y+w.h-9,w.w-16,4);
  g.fillStyle=m.glow;g.fillRect(x+8,y+w.h-9,(w.w-16)*clamp(w.hp/w.max,0,1),4);
+ if(w.bonus){
+  // Cire à cacheter et glyphe : on voit quel bloc vaut la peine d'être ouvert.
+  g.fillStyle=w.bonus.color;g.globalAlpha=.9;
+  g.beginPath();g.arc(0,-2,9,0,TAU);g.fill();
+  g.globalAlpha=1;g.strokeStyle=m.crack;g.lineWidth=1.4;
+  g.beginPath();g.arc(0,-2,9,0,TAU);g.stroke();
+  g.save();g.translate(0,-2);g.fillStyle='#1a1428';drawSeal(g,w.bonus.kind);g.restore();
+ }
  g.restore();
 }
 
@@ -180,9 +240,9 @@ targetScrollSpeed=function(){
 };
 
 window.SixthLabyrinth={
- tick,draw,reset,spawnRow,damageBlock,
+ tick,draw,reset,spawnRow,damageBlock,addPanel,
  get walls(){return walls},get pinTime(){return pinTime},get broken(){return broken},
  get speedBoost(){return 1.5},
- MATERIALS,CELL,COLS,ROW_H
+ MATERIALS,CELL,COLS,ROW_H,BONUS,BONUS_CHANCE,rollBonus,releaseBonus
 };
 })();
