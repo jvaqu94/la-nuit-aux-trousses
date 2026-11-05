@@ -1402,8 +1402,12 @@
 
   function ensureTopHud() {
     let hud = el('duelTopHud');
+    // Le bandeau du duel vit hors du canvas, comme le HUD du jeu principal :
+    // il ne doit jamais recouvrir la minimap ni la zone de jeu.
+    const preferredHolder = document.querySelector?.('.heading.game-status') || document.querySelector?.('main .heading');
+    const holder = preferredHolder || getCanvas()?.parentElement || document.body;
+    if (hud && hud.parentElement !== holder) holder.appendChild(hud);
     if (!hud) {
-      const holder = getCanvas()?.parentElement || document.body;
       hud = document.createElement('div');
       hud.id = 'duelTopHud';
       hud.className = 'duel-top-hud';
@@ -2112,7 +2116,7 @@
     const mmW = 176;
     const mmH = Math.round(mmW * (wh / ww));
     const mx = vw - mmW - 12;
-    const my = 58;
+    const my = 12;
     const sx = mmW / ww;
     const sy = mmH / wh;
     const world = viewSnap.world || {};
@@ -2882,6 +2886,8 @@
     .duel-wager-note{margin:0;text-align:center;font-size:10px;color:#c5b3d6}
     .duel-footer-actions{justify-content:center;flex-wrap:wrap}
     .duel-top-hud{position:absolute;top:8px;left:8px;right:8px;z-index:5;display:none;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px;padding:7px 10px;border:1px solid #8a6fa166;border-radius:10px;background:rgba(16,11,28,0.86);backdrop-filter:blur(4px);color:#f4ebff;pointer-events:none}
+    .heading.game-status .duel-top-hud{position:static;inset:auto;width:100%;margin:0}
+    body.night-duel-combat .heading.game-status{display:block;width:var(--field-width,400px);max-width:100%;height:auto;min-height:0;margin:0 0 8px;padding:0;border:0;background:none;box-shadow:none}
     .duel-hud-side{display:flex;flex-direction:column;gap:2px;min-width:0}
     .duel-hud-opp{align-items:flex-end;text-align:right}
     .duel-hud-opp-top{display:flex;align-items:center;gap:6px}
