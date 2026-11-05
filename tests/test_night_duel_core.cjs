@@ -559,6 +559,9 @@ assert.ok(links.messenger.startsWith('https://www.facebook.com/sharer/sharer.php
   assert.equal(stats.moveSpeed, 275, 'vitesse de course réduite');
   assert.equal(stats.focusSpeed, 150, 'vitesse de précision réduite');
   assert.ok(stats.focusSpeed < stats.moveSpeed, 'la précision reste plus lente');
+  assert.equal(Core.ENEMY_SPEED, 120, 'poursuite des sentinelles ralentie');
+  assert.equal(Core.ENEMY_PATROL_SPEED, 48, 'ronde des sentinelles ralentie');
+  assert.equal(Core.ENEMY_SHOT_SPEED, 240, 'projectiles ennemis plus lents');
   console.log('  ✓ vitesse du duel adoucie pour la visée');
 }
 

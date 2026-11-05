@@ -49,13 +49,15 @@
   const dismissedInviteIds = new Set();
   const INVITE_POLL_MS = 15000;
 
-  // Contrôles tactiles : course plus douce, zone morte + courbe progressive,
-  // et visée lente/précise pendant que le second doigt dirige le balai.
-  const TOUCH_MAX_DRAG = 72;
-  const TOUCH_DEADZONE = 7;
-  const TOUCH_MOVE_SCALE = 0.86;
-  const TOUCH_AIM_MOVE_SCALE = 0.8;
-  const TOUCH_AIM_PRECISION_SMOOTH = 0.3;
+  // Contrôles tactiles volontairement directs : pas de courbe ni de lissage.
+  // Le joystick répond linéairement, le 2e doigt vise exactement où il est, et
+  // le bouton Tir aide à accrocher une cible visible devant soi.
+  const TOUCH_MAX_DRAG = 64;
+  const TOUCH_DEADZONE = 6;
+  const TOUCH_MOVE_SCALE = 1;
+  const AIM_ASSIST_SNAP_RADIUS = 46;
+  const AIM_ASSIST_FIRE_RANGE = 460;
+  const AIM_ASSIST_FIRE_COS = 0.82;
 
   let channel = null;
   let pollTimer = null;
@@ -82,8 +84,6 @@
     fireMouse: false,
     aimX: Core.ARENA_CENTER.x,
     aimY: Core.ARENA_CENTER.y,
-    aimTargetX: Core.ARENA_CENTER.x,
-    aimTargetY: Core.ARENA_CENTER.y,
     moveTouchId: null,
     moveOriginX: 0,
     moveOriginY: 0,
@@ -1595,8 +1595,6 @@
     pointerState.touchMoveY = 0;
     pointerState.aimX = Core.ARENA_CENTER.x;
     pointerState.aimY = Core.ARENA_CENTER.y;
-    pointerState.aimTargetX = Core.ARENA_CENTER.x;
-    pointerState.aimTargetY = Core.ARENA_CENTER.y;
     pointerState.moveCurrentX = 0;
     pointerState.moveCurrentY = 0;
     if (typeof moveInput === 'object' && moveInput) {
@@ -1618,6 +1616,62 @@
   function bindingFor(action, fallback) {
     const custom = typeof prefs === 'object' && prefs?.keys ? prefs.keys[action] : '';
     return String(custom || fallback || '');
+  }
+
+  function visibleAssistTargets(snap) {
+    const targets = [];
+    const world = snap?.world || {};
+    for (const enemy of world.enemies || []) {
+      if (enemy && enemy.state !== 'dead' && (enemy.hp == null || enemy.hp > 0)) {
+        targets.push({ x: enemy.x, y: enemy.y, r: enemy.r || 20, priority: 0 });
+      }
+    }
+    if (snap?.opponent?.visible && Number.isFinite(snap.opponent.x) && Number.isFinite(snap.opponent.y)) {
+      targets.push({ x: snap.opponent.x, y: snap.opponent.y, r: 16, priority: 0 });
+    }
+    for (const crate of world.crates || []) {
+      if (crate && (crate.hp == null || crate.hp > 0)) targets.push({ x: crate.x, y: crate.y, r: crate.r || 22, priority: 1 });
+    }
+    for (const bomb of world.bombs || []) {
+      if (bomb) targets.push({ x: bomb.x, y: bomb.y, r: bomb.r || 18, priority: 1 });
+    }
+    return targets;
+  }
+
+  function assistTouchAim(aimX, aimY, hasAim, autoFire) {
+    const snap = Core.orientSnapshotForViewer(renderSnap, myRole());
+    const self = snap?.self;
+    const targets = visibleAssistTargets(snap);
+    if (!self || !targets.length) return { aimX, aimY, hasAim };
+
+    if (hasAim) {
+      // Aim « aimant » : si le doigt est proche d'une cible visible, on colle dessus.
+      let best = null, bestDist = Infinity;
+      for (const t of targets) {
+        const d = Math.hypot(t.x - aimX, t.y - aimY);
+        if (d <= t.r + AIM_ASSIST_SNAP_RADIUS && d < bestDist) { best = t; bestDist = d; }
+      }
+      if (best) return { aimX: best.x, aimY: best.y, hasAim: true };
+      return { aimX, aimY, hasAim };
+    }
+
+    if (autoFire) {
+      // Bouton Tir sans visée : accroche la cible visible la plus pertinente devant soi.
+      const facing = Number.isFinite(self.aimAngle) ? self.aimAngle : Math.atan2(aimY - self.y, aimX - self.x);
+      const fx = Math.cos(facing), fy = Math.sin(facing);
+      let best = null, bestScore = Infinity;
+      for (const t of targets) {
+        const dx = t.x - self.x, dy = t.y - self.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1 || dist > AIM_ASSIST_FIRE_RANGE) continue;
+        const cos = (dx * fx + dy * fy) / dist;
+        if (cos < AIM_ASSIST_FIRE_COS) continue;
+        const score = dist - (t.priority === 0 ? 60 : 0);
+        if (score < bestScore) { best = t; bestScore = score; }
+      }
+      if (best) return { aimX: best.x, aimY: best.y, hasAim: true };
+    }
+    return { aimX, aimY, hasAim };
   }
 
   function readLocalCommand() {
@@ -1649,16 +1703,9 @@
     let aimY = pointerState.aimY;
     let hasAim = Boolean(pointerState.mouseAimActive || pointerState.aimTouchId !== null);
 
-    // Visée tactile : lissage + mode précision automatique pour pouvoir ajuster
-    // le balai sans que la sorcière ne file trop vite.
-    if (pointerState.aimTouchId !== null) {
-      focus = true;
-      const smooth = TOUCH_AIM_PRECISION_SMOOTH;
-      pointerState.aimX += (pointerState.aimTargetX - pointerState.aimX) * smooth;
-      pointerState.aimY += (pointerState.aimTargetY - pointerState.aimY) * smooth;
-      aimX = pointerState.aimX;
-      aimY = pointerState.aimY;
-    }
+    // Visée tactile directe : le balai pointe immédiatement vers le doigt.
+    // On garde un léger ralentissement de précision pendant la visée mobile.
+    if (pointerState.aimTouchId !== null) focus = true;
 
     const gp = typeof navigator !== 'undefined' ? navigator.getGamepads?.()[0] : null;
     if (gp) {
@@ -1678,6 +1725,17 @@
         aimY = Math.max(0, Math.min(Core.WORLD_HEIGHT, screenSelf.y + ry * 260));
         hasAim = true;
       }
+    }
+
+    // Assistance mobile uniquement, à partir de ce que la joueuse voit déjà
+    // (brouillard de guerre respecté) : jamais une cible cachée.
+    if (renderSnap && (pointerState.aimTouchId !== null || fireButtonHeld)) {
+      const assisted = assistTouchAim(aimX, aimY, hasAim, fireButtonHeld && pointerState.aimTouchId === null && !pointerState.mouseAimActive);
+      aimX = assisted.aimX;
+      aimY = assisted.aimY;
+      hasAim = assisted.hasAim;
+      pointerState.aimX = aimX;
+      pointerState.aimY = aimY;
     }
 
     if (Math.hypot(moveX, moveY) < 0.05 && pointerState.moveTouchId !== null) {
@@ -2206,7 +2264,7 @@
     c.fillText('DÉPLACEMENT', ox, oy + 58);
     if (pointerState.aimTouchId !== null) {
       c.fillStyle = '#9ef7e8';
-      c.fillText('VISÉE PRÉCISE · ralenti', ox, oy + 70);
+      c.fillText('VISÉE DIRECTE', ox, oy + 70);
     }
     c.restore();
   }
@@ -2464,8 +2522,6 @@
             const wp = viewToWorld(pt);
             pointerState.aimX = wp.x;
             pointerState.aimY = wp.y;
-            pointerState.aimTargetX = wp.x;
-            pointerState.aimTargetY = wp.y;
           }
           return;
         }
@@ -2480,8 +2536,6 @@
           const wp = viewToWorld(pt);
           pointerState.aimX = wp.x;
           pointerState.aimY = wp.y;
-          pointerState.aimTargetX = wp.x;
-          pointerState.aimTargetY = wp.y;
         }
       });
 
@@ -2497,10 +2551,9 @@
             pointerState.moveCurrentY = pt.y;
             const dist = Math.hypot(dx, dy);
             if (dist > TOUCH_DEADZONE) {
+              // Linéaire : direction = doigt, vitesse proportionnelle sans courbe.
               const t = Math.min(1, (dist - TOUCH_DEADZONE) / (TOUCH_MAX_DRAG - TOUCH_DEADZONE));
-              const curved = t * t * (3 - 2 * t); // smoothstep : petits gestes = réglage fin
-              const precision = pointerState.aimTouchId !== null ? TOUCH_AIM_MOVE_SCALE : 1;
-              const scale = (curved / dist) * TOUCH_MOVE_SCALE * precision;
+              const scale = (t / dist) * TOUCH_MOVE_SCALE;
               pointerState.touchMoveX = dx * scale;
               pointerState.touchMoveY = dy * scale;
             } else {
@@ -2509,8 +2562,8 @@
             }
           } else if (evt.pointerId === pointerState.aimTouchId) {
             const wp = viewToWorld(pt);
-            pointerState.aimTargetX = wp.x;
-            pointerState.aimTargetY = wp.y;
+            pointerState.aimX = wp.x;
+            pointerState.aimY = wp.y;
           }
           return;
         }
@@ -2518,8 +2571,6 @@
         const wp = viewToWorld(pt);
         pointerState.aimX = wp.x;
         pointerState.aimY = wp.y;
-        pointerState.aimTargetX = wp.x;
-        pointerState.aimTargetY = wp.y;
       });
 
       const releasePointer = evt => {
@@ -2632,7 +2683,7 @@
       };
     }
     const hint = el('hint');
-    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser · viser souris/2e doigt (tactile : ralenti précis) · F/clic gauche ou Tir · Espace/E esquive · Maj précision · La lumière révèle caisses, pièges, bombes et sentinelles';
+    if (hint) hint.textContent = 'DUEL · ZQSD/flèches ou glisser = déplacer · 2e doigt = viser direct · Tir = accroche ce qui est visible devant · F/clic gauche · Espace/E esquive · Maj précision · La lumière révèle caisses, pièges, bombes et sentinelles';
     if (bar) bar.style.display = 'flex';
   }
 
@@ -2844,7 +2895,7 @@
     .duel-hud-scoreline{font-size:12px;color:#efe3fc;white-space:nowrap}
     .duel-hud-scoreline strong{color:#ffd596;font-size:14px}
     .duel-hud-banner{margin-top:2px;font-size:9px;color:#d6c4e8}
-    .duel-fire-button{min-width:96px;border-color:#d8b574aa;color:#ffe6bd;background:linear-gradient(145deg,#3a2849,#251c36)}
+    .duel-fire-button{min-width:112px;min-height:54px;font-size:16px;border-color:#d8b574aa;color:#ffe6bd;background:linear-gradient(145deg,#3a2849,#251c36)}
     .duel-fire-ready{box-shadow:0 0 0 1px #ffd08e55}
     .duel-fire-cooldown{opacity:.72}
     body.night-duel-combat .hud,

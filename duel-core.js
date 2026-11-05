@@ -32,13 +32,14 @@
   const TRAP_COOLDOWN = 4.0;
   const ENEMY_RADIUS = 20;
   const ENEMY_HP = 3;
-  const ENEMY_SPEED = 168;
+  const ENEMY_SPEED = 120;
   const ENEMY_MELEE_CD = 1.15;
   const ENEMY_SHOOT_CD = 2.3;
+  const ENEMY_SHOT_SPEED = 240;
   const ENEMY_WAKE_RADIUS = 330;
   const ENEMY_SLEEP_RETURN = 7.5;
   const ENEMY_PATROL_RADIUS = 170;
-  const ENEMY_PATROL_SPEED = 72;
+  const ENEMY_PATROL_SPEED = 48;
   const ENEMY_AGGRO_RADIUS = 470;
   const ENEMY_LOSE_AGGRO = 1.15;
   const ENEMY_KINDS = Object.freeze(['ghost', 'bat', 'spider', 'zombie', 'pumpkin', 'skull']);
@@ -1036,7 +1037,7 @@
         match.projectiles.push({
           id: ++match.entitySeq, ownerRole: 'enemy', enemyId: enemy.id,
           x: enemy.x, y: enemy.y, prevX: enemy.x, prevY: enemy.y,
-          vx: Math.cos(angle) * 300, vy: Math.sin(angle) * 300,
+          vx: Math.cos(angle) * ENEMY_SHOT_SPEED, vy: Math.sin(angle) * ENEMY_SHOT_SPEED,
           r: 7, damage: 1, life: 2.4, maxLife: 2.4
         });
         match.events.push({ type: 'enemy-shot', enemyId: enemy.id });
@@ -1933,6 +1934,9 @@
     ENEMY_WAKE_RADIUS,
     ENEMY_PATROL_RADIUS,
     ENEMY_AGGRO_RADIUS,
+    ENEMY_SPEED,
+    ENEMY_PATROL_SPEED,
+    ENEMY_SHOT_SPEED,
     ENEMY_KINDS,
     ARENA_WIDTH,
     ARENA_HEIGHT,
