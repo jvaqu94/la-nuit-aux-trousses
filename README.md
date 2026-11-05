@@ -154,6 +154,31 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
 | Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
 
+#### Décors et silhouettes propres au monde 3
+
+Le monde 3 ne réutilise **aucun décor du monde 1** : chaque univers a sa peinture
+(`scenery/sixth-*.jpg`, embarquée en base64 par `sixth-scenery.js`, régénérable avec
+`python3 tools/build_sixth_scenery.py` — nécessite Pillow). `SixthScenery.pick(stage)`
+ne renvoie une image que lorsque le monde 3 est actif ; les mondes 1 et 2 et les
+courses hebdomadaires gardent les leurs.
+
+| Univers | Décor |
+|---|---|
+| Le Faubourg des veilles | Ruelle de maisons hautes, une veilleuse à chaque fenêtre, cire figée sur les façades. |
+| Le Clocher muet | Beffroi de bronze patiné, cloches fêlées, cordes effilochées, plumes. |
+| L’Estran des pas perdus | Estran de nuit, épaves et pieux, croûtes de sel, traces de pas. |
+| Le Bois des lanternes rendues | Arbres nus chargés de lanternes rendues, bocaux vides, troncs creux. |
+| Le Cadran noir | Place-cadran d’obsidienne, graduations d’or **sans aucun chiffre**, aiguilles brisées. |
+
+Les monstres ne sont plus de simples polygones : `sixth-hour-art.js` suit
+l’architecture de `sequel-art.js` — **une silhouette SVG par forme** (dégradés cire,
+bronze patiné, sel, obsidienne, hachures et lueurs) enregistrée dans `MinuitArt`,
+plus deux couches Canvas qui traduisent l’état réel du combat : flammes des mèches
+restantes, ailes du corbeau, battant qui balance, sable qui s’écoule, halo emprunté
+du chasseur. Les 15 silhouettes sont distinctes, et les hitboxes sont inchangées.
+
+Aperçu : `docs/apercu-monde-3.jpg` (décors réels + acteurs dessinés par le code du jeu).
+
 **Aucun de ces cinq gardiens n’a de barre de vie.** Chacun possède sa jauge, sa condition de victoire et sa langue d’annonce ; trois d’entre eux ne tirent jamais. Les dégâts du joueur ne les entament pas : ils servent à agir sur le décor du combat (mèches, battant, boucle, lanternes).
 
 **La difficulté ne monte pas avec le nombre.** Les budgets sont plafonnés aux valeurs du monde 2 et parfois inférieurs :
@@ -374,7 +399,9 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `supabase-config.js` | URL et clé publiable du projet ; des valeurs vides désactivent le cloud pour un fonctionnement local. |
 | `supabase/` | Schéma SQL RLS et guide de configuration. |
 | `server.py` | Serveur HTTP local et ancien backend SQLite de ligue. |
-| `scenery/` | Images sources des décors. |
+| `scenery/` | Images sources des décors, dont `sixth-*.jpg` pour le monde 3. |
+| `sixth-hour-art.js` | Silhouettes SVG et couches d’animation des 10 formes et 5 gardiens du monde 3. |
+| `sixth-scenery.js` | Décors peints du monde 3, embarqués (généré par `tools/build_sixth_scenery.py`). |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
 | `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
 | `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |

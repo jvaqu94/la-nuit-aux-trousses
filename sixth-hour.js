@@ -537,30 +537,14 @@ function hitTargets(){
  }
 }
 
-/* --- Rendu : silhouettes et mobilier, palette du jeu --------------------- */
+/* --- Rendu : la silhouette vient de sixth-hour-art.js -------------------
+   Les sprites détaillés sont enregistrés dans window.MinuitArt par le module
+   artistique, qui ajoute ses couches d'animation. Ce wrapper ne fait que
+   router les formes du monde 3 vers lui, y compris hors combat (aperçus). */
 const baseSprite=sprite;
 sprite=function(g,kind,x,y,s=1,t=0,hit=0,tint=''){
- if(!active()||!(foeKinds.has(kind)||bossKinds.has(kind)))return baseSprite(g,kind,x,y,s,t,hit,tint);
- g.save();g.translate(x,y);g.scale(s,s);g.lineCap='round';g.lineJoin='round';
- if(hit){g.shadowBlur=12;g.shadowColor='#fff'}
- const moon=world?.moon||'#ffd9a0';
- g.strokeStyle=moon;g.lineWidth=2;g.fillStyle='#241d33';
- if(kind==='wickWarden'){g.beginPath();g.arc(0,0,20,0,Math.PI*2);g.fill();g.stroke();g.beginPath();g.moveTo(0,-26);g.lineTo(0,-8);g.stroke();g.fillStyle=moon;g.beginPath();g.ellipse(0,-30,5,8,0,0,Math.PI*2);g.fill()}
- else if(kind==='waxCourier'){g.beginPath();g.moveTo(-22,26);g.lineTo(-14,-14);g.lineTo(0,-26);g.lineTo(15,-13);g.lineTo(23,26);g.closePath();g.fill();g.stroke();g.fillStyle=moon;g.fillRect(-7,-8,14,4)}
- else if(kind==='bronzeCrow'){g.beginPath();g.moveTo(-26,6);g.lineTo(0,-18);g.lineTo(26,6);g.lineTo(0,20);g.closePath();g.fill();g.stroke();g.beginPath();g.moveTo(0,-18);g.lineTo(0,-30);g.stroke()}
- else if(kind==='crackedBell'){g.beginPath();g.moveTo(-22,20);g.quadraticCurveTo(-18,-24,0,-26);g.quadraticCurveTo(18,-24,22,20);g.closePath();g.fill();g.stroke();g.beginPath();g.moveTo(-4,-14);g.lineTo(6,14);g.stroke()}
- else if(kind==='saltWalker'){g.beginPath();g.moveTo(-18,24);g.lineTo(-8,-20);g.lineTo(10,-20);g.lineTo(20,24);g.closePath();g.fill();g.stroke();g.strokeStyle='#e8dcc0';g.beginPath();g.moveTo(-24,28);g.lineTo(24,28);g.stroke()}
- else if(kind==='printThief'){g.beginPath();g.arc(0,-4,17,0,Math.PI*2);g.fill();g.stroke();g.strokeStyle=moon;for(let i=0;i<3;i++){g.beginPath();g.moveTo(-10+i*10,16);g.lineTo(-14+i*10,26);g.stroke()}}
- else if(kind==='wickPicker'){g.beginPath();g.moveTo(0,-28);g.lineTo(16,0);g.lineTo(0,26);g.lineTo(-16,0);g.closePath();g.fill();g.stroke()}
- else if(kind==='hollowFlame'){g.beginPath();g.arc(0,0,18,0,Math.PI*2);g.stroke();g.fillStyle='#1b1526';g.fill();g.strokeStyle=moon;g.beginPath();g.moveTo(-12,-24);g.lineTo(12,-24);g.stroke()}
- else if(kind==='unnamedDigit'){g.beginPath();g.rect(-18,-24,36,48);g.fill();g.stroke();g.fillStyle=moon;g.font='bold 26px Georgia';g.textAlign='center';g.fillText('◷',0,10)}
- else if(kind==='facelessEcho'){g.beginPath();g.ellipse(0,0,18,24,0,0,Math.PI*2);g.stroke();g.setLineDash([4,6]);g.beginPath();g.ellipse(0,0,12,18,0,0,Math.PI*2);g.stroke();g.setLineDash([])}
- else if(kind==='veilleuse'){g.beginPath();g.moveTo(-30,34);g.lineTo(-16,-20);g.lineTo(0,-34);g.lineTo(16,-20);g.lineTo(30,34);g.closePath();g.fill();g.stroke();g.fillStyle=moon;g.beginPath();g.arc(0,-40,7,0,Math.PI*2);g.fill()}
- else if(kind==='sonneur'){g.beginPath();g.moveTo(-34,30);g.quadraticCurveTo(-24,-30,0,-34);g.quadraticCurveTo(24,-30,34,30);g.closePath();g.fill();g.stroke()}
- else if(kind==='passeur'){g.beginPath();g.moveTo(-26,32);g.lineTo(0,-32);g.lineTo(26,32);g.closePath();g.stroke();g.beginPath();g.moveTo(-30,10);g.lineTo(30,10);g.stroke()}
- else if(kind==='cueilleuse'){g.beginPath();g.moveTo(-28,30);g.lineTo(-10,-26);g.lineTo(12,-26);g.lineTo(28,30);g.closePath();g.fill();g.stroke();g.beginPath();g.moveTo(18,-10);g.lineTo(38,-22);g.stroke()}
- else{g.beginPath();g.ellipse(0,0,26,34,0,0,Math.PI*2);g.stroke();g.setLineDash([5,7]);g.beginPath();g.moveTo(-26,-10);g.lineTo(26,-10);g.stroke();g.setLineDash([])}
- g.restore();
+ if(active()&&(foeKinds.has(kind)||bossKinds.has(kind))&&window.SixthHourArt?.drawActor(g,{kind},x,y,s,t,hit))return;
+ return baseSprite(g,kind,x,y,s,t,hit,tint);
 };
 
 function ring(g,x,y,r,color,dashed){
