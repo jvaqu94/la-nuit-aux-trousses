@@ -631,7 +631,9 @@ function createFakeDom(initialUrl, sessionObj) {
   menuGrid.className = 'menu-grid';
   const labMenu = makeElement('button', 'labMenu');
   menuGrid.appendChild(labMenu);
-  makeElement('div', 'gameStatus');
+  const heading = makeElement('div', 'gameStatus');
+  heading.className = 'heading game-status';
+  body.appendChild(heading);
   makeElement('div', 'status');
   makeElement('button', 'specialCast');
   const dashBtn = makeElement('button', 'dash');
@@ -657,6 +659,7 @@ function createFakeDom(initialUrl, sessionObj) {
     getElementById: id => elementsById.get(id) || null,
     querySelector: sel => {
       if (sel === '.touchbar') return touchbar;
+      if (sel === '.heading.game-status' || sel === 'main .heading') return heading;
       if (sel === '#overlay .duel-draft-grid') {
         return allElements.find(e => e.classList.contains('duel-draft-grid')) || null;
       }
@@ -761,7 +764,7 @@ function createFakeDom(initialUrl, sessionObj) {
     (winListeners.get(evt.type) || []).forEach(fn => fn(evt));
   };
 
-  return { sandbox, document, elementsById, canvas };
+  return { sandbox, document, elementsById, canvas, heading };
 }
 
 function bootClientVm(supabaseUrl, pageUrl, token, userId, displayName) {
@@ -904,6 +907,10 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.equal(host.ctx.state, 'play', 'la boucle principale doit simuler le duel (state play)');
   assert.equal(guest.ctx.state, 'play', 'la boucle principale doit simuler le duel côté invitée');
   assert.ok(host.document.getElementById('game'), 'le duel doit utiliser le canvas réel du jeu');
+  const hostTopHud = host.document.getElementById('duelTopHud');
+  assert.ok(hostTopHud, 'le bandeau du duel doit exister');
+  assert.equal(hostTopHud.parentElement, host.heading, 'le bandeau du duel doit être hors du canvas, au-dessus du terrain');
+  assert.notEqual(hostTopHud.parentElement, host.canvas.parentElement, 'le bandeau du duel ne doit pas vivre dans la zone de jeu');
   assert.equal(host.document.getElementById('pause').textContent, 'Ⅱ Abandon');
   assert.ok(host.document.getElementById('hint').textContent.includes('DUEL'));
 
