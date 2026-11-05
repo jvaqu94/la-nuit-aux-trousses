@@ -955,7 +955,7 @@ async function runTwoClientIntegration(mockSupabase) {
   // Comme son écran est orienté comme celui de la créatrice (elle se voit en bas),
   // la droite écran correspond à la gauche du monde arbitré par l'hôte.
   const guestStartX = guest.ctx.NightDuel.snapshot.self.x;
-  guest.ctx.moveInput.arrowright = true;
+  guest.ctx.moveInput.d = true;
   tickClient(guest, 0.05);
   await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd'));
   const wireCmd = mockSupabase.wireLog.find(m => m.payload?.event === 'cmd').payload.payload;
@@ -964,7 +964,7 @@ async function runTwoClientIntegration(mockSupabase) {
 
   // Joystick tactile linéaire : un geste droit donne une direction droite, sans
   // courbe progressive, et une amplitude proportionnelle au doigt.
-  guest.ctx.moveInput.arrowright = false;
+  guest.ctx.moveInput.d = false;
   mockSupabase.wireLog.length = 0;
   const touchEvt = (type, x, y, id = 11) => ({ type, pointerType: 'touch', pointerId: id, clientX: x, clientY: y, preventDefault() {} });
   guest.canvas.dispatchEvent(touchEvt('pointerdown', 400, 450));
@@ -986,11 +986,28 @@ async function runTwoClientIntegration(mockSupabase) {
   guest.canvas.dispatchEvent(touchEvt('pointerup', 520, 450, 12));
   guest.canvas.dispatchEvent(touchEvt('pointerup', 432, 450, 11));
 
+  // Flèches ordinateur : haut avance dans l'axe du balai, pas vers le haut de la carte.
+  // On pivote d'abord le balai vers la droite écran, puis on avance : la commande
+  // doit partir sur le côté (gauche monde pour l'invitée), pas tout droit en haut.
+  guest.ctx.moveInput.arrowright = true;
+  for (let i = 0; i < 12; i += 1) tickClient(guest, 1 / 60);
+  guest.ctx.moveInput.arrowright = false;
+  guest.ctx.moveInput.arrowup = true;
+  mockSupabase.wireLog.length = 0;
+  tickClient(guest, 0.05);
+  await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd' && (Math.abs(m.payload.payload.moveX) > 0.05 || Math.abs(m.payload.payload.moveY) > 0.05)));
+  const forwardCmd = mockSupabase.wireLog.filter(m => m.payload?.event === 'cmd' && (Math.abs(m.payload.payload.moveX) > 0.05 || Math.abs(m.payload.payload.moveY) > 0.05)).pop().payload.payload;
+  assert.equal(forwardCmd.hasAim, true, 'Les flèches gardent le cap du balai');
+  assert.ok(forwardCmd.moveX < -0.2, 'Après pivot, flèche haut avance vers le devant du balai');
+  assert.ok(forwardCmd.moveY > 0.05, 'Flèche haut ne force plus le haut de la carte');
+  guest.ctx.moveInput.arrowup = false;
+
   // Les deux joueuses maintiennent le tir manuel (F) : les salves partent et les
   // projectiles deviennent visibles chez l'invitée.
   host.ctx.moveInput.f = true;
   guest.ctx.moveInput.f = true;
   guest.ctx.moveInput.arrowright = false;
+  guest.ctx.moveInput.arrowup = false;
   for (let i = 0; i < 72; i += 1) {
     tickClient(guest, 1 / 60);
     tickClient(host, 1 / 60);
@@ -1030,18 +1047,19 @@ async function runTwoClientIntegration(mockSupabase) {
   // Les deux sorcières montent vers le haut de leur propre écran (donc vers le centre
   // du monde) et maintiennent le tir manuel pour conclure les 2 manches.
   guest.ctx.moveInput.arrowright = false;
-  guest.ctx.moveInput.arrowup = true;
-  host.ctx.moveInput.arrowup = true;
+  guest.ctx.moveInput.arrowup = false;
+  host.ctx.moveInput.arrowup = false;
   // Les spawns sont aléatoires : chaque pilote se dirige vers le centre en
   // diagonale (couloir dégagé), puis s'arrête à portée pour tirer.
+  // ZQSD reste un déplacement absolu, utilisé ici par le pilote automatique.
   function steerToCenter(input, self) {
     const dx = Core.ARENA_CENTER.x - self.x;
     const dy = Core.ARENA_CENTER.y - self.y;
     const close = Math.hypot(dx, dy) < 230;
-    input.arrowleft = !close && dx < -15;
-    input.arrowright = !close && dx > 15;
-    input.arrowup = !close && dy < -15;
-    input.arrowdown = !close && dy > 15;
+    input.q = !close && dx < -15;
+    input.d = !close && dx > 15;
+    input.z = !close && dy < -15;
+    input.s = !close && dy > 15;
   }
   let guard = 0;
   while (host.ctx.NightDuel.isCombatActive && guard < 3000) {
