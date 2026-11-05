@@ -43,6 +43,45 @@
   const ENEMY_AGGRO_RADIUS = 470;
   const ENEMY_LOSE_AGGRO = 1.15;
   const ENEMY_KINDS = Object.freeze(['ghost', 'bat', 'spider', 'zombie', 'pumpkin', 'skull']);
+
+  // Maps du duel. Par défaut on joue un duel pur, SANS monstre : c'est plus
+  // lisible à deux et surtout plus simple à viser sur téléphone. Tout le moteur
+  // des sentinelles est conservé et reste actif sur la Forêt hantée, prête pour
+  // le futur choix de map / difficulté.
+  const DUEL_MAPS = Object.freeze([
+    Object.freeze({
+      id: 'clairiere',
+      name: 'Clairière silencieuse',
+      tagline: 'Duel pur · aucun monstre',
+      description: 'Seule la sorcière adverse compte : caisses à atouts, pièges et bombes, mais aucune créature.',
+      enemyPairs: 0
+    }),
+    Object.freeze({
+      id: 'foret-hantee',
+      name: 'Forêt hantée',
+      tagline: 'Sentinelles endormies',
+      description: 'Le décor vivant : les sentinelles dorment, se réveillent dans la lumière puis reprennent leur ronde.',
+      enemyPairs: 5
+    })
+  ]);
+  const DEFAULT_DUEL_MAP_ID = 'clairiere';
+  const DUEL_MAP_INDEX = new Map(DUEL_MAPS.map(map => [map.id, map]));
+  function getDuelMap(mapId) {
+    return DUEL_MAP_INDEX.get(String(mapId || '')) || DUEL_MAP_INDEX.get(DEFAULT_DUEL_MAP_ID);
+  }
+
+  // Difficulté : ne touche que les maps peuplées. Le duel sans monstre reste
+  // identique quelle que soit la difficulté choisie.
+  const DUEL_DIFFICULTIES = Object.freeze([
+    Object.freeze({ id: 'douce', name: 'Douce', enemyPairsDelta: -2, enemySpeedFactor: 0.8 }),
+    Object.freeze({ id: 'normale', name: 'Normale', enemyPairsDelta: 0, enemySpeedFactor: 1 }),
+    Object.freeze({ id: 'cauchemar', name: 'Cauchemar', enemyPairsDelta: 3, enemySpeedFactor: 1.2 })
+  ]);
+  const DEFAULT_DUEL_DIFFICULTY = 'normale';
+  const DUEL_DIFFICULTY_INDEX = new Map(DUEL_DIFFICULTIES.map(level => [level.id, level]));
+  function getDuelDifficulty(difficulty) {
+    return DUEL_DIFFICULTY_INDEX.get(String(difficulty || '')) || DUEL_DIFFICULTY_INDEX.get(DEFAULT_DUEL_DIFFICULTY);
+  }
   const PICKUP_RADIUS = 16;
   const PICKUP_LIFE = 22;
   const ALARM_LIFE = 4.0;
@@ -556,6 +595,8 @@
   }
 
   function buildWorld(match) {
+    const map = getDuelMap(match.mapId);
+    const difficulty = getDuelDifficulty(match.difficulty);
     const rng = mulberry32((match.seed + match.round * 104729) >>> 0);
     const world = { obstacles: [], crates: [], bombs: [], traps: [], enemies: [], pickups: [], alarms: [] };
     const placed = [];
@@ -628,8 +669,11 @@
     for (let i = 0; i < 5; i += 1) {
       addPair(world.traps, (x, y) => ({ type: 'trap', shape: 'circle', x, y, r: TRAP_RADIUS, cooldown: 0 }), TRAP_RADIUS);
     }
-    // Sentinelles endormies.
-    for (let i = 0; i < 5; i += 1) {
+    // Sentinelles endormies : uniquement sur les maps qui en prévoient.
+    // Générées en dernier, elles ne décalent jamais le décor des autres maps.
+    const enemyPairs = map.enemyPairs > 0 ? Math.max(1, map.enemyPairs + difficulty.enemyPairsDelta) : 0;
+    match.enemySpeedFactor = map.enemyPairs > 0 ? difficulty.enemySpeedFactor : 1;
+    for (let i = 0; i < enemyPairs; i += 1) {
       addPair(world.enemies, (x, y) => ({
         type: 'enemy', shape: 'circle', x, y, r: ENEMY_RADIUS, hp: ENEMY_HP,
         kind: ENEMY_KINDS[Math.floor(rng() * ENEMY_KINDS.length)],
@@ -889,6 +933,7 @@
 
   function updateWorld(match, dt) {
     const world = match.world;
+    const enemySpeedFactor = Number(match.enemySpeedFactor) > 0 ? Number(match.enemySpeedFactor) : 1;
     for (const trap of world.traps) trap.cooldown = Math.max(0, trap.cooldown - dt);
 
     // Contact joueuses -> pièges / bombes / pickups.
@@ -976,13 +1021,13 @@
           enemy.sleepTimer = 0;
           continue;
         }
-        enemy.patrolAngle += dt * (ENEMY_PATROL_SPEED / Math.max(60, enemy.perimeter));
+        enemy.patrolAngle += dt * ((ENEMY_PATROL_SPEED * enemySpeedFactor) / Math.max(60, enemy.perimeter));
         const tx = enemy.homeX + Math.cos(enemy.patrolAngle) * enemy.perimeter;
         const ty = enemy.homeY + Math.sin(enemy.patrolAngle) * enemy.perimeter;
         const dx = tx - enemy.x, dy = ty - enemy.y;
         const d = Math.hypot(dx, dy);
         if (d > 2) {
-          const step = Math.min(d, ENEMY_PATROL_SPEED * dt);
+          const step = Math.min(d, ENEMY_PATROL_SPEED * enemySpeedFactor * dt);
           enemy.x += (dx / d) * step;
           enemy.y += (dy / d) * step;
         }
@@ -1022,7 +1067,7 @@
       enemy.shootCd = Math.max(0, enemy.shootCd - dt);
       const dist = info.dist;
       if (target && target.hearts > 0 && dist > 1) {
-        const step = Math.min(dist, ENEMY_SPEED * dt);
+        const step = Math.min(dist, ENEMY_SPEED * enemySpeedFactor * dt);
         enemy.x += ((target.x - enemy.x) / dist) * step;
         enemy.y += ((target.y - enemy.y) / dist) * step;
       }
@@ -1037,7 +1082,7 @@
         match.projectiles.push({
           id: ++match.entitySeq, ownerRole: 'enemy', enemyId: enemy.id,
           x: enemy.x, y: enemy.y, prevX: enemy.x, prevY: enemy.y,
-          vx: Math.cos(angle) * ENEMY_SHOT_SPEED, vy: Math.sin(angle) * ENEMY_SHOT_SPEED,
+          vx: Math.cos(angle) * ENEMY_SHOT_SPEED * enemySpeedFactor, vy: Math.sin(angle) * ENEMY_SHOT_SPEED * enemySpeedFactor,
           r: 7, damage: 1, life: 2.4, maxLife: 2.4
         });
         match.events.push({ type: 'enemy-shot', enemyId: enemy.id });
@@ -1174,6 +1219,9 @@
       seed: hashSeed(id),
       rng: mulberry32(hashSeed(id)),
       mode: opts.mode === 'ranked' ? 'ranked' : 'friendly',
+      mapId: getDuelMap(opts.mapId).id,
+      difficulty: getDuelDifficulty(opts.difficulty).id,
+      enemySpeedFactor: 1,
       wager: opts.wager === WAGER_AMOUNT ? WAGER_AMOUNT : 0,
       seq: 0,
       entitySeq: 0,
@@ -1720,6 +1768,8 @@
     return {
       seq: match.seq,
       viewerRole: role,
+      mapId: getDuelMap(match.mapId).id,
+      difficulty: getDuelDifficulty(match.difficulty).id,
       round: match.round,
       roundTime: Math.round(match.roundTime * 100) / 100,
       roundPhase: match.roundPhase,
@@ -1938,6 +1988,12 @@
     ENEMY_PATROL_SPEED,
     ENEMY_SHOT_SPEED,
     ENEMY_KINDS,
+    DUEL_MAPS,
+    DEFAULT_DUEL_MAP_ID,
+    getDuelMap,
+    DUEL_DIFFICULTIES,
+    DEFAULT_DUEL_DIFFICULTY,
+    getDuelDifficulty,
     ARENA_WIDTH,
     ARENA_HEIGHT,
     ARENA_CENTER,

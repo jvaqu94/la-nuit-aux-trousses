@@ -6703,6 +6703,45 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
   const ENEMY_AGGRO_RADIUS = 470;
   const ENEMY_LOSE_AGGRO = 1.15;
   const ENEMY_KINDS = Object.freeze(['ghost', 'bat', 'spider', 'zombie', 'pumpkin', 'skull']);
+
+  // Maps du duel. Par défaut on joue un duel pur, SANS monstre : c'est plus
+  // lisible à deux et surtout plus simple à viser sur téléphone. Tout le moteur
+  // des sentinelles est conservé et reste actif sur la Forêt hantée, prête pour
+  // le futur choix de map / difficulté.
+  const DUEL_MAPS = Object.freeze([
+    Object.freeze({
+      id: 'clairiere',
+      name: 'Clairière silencieuse',
+      tagline: 'Duel pur · aucun monstre',
+      description: 'Seule la sorcière adverse compte : caisses à atouts, pièges et bombes, mais aucune créature.',
+      enemyPairs: 0
+    }),
+    Object.freeze({
+      id: 'foret-hantee',
+      name: 'Forêt hantée',
+      tagline: 'Sentinelles endormies',
+      description: 'Le décor vivant : les sentinelles dorment, se réveillent dans la lumière puis reprennent leur ronde.',
+      enemyPairs: 5
+    })
+  ]);
+  const DEFAULT_DUEL_MAP_ID = 'clairiere';
+  const DUEL_MAP_INDEX = new Map(DUEL_MAPS.map(map => [map.id, map]));
+  function getDuelMap(mapId) {
+    return DUEL_MAP_INDEX.get(String(mapId || '')) || DUEL_MAP_INDEX.get(DEFAULT_DUEL_MAP_ID);
+  }
+
+  // Difficulté : ne touche que les maps peuplées. Le duel sans monstre reste
+  // identique quelle que soit la difficulté choisie.
+  const DUEL_DIFFICULTIES = Object.freeze([
+    Object.freeze({ id: 'douce', name: 'Douce', enemyPairsDelta: -2, enemySpeedFactor: 0.8 }),
+    Object.freeze({ id: 'normale', name: 'Normale', enemyPairsDelta: 0, enemySpeedFactor: 1 }),
+    Object.freeze({ id: 'cauchemar', name: 'Cauchemar', enemyPairsDelta: 3, enemySpeedFactor: 1.2 })
+  ]);
+  const DEFAULT_DUEL_DIFFICULTY = 'normale';
+  const DUEL_DIFFICULTY_INDEX = new Map(DUEL_DIFFICULTIES.map(level => [level.id, level]));
+  function getDuelDifficulty(difficulty) {
+    return DUEL_DIFFICULTY_INDEX.get(String(difficulty || '')) || DUEL_DIFFICULTY_INDEX.get(DEFAULT_DUEL_DIFFICULTY);
+  }
   const PICKUP_RADIUS = 16;
   const PICKUP_LIFE = 22;
   const ALARM_LIFE = 4.0;
@@ -7216,6 +7255,8 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
   }
 
   function buildWorld(match) {
+    const map = getDuelMap(match.mapId);
+    const difficulty = getDuelDifficulty(match.difficulty);
     const rng = mulberry32((match.seed + match.round * 104729) >>> 0);
     const world = { obstacles: [], crates: [], bombs: [], traps: [], enemies: [], pickups: [], alarms: [] };
     const placed = [];
@@ -7288,8 +7329,11 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     for (let i = 0; i < 5; i += 1) {
       addPair(world.traps, (x, y) => ({ type: 'trap', shape: 'circle', x, y, r: TRAP_RADIUS, cooldown: 0 }), TRAP_RADIUS);
     }
-    // Sentinelles endormies.
-    for (let i = 0; i < 5; i += 1) {
+    // Sentinelles endormies : uniquement sur les maps qui en prévoient.
+    // Générées en dernier, elles ne décalent jamais le décor des autres maps.
+    const enemyPairs = map.enemyPairs > 0 ? Math.max(1, map.enemyPairs + difficulty.enemyPairsDelta) : 0;
+    match.enemySpeedFactor = map.enemyPairs > 0 ? difficulty.enemySpeedFactor : 1;
+    for (let i = 0; i < enemyPairs; i += 1) {
       addPair(world.enemies, (x, y) => ({
         type: 'enemy', shape: 'circle', x, y, r: ENEMY_RADIUS, hp: ENEMY_HP,
         kind: ENEMY_KINDS[Math.floor(rng() * ENEMY_KINDS.length)],
@@ -7549,6 +7593,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
 
   function updateWorld(match, dt) {
     const world = match.world;
+    const enemySpeedFactor = Number(match.enemySpeedFactor) > 0 ? Number(match.enemySpeedFactor) : 1;
     for (const trap of world.traps) trap.cooldown = Math.max(0, trap.cooldown - dt);
 
     // Contact joueuses -> pièges / bombes / pickups.
@@ -7636,13 +7681,13 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
           enemy.sleepTimer = 0;
           continue;
         }
-        enemy.patrolAngle += dt * (ENEMY_PATROL_SPEED / Math.max(60, enemy.perimeter));
+        enemy.patrolAngle += dt * ((ENEMY_PATROL_SPEED * enemySpeedFactor) / Math.max(60, enemy.perimeter));
         const tx = enemy.homeX + Math.cos(enemy.patrolAngle) * enemy.perimeter;
         const ty = enemy.homeY + Math.sin(enemy.patrolAngle) * enemy.perimeter;
         const dx = tx - enemy.x, dy = ty - enemy.y;
         const d = Math.hypot(dx, dy);
         if (d > 2) {
-          const step = Math.min(d, ENEMY_PATROL_SPEED * dt);
+          const step = Math.min(d, ENEMY_PATROL_SPEED * enemySpeedFactor * dt);
           enemy.x += (dx / d) * step;
           enemy.y += (dy / d) * step;
         }
@@ -7682,7 +7727,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       enemy.shootCd = Math.max(0, enemy.shootCd - dt);
       const dist = info.dist;
       if (target && target.hearts > 0 && dist > 1) {
-        const step = Math.min(dist, ENEMY_SPEED * dt);
+        const step = Math.min(dist, ENEMY_SPEED * enemySpeedFactor * dt);
         enemy.x += ((target.x - enemy.x) / dist) * step;
         enemy.y += ((target.y - enemy.y) / dist) * step;
       }
@@ -7697,7 +7742,7 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
         match.projectiles.push({
           id: ++match.entitySeq, ownerRole: 'enemy', enemyId: enemy.id,
           x: enemy.x, y: enemy.y, prevX: enemy.x, prevY: enemy.y,
-          vx: Math.cos(angle) * ENEMY_SHOT_SPEED, vy: Math.sin(angle) * ENEMY_SHOT_SPEED,
+          vx: Math.cos(angle) * ENEMY_SHOT_SPEED * enemySpeedFactor, vy: Math.sin(angle) * ENEMY_SHOT_SPEED * enemySpeedFactor,
           r: 7, damage: 1, life: 2.4, maxLife: 2.4
         });
         match.events.push({ type: 'enemy-shot', enemyId: enemy.id });
@@ -7834,6 +7879,9 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
       seed: hashSeed(id),
       rng: mulberry32(hashSeed(id)),
       mode: opts.mode === 'ranked' ? 'ranked' : 'friendly',
+      mapId: getDuelMap(opts.mapId).id,
+      difficulty: getDuelDifficulty(opts.difficulty).id,
+      enemySpeedFactor: 1,
       wager: opts.wager === WAGER_AMOUNT ? WAGER_AMOUNT : 0,
       seq: 0,
       entitySeq: 0,
@@ -8380,6 +8428,8 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     return {
       seq: match.seq,
       viewerRole: role,
+      mapId: getDuelMap(match.mapId).id,
+      difficulty: getDuelDifficulty(match.difficulty).id,
       round: match.round,
       roundTime: Math.round(match.roundTime * 100) / 100,
       roundPhase: match.roundPhase,
@@ -8598,6 +8648,12 @@ setTimeout(()=>{if(window.MinuitCloud?.connected)onAccount(window.MinuitCloud.us
     ENEMY_PATROL_SPEED,
     ENEMY_SHOT_SPEED,
     ENEMY_KINDS,
+    DUEL_MAPS,
+    DEFAULT_DUEL_MAP_ID,
+    getDuelMap,
+    DUEL_DIFFICULTIES,
+    DEFAULT_DUEL_DIFFICULTY,
+    getDuelDifficulty,
     ARENA_WIDTH,
     ARENA_HEIGHT,
     ARENA_CENTER,
@@ -11517,6 +11573,8 @@ var qrcode = function() {
       hostMatch = Core.createMatch({
         id: duel.id,
         mode: duel.mode,
+        mapId: duel.mapId,
+        difficulty: duel.difficulty,
         wager: duel.wager,
         creatorPerks: duel.creatorPerks,
         opponentPerks: duel.opponentPerks,
@@ -11530,6 +11588,8 @@ var qrcode = function() {
       const preview = Core.createMatch({
         id: duel.id,
         mode: duel.mode,
+        mapId: duel.mapId,
+        difficulty: duel.difficulty,
         wager: duel.wager,
         creatorPerks: duel.creatorPerks,
         opponentPerks: duel.opponentPerks,
@@ -12215,6 +12275,7 @@ var qrcode = function() {
         <div class="eyebrow">☾ ${esc(modeLabel.toUpperCase())}${esc(wagerLabel.toUpperCase())} · BEST OF 3</div>
         <h2>CHOISIS 3 ATOUTS DE NUIT</h2>
         <p>Catalogue commun de 10 atouts · Aucun équipement de campagne, compagnon ou bonus quotidien ne s’applique.</p>
+        <small class="duel-map-note">Map : <b>${esc(Core.getDuelMap?.(duel?.mapId)?.name || 'Clairière silencieuse')}</b> · ${esc(Core.getDuelMap?.(duel?.mapId)?.tagline || 'Duel pur · aucun monstre')}</small>
       </div>
       <div class="duel-versus-strip">
         <div class="duel-fighter-pill">
@@ -12320,6 +12381,7 @@ var qrcode = function() {
         <div class="eyebrow">☾ DUEL DE LA NUIT NOIRE · 1 CONTRE 1 EN DIRECT</div>
         <h2>SALON DES OMBRES</h2>
         <p> Sorcière : <b>${esc(pseudo)}</b> · Manches de 90 s en 2 manches gagnantes · Visibilité limitée au halo et aux éclats.</p>
+        <small class="duel-map-note">Map jouée : <b>${esc(Core.getDuelMap?.(duel?.mapId)?.name || 'Clairière silencieuse')}</b> · ${esc(Core.getDuelMap?.(duel?.mapId)?.tagline || 'Duel pur · aucun monstre')}. Les sentinelles restent réservées aux maps hantées.</small>
       </div>
       <div class="duel-summary-grid">
         <div class="duel-stat-box"><small>COTE DUEL</small><b>${Number(p.rating) || 1000}</b></div>
@@ -12572,7 +12634,8 @@ var qrcode = function() {
       } else if (renderSnap.roundTime >= Core.ZONE_SHRINK_START) {
         bannerEl.textContent = 'La brume se resserre vers le centre !';
       } else {
-        bannerEl.textContent = duel?.mode === 'ranked' ? 'Duel classé en direct' : 'Duel amical en direct';
+        const mapName = Core.getDuelMap?.(renderSnap.mapId || duel?.mapId)?.name || 'Clairière silencieuse';
+        bannerEl.textContent = `${duel?.mode === 'ranked' ? 'Duel classé' : 'Duel amical'} · ${mapName}`;
       }
     }
 
@@ -13848,7 +13911,7 @@ var qrcode = function() {
     button.id = 'nightDuelEntry';
     button.className = 'secondary menu-card-button';
     button.innerHTML =
-      '<span class="menu-card-icon">☾</span><span>Duel de la Nuit noire<small>1v1 en direct · brouillard & éclats</small></span>';
+      '<span class="menu-card-icon">☾</span><span>Duel de la Nuit noire<small>1v1 en direct · duel sans monstre</small></span>';
     button.onclick = () => openHub();
     grid.insertBefore(button, grid.firstChild);
   }
@@ -13905,6 +13968,8 @@ var qrcode = function() {
     .duel-header{text-align:center}
     .duel-header h2{margin:4px 0 6px;font-size:clamp(22px,3.6vw,34px);color:#f7e9ff}
     .duel-header p{margin:0 auto;max-width:660px;font-size:11px;line-height:1.55;color:#c3b2d4}
+    .duel-map-note{display:block;margin:7px auto 0;max-width:660px;font-size:10px;line-height:1.5;color:#cbbad9}
+    .duel-map-note b{color:#ffd596}
     .duel-invite-banner{padding:10px 12px;border:1px dashed #d8b574aa;border-radius:10px;background:#2e233cdd;text-align:center}
     .duel-invite-banner span{display:block;font-size:9px;letter-spacing:1.1px;color:#ffd28e}
     .duel-invite-banner b{display:block;margin:4px 0;font:700 13px ui-monospace,monospace;color:#fff2d6;overflow-wrap:anywhere}

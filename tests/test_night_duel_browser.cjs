@@ -850,6 +850,9 @@ async function runTwoClientIntegration(mockSupabase) {
   entryBtn.click();
 
   await waitUntil(() => host.document.getElementById('duelCreateBtn'));
+  const hubHtml = host.document.getElementById('overlay').innerHTML;
+  assert.ok(hubHtml.includes('Clairière silencieuse'), 'Le salon annonce la map jouée');
+  assert.ok(hubHtml.includes('aucun monstre'), 'Le salon annonce un duel sans monstre');
   assert.equal(host.ctx.Journey.grantDailyReward(), null, 'Les récompenses quotidiennes sont bloquées pendant le duel');
 
   host.document.getElementById('duelWagerTen').click();
@@ -950,6 +953,9 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.equal(firstWireSnap.opponent.visible, false, 'Au départ hors halo, la créatrice est invisible pour l’invitée');
   assert.equal(firstWireSnap.opponent.x, null, 'Aucune coordonnée X cachée envoyée à l’invitée');
   assert.equal(firstWireSnap.opponent.y, null, 'Aucune coordonnée Y cachée envoyée à l’invitée');
+  assert.equal(firstWireSnap.mapId, 'clairiere', 'Le duel en direct se joue sur la map sans monstre');
+  assert.equal((firstWireSnap.world.enemies || []).length, 0, 'Aucun monstre dans le duel en direct');
+  assert.equal((guest.ctx.NightDuel.snapshot?.world?.enemies || []).length, 0, 'L’invitée ne voit aucune créature non plus');
 
   // L'invitée envoie une commande de déplacement vers la droite de SON écran.
   // Comme son écran est orienté comme celui de la créatrice (elle se voit en bas),
