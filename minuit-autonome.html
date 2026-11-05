@@ -1291,21 +1291,24 @@ css.textContent+=`
 }
 `;
 css.textContent+=`
-/* Le bilan et ses HI-SCORES utilisent toute la surface disponible. */
-body:has(.journey-result-screen) .layout{grid-template-columns:minmax(0,1fr)!important}
-body:has(.journey-result-screen) .sidebar,body:has(.journey-result-screen) .touchbar{display:none!important}
-body:has(.journey-result-screen) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
-.overlay:has(.journey-result-screen){justify-content:flex-start;padding:14px}
-@media(max-width:850px){.overlay:has(.journey-result-screen){padding:10px}}
+/* Le bilan et ses HI-SCORES utilisent toute la surface disponible.
+   Ces règles ne doivent viser que le bilan AFFICHÉ : après « Rejouer avec ce
+   build », l'overlay est masqué mais son ancien HTML peut rester dans le DOM ;
+   sans :not(.hidden), la touchbar (sort, esquive, pause) restait cachée. */
+body:has(.overlay:not(.hidden) .journey-result-screen) .layout{grid-template-columns:minmax(0,1fr)!important}
+body:has(.overlay:not(.hidden) .journey-result-screen) .sidebar,body:has(.overlay:not(.hidden) .journey-result-screen) .touchbar{display:none!important}
+body:has(.overlay:not(.hidden) .journey-result-screen) .arena{width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+.overlay:not(.hidden):has(.journey-result-screen){justify-content:flex-start;padding:14px}
+@media(max-width:850px){.overlay:not(.hidden):has(.journey-result-screen){padding:10px}}
 `;
 css.textContent+=`
 /* Le Grimoire est une page de consultation plein écran sur téléphone, pas
    une carte confinée aux dimensions du terrain de jeu. */
 @media(max-width:850px){
- body:has(.grimoire-screen) .layout{grid-template-columns:minmax(0,1fr)!important}
- body:has(.grimoire-screen) .sidebar,body:has(.grimoire-screen) .touchbar{display:none!important}
- body:has(.grimoire-screen) .arena:has(.overlay:not(.hidden)){width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
- .overlay:has(.grimoire-screen){justify-content:flex-start;padding:10px}
+ body:has(.overlay:not(.hidden) .grimoire-screen) .layout{grid-template-columns:minmax(0,1fr)!important}
+ body:has(.overlay:not(.hidden) .grimoire-screen) .sidebar,body:has(.overlay:not(.hidden) .grimoire-screen) .touchbar{display:none!important}
+ body:has(.overlay:not(.hidden) .grimoire-screen) .arena{width:100%!important;height:100%!important;max-height:100%!important;aspect-ratio:auto!important}
+ .overlay:not(.hidden):has(.grimoire-screen){justify-content:flex-start;padding:10px}
  .grimoire-screen{width:100%;min-height:100%}
 }
 `;

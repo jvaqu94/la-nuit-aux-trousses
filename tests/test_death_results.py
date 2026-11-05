@@ -54,6 +54,19 @@ with sync_playwright() as p:
     assert int(re.sub(r'\D', '', latest.locator('.arcade-points').inner_text())) == 3456
     assert 'HI-SCORES' in page.locator('.scoreboard-title').inner_text()
     page.screenshot(path='/tmp/death-highscores-desktop.png')
+    # Non-régression : « Rejouer avec ce build » doit rendre la barre de combat
+    # (sort spécial, esquive, pause) même si l'ancien bilan reste dans l'overlay masqué.
+    page.wait_for_function("document.querySelector('#retry')?.textContent.includes('Rejouer avec ce build')", timeout=6000)
+    page.click('#retry')
+    page.wait_for_function("state==='play' && document.querySelector('#overlay').classList.contains('hidden')")
+    restored = page.evaluate("""() => ({
+        touchbar:getComputedStyle(document.querySelector('.touchbar')).display,
+        pause:document.querySelector('#pause').getBoundingClientRect().width,
+        dash:document.querySelector('#dash').getBoundingClientRect().width,
+        specialCast:document.querySelector('#specialCast').getBoundingClientRect().width
+    })""")
+    assert restored['touchbar'] != 'none', restored
+    assert restored['pause'] > 0 and restored['dash'] > 0 and restored['specialCast'] > 0, restored
     assert not errors, errors
     print('OK : décompte visible, Top 10 du dernier vol et HI-SCORES plein écran sur ordinateur.')
     context.close()
@@ -94,6 +107,17 @@ with sync_playwright() as p:
     assert dimensions['sidebar'] == 'none' and dimensions['touchbar'] == 'none', dimensions
     assert int(re.sub(r'\D', '', phone.locator('.arcade-score-row.is-last .arcade-points').inner_text())) == 2345
     phone.screenshot(path='/tmp/death-highscores-mobile.png', full_page=True)
+    phone.wait_for_function("document.querySelector('#retry')?.textContent.includes('Rejouer avec ce build')", timeout=6000)
+    phone.click('#retry')
+    phone.wait_for_function("state==='play' && document.querySelector('#overlay').classList.contains('hidden')")
+    restored_phone = phone.evaluate("""() => ({
+        touchbar:getComputedStyle(document.querySelector('.touchbar')).display,
+        pause:document.querySelector('#pause').getBoundingClientRect().width,
+        dash:document.querySelector('#dash').getBoundingClientRect().width,
+        specialCast:document.querySelector('#specialCast').getBoundingClientRect().width
+    })""")
+    assert restored_phone['touchbar'] != 'none', restored_phone
+    assert restored_phone['pause'] > 0 and restored_phone['dash'] > 0 and restored_phone['specialCast'] > 0, restored_phone
     assert not phone_errors, phone_errors
     print('OK : repli sans audio, décompte de trois secondes et bilan plein écran à 390×844.')
     mobile.close()
