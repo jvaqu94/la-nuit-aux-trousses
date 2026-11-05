@@ -955,6 +955,30 @@ async function runTwoClientIntegration(mockSupabase) {
   assert.equal(wireCmd.moveX, -1, 'droite écran invitée = gauche monde');
   assert.equal('hearts' in wireCmd, false, 'Le paquet de commande invité ne transporte aucun état d’autorité');
 
+  // Joystick tactile linéaire : un geste droit donne une direction droite, sans
+  // courbe progressive, et une amplitude proportionnelle au doigt.
+  guest.ctx.moveInput.arrowright = false;
+  mockSupabase.wireLog.length = 0;
+  const touchEvt = (type, x, y, id = 11) => ({ type, pointerType: 'touch', pointerId: id, clientX: x, clientY: y, preventDefault() {} });
+  guest.canvas.dispatchEvent(touchEvt('pointerdown', 400, 450));
+  guest.canvas.dispatchEvent(touchEvt('pointermove', 432, 450));
+  tickClient(guest, 0.05);
+  await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd'));
+  const touchCmd = mockSupabase.wireLog.find(m => m.payload?.event === 'cmd').payload.payload;
+  const expectedTouch = (32 - 6) / (64 - 6);
+  assert.ok(Math.abs(Math.abs(touchCmd.moveX) - expectedTouch) < 0.02, 'Le joystick tactile répond linéairement, sans courbure');
+  assert.equal(touchCmd.moveY, 0, 'Un geste horizontal reste horizontal');
+  // Second doigt = visée directe + précision automatique.
+  guest.canvas.dispatchEvent(touchEvt('pointerdown', 520, 450, 12));
+  mockSupabase.wireLog.length = 0;
+  tickClient(guest, 0.05);
+  await waitUntil(() => mockSupabase.wireLog.some(m => m.payload?.event === 'cmd'));
+  const aimCmd = mockSupabase.wireLog.find(m => m.payload?.event === 'cmd').payload.payload;
+  assert.equal(aimCmd.hasAim, true, 'Le second doigt active la visée');
+  assert.equal(aimCmd.focus, true, 'La visée tactile ralentit la sorcière');
+  guest.canvas.dispatchEvent(touchEvt('pointerup', 520, 450, 12));
+  guest.canvas.dispatchEvent(touchEvt('pointerup', 432, 450, 11));
+
   // Les deux joueuses maintiennent le tir manuel (F) : les salves partent et les
   // projectiles deviennent visibles chez l'invitée.
   host.ctx.moveInput.f = true;
