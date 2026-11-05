@@ -334,6 +334,15 @@ colonnes quantitatives restent à la valeur du monde 2 ou en dessous.
 
 ---
 
+## 8bis. Révision après retour en jeu
+
+Quatre corrections demandées explicitement, qui **remplacent** les contraintes initiales correspondantes :
+
+1. **Décors vus de dessus.** Les peintures en perspective sont remplacées par des vues orthographiques (caméra à la verticale, sans horizon), en portrait pour le défilement vertical.
+2. **Bug de tir corrigé.** `tickFlame` remontait `player.fire` à chaque image : dès la première flamme dépensée, le délai ne redescendait jamais à zéro et la sorcière cessait de tirer. Le ralentissement est désormais un facteur appliqué à l'armement du tir (`fireDelay`, borné à ×1,66), jamais pendant l'attente.
+3. **Plus de monstres, et ils tirent tous.** Budgets relevés : 8 → 12 ennemis, 2 → 4 projectiles par salve, cadence 2,8 → 2,0 s, vitesse 150 → 190. Chaque forme tire une salve à chaque cycle et garde sa mécanique signature un cycle sur deux.
+4. **Mécanisme rendu compréhensible.** Bandeau d'objectif permanent hors canvas, mots **DANGER** / **LEURRE** écrits sur les cercles, suppression de l'inversion de la vague 4, Chiffre sans nom simplement **FAIBLE ×2** au lieu d'immunisé, mention **PROTÉGÉ ½ dégâts**, et réponse **INSENSIBLE ·** + marche à suivre quand on tire sur un gardien.
+
 ## 9. Ce qui est vérifié par le test
 
 `tests/test_sixth_hour.cjs` charge les vrais `game.js`, `online.js`, `journey.js`, `nemesis.js`,
