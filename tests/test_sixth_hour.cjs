@@ -473,7 +473,8 @@ out.labyrinth.fork={
 labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
 const cache=Lab.walls.find(w=>w.row===2&&w.routeCache&&w.bonus);
 const cacheHp=cache&&cache.hp;if(cache)Lab.damageBlock(cache,cacheHp);
-out.labyrinth.puzzles={cacheBreakable:!!cache?.dead,cacheNotGate:!!cache&&cache.gate==null};
+out.labyrinth.puzzles={cacheBreakable:!!cache?.dead,cacheNotGate:!!cache&&cache.gate==null,
+  cacheOptional:!!cache?.optional,cacheWidth:cache?.w||0};
 labScene(1,1);Lab.spawnRow();Lab.spawnRow();
 const bellSwitch=Lab.walls.find(w=>w.row===1&&w.switch&&w.routeId==='narrow');
 const narrowGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='narrow');
@@ -1071,7 +1072,7 @@ assert.equal(r.labyrinth.fork.count,1,'une bifurcation est créée sur la troisi
 assert.equal(r.labyrinth.fork.gaps,3,'les deux voies restent praticables et la voie large offre deux cases');
 assert.equal(r.labyrinth.fork.cache,true,'la cache facultative doit être dans un bloc adjacent à la voie large');
 assert.equal(r.labyrinth.fork.labels,true,'les deux routes et la cache facultative sont identifiées à l’écran');
-assert.deepEqual(r.labyrinth.puzzles,{cacheBreakable:true,cacheNotGate:true},'la cache du Faubourg est destructible sans condamner une route');
+assert.deepEqual(r.labyrinth.puzzles,{cacheBreakable:true,cacheNotGate:true,cacheOptional:true,cacheWidth:50},'la cache du Faubourg est destructible et n’obstrue qu’une partie de la voie large');
 assert.deepEqual(r.labyrinth.puzzles.bronze,{switchBroken:true,narrowOpened:true,wideStillLocked:true},'la cloche choisie ouvre uniquement sa route dans le Clocher');
 assert.equal(r.labyrinth.shot.hp1, r.labyrinth.shot.hp0 - 1, 'un tir doit entamer le bloc');
 assert.equal(r.labyrinth.shot.consumed, true, 'le tir est arrêté par le décor');
