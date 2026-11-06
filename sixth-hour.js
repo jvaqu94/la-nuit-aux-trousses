@@ -56,6 +56,27 @@ const HOWTO={
  chasseur:'Fais le geste écrit à l’écran : il ne sait pas le copier.'
 };
 const HABITS={relays:'relais brisés',halos:'halos fréquentés',salt:'sable intact foulé',flames:'flammes rendues'};
+/* Chaque univers possède une épreuve active pendant les quatre vagues.
+   Elle récompense la maîtrise de sa mécanique, sans bloquer la progression. */
+const TRIALS=[
+ {kind:'waxMimic',short:'SCEAUX',text:'perce 3 Faux-cierges avant leur contact'},
+ {kind:'crackedBell',short:'ÉCHOS',text:'brise 3 cloches liées'},
+ {kind:'saltDash',short:'TRACES',text:'efface 3 empreintes avec une esquive'},
+ {kind:'snufferHand',short:'MÈCHES',text:'reprends 3 mèches volées au Moucheur'},
+ {kind:'unnamedDigit',short:'CHIFFRES',text:'abats 3 Chiffres sur leur faiblesse'}
+];
+function countTrial(kind){
+ const trial=TRIALS[clamp(stage,0,4)];
+ if(!trial||trial.kind!==kind||mission.trialDone)return;
+ mission.trial=Math.min(3,(mission.trial||0)+1);
+ score+=120*(stage+1);
+ if(mission.trial>=3){
+  mission.trialDone=true;
+  score+=500*(stage+1);
+  say('ÉPREUVE ACCOMPLIE · '+trial.short+' · récompense '+(620*(stage+1))+' points',3);
+  particle(player.x,player.y,world.moon,24);
+ }else say('ÉPREUVE '+trial.short+' · '+mission.trial+'/3',1.7);
+}
 
 let marks=[],salt=[],trail=[],mission={},habits=freshHabits(),boss=null,minute=null,meche=null;
 let slams=[];
@@ -121,7 +142,7 @@ spawnEnemy=function(d){
  if(e.kind==='snufferHand')e.halo=130;
  if(e.kind==='crackedBell'){
   const twin=enemies.find(o=>o!==e&&!o.dead&&o.kind==='crackedBell'&&!o.twin);
-  if(twin){twin.twin=e;e.twin=twin}
+  if(twin){twin.twin=e;e.twin=twin;twin.linkedBell=true;e.linkedBell=true}
  }
 };
 
@@ -147,7 +168,7 @@ newWave=function(...args){
  const result=baseNewWave(...args);
  if(!active())return result;
  marks=[];salt=[];minute=null;meche=null;frozen=[];boss=null;gesture=null;haloTime=0;
- mission={key:stage+':'+wave,minuteTaken:false,seals:0,digit:1,digitTimer:5,tenure:0};
+ mission={key:stage+':'+wave,minuteTaken:false,seals:0,digit:1,digitTimer:5,tenure:0,trial:0,trialDone:false};
  if(wave===1)say(RULES[clamp(stage,0,4)],3.4);
  if(wave===2){minute=makeMinute();say('PRENDS LA MINUTE · tue d’abord le Garde-mèche qui la protège, puis marche sur le cadran',3.4)}
  if(wave===3)say('TIENS 22 SECONDES · la minute se libère ensuite, marche dessus',2.8);
@@ -358,7 +379,13 @@ function tick(dt){
  marks=marks.filter(m=>m.age<m.warn+m.life);
  for(const s of salt){
   s.age+=dt;
-  if(s.age>.35&&near(player.x,player.y,s.x,s.y,s.r))player.slow=Math.max(player.slow,.4);
+  if(s.age>.35&&near(player.x,player.y,s.x,s.y,s.r)){
+   if(player.dash>0&&!s.cleansed){
+    s.cleansed=true;s.age=s.life;countTrial('saltDash');
+    score+=75*(stage+1);particle(s.x,s.y,'#e8dcc0',12);
+    say('TRACE EFFACÉE · esquive réussie',1.5);
+   }else if(!s.cleansed)player.slow=Math.max(player.slow,.4);
+  }
  }
  salt=salt.filter(s=>s.age<s.life);
  for(const b of hostile)if(b.frozen){
@@ -398,7 +425,8 @@ damageEnemy=function(e,n,...rest){
   return;
  }
  let value=n;
- if(e.kind==='waxMimic'&&e.disguise){e.disguise=false;e.revealed=true;value*=2}
+ if(e.kind==='waxMimic'&&e.disguise){e.cleanSealShot=true;e.disguise=false;e.revealed=true;value*=2}
+ if(e.kind==='unnamedDigit'&&e.digit===mission.digit)e.weakHit=true;
  if(e.kind==='unnamedDigit'&&e.digit===mission.digit)value*=2;
  if(wardenAt(e.x,e.y))value*=.55;
  if(playerInHalo())value*=.55;
@@ -409,7 +437,10 @@ damageEnemy=function(e,n,...rest){
 const baseReward=reward;
 reward=function(e){
  if(active()&&e&&!e.dead){
-  if(e.kind==='crackedBell')breakBell(e);
+  if(e.kind==='crackedBell'){breakBell(e);if(e.linkedBell)countTrial('crackedBell')}
+  if(e.kind==='waxMimic'&&e.cleanSealShot)countTrial('waxMimic');
+  if(e.kind==='snufferHand'&&e.stolen>0)countTrial('snufferHand');
+  if(e.kind==='unnamedDigit'&&e.weakHit)countTrial('unnamedDigit');
   const armed=marks.some(m=>m.source===e&&!m.struck);
   if(armed||e.kind==='wickWarden'||e.kind==='facelessEcho'){
    habits.relays++;
@@ -967,16 +998,21 @@ const objectiveBar=document.createElement('div');
 objectiveBar.id='sixthObjective';objectiveBar.className='sixth-objective hidden';
 objectiveBar.setAttribute('role','status');
 (document.getElementById('gameStatus')||document.body).appendChild(objectiveBar);
+function withTrial(text){
+ const trial=TRIALS[clamp(stage,0,4)];
+ if(!trial||mission.trialDone)return text+' · ÉPREUVE '+trial.short+' ✓';
+ return text+' · ÉPREUVE '+trial.short+' '+(mission.trial||0)+'/3 : '+trial.text;
+}
 function objectiveText(){
  if(!active()||state!=='play')return '';
  const e=enemies.find(v=>v.boss&&!v.dead);
  if(e&&bossKinds.has(e.kind))return 'GARDIEN · '+(VICTORY[e.kind]||'')+' — '+(HOWTO[e.kind]||'');
  const kept=window.Campaign?.progress?.minutesKept||0;
  const tally=' · '+kept+'/15 rendues';
- if(wave===2)return (mission.minuteTaken?'MINUTE 1/3 RENDUE'+tally+' · finis la vague':'MINUTE 1/3 · tue le Garde-mèche qui la protège, puis marche sur le cadran');
- if(wave===3)return mission.minuteTaken?'MINUTE 2/3 RENDUE'+tally:(waveTime<22?'TENUE · survis '+Math.max(0,Math.ceil(22-waveTime))+' s, la minute se libère ensuite':'MINUTE 2/3 LIBÉRÉE · marche sur le cadran');
- if(wave===4)return mission.minuteTaken?'MINUTE 3/3 RENDUE'+tally:(mission.seals>=2?'MINUTE 3/3 LIBÉRÉE · marche sur le cadran':'SCEAUX · tire sur les 2 flammes creuses marquées SCEAU ('+(mission.seals||0)+'/2), ils libèrent la minute');
- return RULES[clamp(stage,0,4)];
+ if(wave===2)return withTrial(mission.minuteTaken?'MINUTE 1/3 RENDUE'+tally+' · finis la vague':'MINUTE 1/3 · tue le Garde-mèche qui la protège, puis marche sur le cadran');
+ if(wave===3)return withTrial(mission.minuteTaken?'MINUTE 2/3 RENDUE'+tally:(waveTime<22?'TENUE · survis '+Math.max(0,Math.ceil(22-waveTime))+' s, la minute se libère ensuite':'MINUTE 2/3 LIBÉRÉE · marche sur le cadran'));
+ if(wave===4)return withTrial(mission.minuteTaken?'MINUTE 3/3 RENDUE'+tally:(mission.seals>=2?'MINUTE 3/3 LIBÉRÉE · marche sur le cadran':'SCEAUX · tire sur les 2 flammes creuses marquées SCEAU ('+(mission.seals||0)+'/2), ils libèrent la minute'));
+ return withTrial(RULES[clamp(stage,0,4)]);
 }
 function refreshObjective(){
  const text=objectiveText();
