@@ -205,7 +205,8 @@ for(const w of v.windows)shots.push({x:w.x,y:w.y,vx:0,vy:-100,life:1,damage:5,pi
 SH.tick(1/60);
 out.veilleuse={lit:v.windows.filter(w=>w.lit).length};
 v.windows.forEach(w=>{w.lit=false});SH.moveBoss(v,1/60);
-out.veilleuse.value=v.value;
+out.veilleuse.value=v.value;out.veilleuse.phase=v.phase;
+v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;
 
 /* 11b · Le Sonneur : tirer sur la cloche monte la résonance, le battant se frappe à côté */
 let s=bossFor(1);
@@ -464,8 +465,21 @@ out.labyrinth.fork={
   cache:forkWalls.some(w=>w.routeCache&&w.bonus),
   narrow:fork?.narrowX,
   wide:fork?.wideX,
-  labels:/ÉTROIT · CACHE À CASSER/.test(read('sixth-labyrinth.js'))&&/LARGE · SÛR/.test(read('sixth-labyrinth.js'))
+  labels:/CIRE · SCEAU À BRISER/.test(read('sixth-labyrinth.js'))&&/LARGE · SANS DÉTOUR/.test(read('sixth-labyrinth.js'))
 };
+
+
+/* Énigmes différentes : cire = sceau à briser ; bronze = cloche à choisir. */
+labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
+const waxSeal=Lab.walls.find(w=>w.row===2&&w.gate==='wax');
+const waxHp=waxSeal&&waxSeal.hp;if(waxSeal)Lab.damageBlock(waxSeal,waxHp);
+out.labyrinth.puzzles={waxSealBroken:!!waxSeal?.dead};
+labScene(1,1);Lab.spawnRow();Lab.spawnRow();
+const bellSwitch=Lab.walls.find(w=>w.row===1&&w.switch&&w.routeId==='narrow');
+const narrowGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='narrow');
+const wideGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='wide');
+if(bellSwitch)Lab.damageBlock(bellSwitch,bellSwitch.hp);
+out.labyrinth.puzzles.bronze={switchBroken:!!bellSwitch?.dead,narrowOpened:!!narrowGate?.dead,wideStillLocked:!!wideGate&&!wideGate.dead};
 
 /* Les tirs cassent le décor : sans tir, pas de sortie. */
 labScene(1,1);Lab.spawnRow();
@@ -947,7 +961,10 @@ for (const b of r.bosses) {
 assert.equal(new Set(r.bosses.map(b => b.victory)).size, 5, 'cinq conditions de victoire différentes');
 
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
-assert.equal(r.veilleuse.value, 1, 'la jauge de la Veilleuse est complète quand tout est éteint');
+assert.equal(r.veilleuse.value, .5, 'éteindre les mèches déclenche la seconde phase sans tuer le boss');
+assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après les cinq mèches');
+assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
+assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
 assert.equal(r.sonneur.strikes, 0, 'la cloche n’est pas le battant');
 assert.equal(r.sonneur.strikesAfter, 1, 'le battant se frappe hors de l’ombre de la cloche');
@@ -1043,17 +1060,19 @@ assert.ok(r.labyrinth.speed.boosted <= 260, 'le défilement reste plafonné');
 assert.equal(r.labyrinth.speedWorld2, r.labyrinth.speed.classicSpeed, 'le monde 2 ne doit pas être accéléré');
 assert.equal(r.labyrinth.foreignSpeed, 74, 'le monde 1 garde sa vitesse');
 assert.deepEqual(r.labyrinth.foreign, [0, 0], 'aucun mur dans les mondes 1 et 2');
-assert.equal(r.labyrinth.rows.count, 64, 'dix rangées avec sept brèches simples et trois bifurcations');
+assert.equal(r.labyrinth.rows.count, 67, 'dix rangées avec trois bifurcations dont le sceau de cire');
 assert.ok(r.labyrinth.rows.gaps.every(n => n >= 1), 'chaque rangée doit laisser au moins une brèche');
-assert.ok(r.labyrinth.rows.gaps.some(n => n === 3), 'les bifurcations offrent une issue étroite et une issue large de deux cellules');
+assert.ok(r.labyrinth.rows.gaps.some(n => n === 2), 'les bifurcations du Faubourg gardent une voie large et une voie courte scellée');
 assert.equal(r.labyrinth.rows.columns, 8, 'la route doit balayer toute la largeur');
 assert.deepEqual(r.labyrinth.hpPerStage, [3, 5, 7], 'le décor durcit avec les univers');
 assert.deepEqual(r.labyrinth.materials, ['CIRE', 'BRONZE', 'SEL', 'BOIS', 'OBSIDIENNE'], 'une matière par univers');
 assert.equal(r.labyrinth.fork.every,3,'une bifurcation toutes les trois rangées');
 assert.equal(r.labyrinth.fork.count,1,'une bifurcation est créée sur la troisième rangée');
-assert.equal(r.labyrinth.fork.gaps,3,'la bifurcation propose un passage étroit et un passage large');
+assert.equal(r.labyrinth.fork.gaps,2,'la voie courte est fermée par un sceau, la voie large reste libre');
 assert.equal(r.labyrinth.fork.cache,true,'la cache doit être placée sur un bloc destructible voisin');
-assert.equal(r.labyrinth.fork.labels,true,'les deux routes sont identifiées à l’écran');
+assert.equal(r.labyrinth.fork.labels,true,'les deux routes du Faubourg sont identifiées à l’écran');
+assert.equal(r.labyrinth.puzzles.waxSealBroken,true,'le sceau du Faubourg doit être destructible');
+assert.deepEqual(r.labyrinth.puzzles.bronze,{switchBroken:true,narrowOpened:true,wideStillLocked:true},'la cloche choisie ouvre uniquement sa route dans le Clocher');
 assert.equal(r.labyrinth.shot.hp1, r.labyrinth.shot.hp0 - 1, 'un tir doit entamer le bloc');
 assert.equal(r.labyrinth.shot.consumed, true, 'le tir est arrêté par le décor');
 assert.equal(r.labyrinth.shot.broken, true, 'le bloc doit céder sous les tirs');
