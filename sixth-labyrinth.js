@@ -84,26 +84,40 @@ function material(){return MATERIALS[clamp(stage,0,4)]}
    Une ligne sur trois devient une bifurcation : un couloir étroit qui cache
    un butin garanti, ou un couloir large plus confortable. */
 function spawnRow(){
- const narrow=ROUTE[rowIndex%ROUTE.length];
- const fork=rowIndex%FORK_EVERY===FORK_EVERY-1;
+ const row=rowIndex,narrow=ROUTE[row%ROUTE.length];
+ const forkEvery=stage<=1?2:FORK_EVERY;
+ const fork=row%forkEvery===forkEvery-1;
  const wideStart=(narrow+4)%COLS;
  const gaps=new Set([narrow]);
  if(fork){gaps.add(wideStart);gaps.add((wideStart+1)%COLS)}
  const hp=3+clamp(stage,0,4);
- let cachePlaced=false;
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
-  let bonus=rollBonus(),routeCache=false;
-  if(fork&&!cachePlaced&&c===(narrow+1)%COLS){
-   bonus=ROUTE_CACHE[rowIndex%ROUTE_CACHE.length];
-   routeCache=true;cachePlaced=true;
+  const bonus=rollBonus();
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache:false});
+ }
+ if(fork&&stage===0){
+  // Faubourg de cire : la voie courte est scellée, la voie large reste libre.
+  walls.push({x:narrow*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp:5,max:5,hit:0,dead:false,row,
+   bonus:ROUTE_CACHE[row%ROUTE_CACHE.length],routeCache:true,gate:'wax',routeId:'narrow'});
+ }
+ if(fork&&stage===1){
+  // Clocher : les deux itinéraires sont verrouillés. Il faut choisir une cloche
+  // et l'aligner avec le tir automatique pour ouvrir uniquement sa route.
+  const choices=[
+   {routeId:'narrow',cells:[narrow],x:narrow*CELL+CELL/2},
+   {routeId:'wide',cells:[wideStart,(wideStart+1)%COLS],x:wideStart*CELL+CELL}
+  ];
+  for(const choice of choices){
+   for(const c of choice.cells)walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp:99,max:99,hit:0,dead:false,row,
+    bonus:null,locked:true,routeId:choice.routeId,gate:'bronze'});
+   walls.push({x:choice.x,y:-ROW_H-48,w:46,h:34,hp:2,max:2,hit:0,dead:false,row,
+    bonus:null,switch:true,routeId:choice.routeId});
   }
-  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex,bonus,routeCache});
  }
- if(fork){
-  routeRows.push({row:rowIndex,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
-   wideX:wideStart*CELL+CELL,wideStart,cacheX:(narrow+1)*CELL+CELL/2});
- }
+ if(fork)routeRows.push({row,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
+  wideX:wideStart*CELL+CELL,wideStart,cacheX:(narrow+1)*CELL+CELL/2,
+  switches:stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
  rowIndex++;
 }
 
@@ -121,12 +135,18 @@ function breakBlock(w){
  w.dead=true;broken++;
  score+=30;particle(w.x,w.y,material().glow,14);
  tone(320,.16,'triangle',.05,1.1);
+ if(w.switch){
+  for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row&&gate.routeId===w.routeId){gate.dead=true;broken++}
+  say('RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT',2.8);
+  tone(760,.3,'triangle',.08,1.35);
+ }
+ if(w.gate==='wax')say('SCEAU DE CIRE BRISÉ · passage court ouvert',2.4);
  if(w.bonus){particle(w.x,w.y,w.bonus.color,20);tone(660,.22,'sine',.06,1.3)}
  releaseBonus(w);
 }
 
 function damageBlock(w,amount){
- if(w.dead)return;
+ if(w.dead||w.locked)return;
  w.hp-=amount;w.hit=.16;
  particle(w.x,w.y,material().fill,4);
  if(w.hp<=0)breakBlock(w);
@@ -221,6 +241,13 @@ function drawBlock(g,w){
  // Petite jauge de solidité, lisible même sur téléphone.
  g.fillStyle='#0f0c1acc';g.fillRect(x+8,y+w.h-9,w.w-16,4);
  g.fillStyle=m.glow;g.fillRect(x+8,y+w.h-9,(w.w-16)*clamp(w.hp/w.max,0,1),4);
+ if(w.switch){
+  g.save();g.strokeStyle='#d7f0e4';g.lineWidth=3;g.beginPath();g.arc(0,-2,10,0,TAU);g.stroke();
+  g.beginPath();g.moveTo(-6,-2);g.lineTo(6,-2);g.moveTo(0,-8);g.lineTo(0,7);g.stroke();
+  g.fillStyle='#f4e0a5';g.font='bold 9px Arial';g.textAlign='center';g.fillText('CHOISIS',0,20);g.restore();
+ }
+ if(w.locked){g.fillStyle='#d7f0e4';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCELLÉ',0,4)}
+ if(w.gate==='wax'){g.fillStyle='#8e253e';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCEAU',0,4)}
  if(w.bonus){
   // Cire à cacheter et glyphe : on voit quel bloc vaut la peine d'être ouvert.
   g.fillStyle=w.bonus.color;g.globalAlpha=.9;
@@ -250,8 +277,16 @@ function draw(g){
  for(const route of routeRows){
   if(route.y<34||route.y>H-28)continue;
   g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
-  g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · CACHE À CASSER',route.narrowX,route.y-ROW_H/2-5);
-  g.fillStyle='#cfe6d8';g.fillText('LARGE · SÛR',route.wideX,route.y-ROW_H/2-5);
+  if(route.stage===0){
+   g.fillStyle='#ffd9a0';g.fillText('CIRE · SCEAU À BRISER',route.narrowX,route.y-ROW_H/2-5);
+   g.fillStyle='#cfe6d8';g.fillText('LARGE · SANS DÉTOUR',route.wideX,route.y-ROW_H/2-5);
+  }else if(route.stage===1){
+   g.fillStyle='#cfe6d8';g.fillText('CLOCHE A · OUVRIR',route.narrowX,route.y-ROW_H/2-5);
+   g.fillText('CLOCHE B · OUVRIR',route.wideX,route.y-ROW_H/2-5);
+  }else{
+   g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · CACHE À CASSER',route.narrowX,route.y-ROW_H/2-5);
+   g.fillStyle='#cfe6d8';g.fillText('LARGE · SÛR',route.wideX,route.y-ROW_H/2-5);
+  }
   g.restore();
  }
  if(pinTime>.2){
