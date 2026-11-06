@@ -1000,7 +1000,8 @@ objectiveBar.setAttribute('role','status');
 (document.getElementById('gameStatus')||document.body).appendChild(objectiveBar);
 function withTrial(text){
  const trial=TRIALS[clamp(stage,0,4)];
- if(!trial||mission.trialDone)return text+' · ÉPREUVE '+trial.short+' ✓';
+ if(!trial)return text;
+ if(mission.trialDone)return text+' · ÉPREUVE '+trial.short+' ✓';
  return text+' · ÉPREUVE '+trial.short+' '+(mission.trial||0)+'/3 : '+trial.text;
 }
 function objectiveText(){
@@ -1025,7 +1026,7 @@ style.textContent='body.sixth-hour-theme{background:radial-gradient(ellipse at 2
 document.head.appendChild(style);
 
 window.SixthHour={
- BUDGET,TUNING,foeNames,VICTORY,RULES,HOWTO,HABITS,fireDelay,objectiveText,
+ BUDGET,TUNING,foeNames,VICTORY,RULES,HOWTO,HABITS,TRIALS,fireDelay,objectiveText,
  moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,
  isFoeKind:k=>foeKinds.has(k),isBossKind:k=>bossKinds.has(k),
  get boss(){return boss},get mission(){return mission},get habits(){return habits},
