@@ -93,12 +93,15 @@ function spawnRow(){
  const hp=3+clamp(stage,0,4);
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
-  // Au Faubourg, la cache est dans le mur qui borde la grande voie :
-  // elle se tire depuis le couloir, sans condamner ni ralentir le passage.
-  const cacheCell=(wideStart+2)%COLS;
-  const routeCache=fork&&stage===0&&c===cacheCell;
-  const bonus=routeCache?ROUTE_CACHE[row%ROUTE_CACHE.length]:rollBonus();
-  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache});
+  const bonus=rollBonus();
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache:false});
+ }
+ if(fork&&stage===0){
+  // Une cache latérale mord légèrement sur la voie large, sans la fermer :
+  // le joueur peut la détruire depuis le couloir ou poursuivre sans s'arrêter.
+  const cacheX=wideStart*CELL+175;
+  walls.push({x:cacheX,y:-ROW_H,w:50,h:ROW_H-8,hp:4,max:4,hit:0,dead:false,row,
+   bonus:ROUTE_CACHE[row%ROUTE_CACHE.length],routeCache:true,optional:true});
  }
  if(fork&&stage===1){
   // Clocher : les deux itinéraires sont verrouillés. Il faut choisir une cloche
@@ -115,7 +118,7 @@ function spawnRow(){
   }
  }
  if(fork)routeRows.push({row,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
-  wideX:wideStart*CELL+CELL,wideStart,cacheX:((wideStart+2)%COLS)*CELL+CELL/2,
+  wideX:wideStart*CELL+CELL,wideStart,cacheX:wideStart*CELL+175,
   switches:stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
  rowIndex++;
 }
