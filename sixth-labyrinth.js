@@ -85,7 +85,7 @@ function material(){return MATERIALS[clamp(stage,0,4)]}
    un butin garanti, ou un couloir large plus confortable. */
 function spawnRow(){
  const row=rowIndex,narrow=ROUTE[row%ROUTE.length];
- const forkEvery=stage<=1?2:FORK_EVERY;
+ const forkEvery=stage===1?2:FORK_EVERY;
  const fork=row%forkEvery===forkEvery-1;
  const wideStart=(narrow+4)%COLS;
  const gaps=new Set([narrow]);
