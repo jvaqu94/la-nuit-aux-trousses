@@ -159,9 +159,9 @@ makeSchedule=function(){
  const forms=world.foes,list=[];
  if(wave===5){for(let i=0;i<8;i++)list.push({time:.8+i*.8,x:90+(i*173)%620,kind:forms[i%forms.length],pattern:99,group:1+Math.floor(i/2),index:i%2});return list}
  const count=16+wave*3;
- // Entrée plus vive et cadence régulière : la vague suivante ne démarre
- // pas par une longue attente après la transition.
- for(let i=0;i<count;i++)list.push({time:.35+i*1.35,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
+ // Entrée plus régulière : les groupes se chevauchent davantage et réduisent
+ // les creux de pression entre deux apparitions.
+ for(let i=0;i<count;i++)list.push({time:.25+i*1.0,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
  return list;
 };
 
