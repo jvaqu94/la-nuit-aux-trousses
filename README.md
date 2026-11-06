@@ -226,7 +226,8 @@ ajoute une troisième couche de pression :
 
 - **Défilement ×1,5** (plafonné à 260), uniquement quand `Campaign.activeWorld===3`.
 - Des **rangées de décor solide** descendent vers le joueur : huit cellules,
-  une brèche obligatoire, deux une rangée sur trois. La route alterne sur toute
+  une brèche sur les rangées ordinaires ; sur les bifurcations, une issue étroite
+  d'une cellule et une issue large de deux cellules. La route alterne sur toute
   la largeur, donc il faut lire le mur et choisir sa colonne.
 - **Une bifurcation toutes les trois rangées** oppose deux itinéraires visibles :
   un passage étroit avec une cache visible à détruire dans le bloc voisin, ou un passage
