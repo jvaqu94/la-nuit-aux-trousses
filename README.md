@@ -230,7 +230,7 @@ ajoute une troisième couche de pression :
   d'une cellule et une issue large de deux cellules. La route alterne sur toute
   la largeur, donc il faut lire le mur et choisir sa colonne.
 - **Deux énigmes de route différentes dès les premiers univers :** au Faubourg,
-  le raccourci est fermé par un sceau de cire à briser tandis que le détour reste libre ;
+  deux voies restent praticables ; la voie large borde une cache facultative à découvrir en tirant sur un mur ;
   au Clocher, deux cloches verrouillent deux passages et le joueur doit choisir celle
   qu'il aligne avec son tir automatique pour n'ouvrir qu'une seule route. Les autres
   univers conservent les bifurcations risque/récompense, une toutes les trois rangées.
@@ -541,7 +541,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `scenery/` | Images sources des décors, dont `sixth-*.jpg` pour le monde 3. |
 | `sixth-hour-art.js` | Silhouettes SVG et couches d’animation des 10 formes et 5 gardiens du monde 3. |
 | `sixth-scenery.js` | Décors peints du monde 3, embarqués (généré par `tools/build_sixth_scenery.py`). |
-| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, bifurcations risque/récompense, butin scellé, coincement du joueur. |
+| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, bifurcations à deux voies praticables, caches facultatives, coincement du joueur. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
 | `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
 | `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |
