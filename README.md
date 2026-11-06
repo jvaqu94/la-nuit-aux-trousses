@@ -267,6 +267,43 @@ est tracé par le code (pas un caractère Unicode, qui manquerait dans la police
 Ce sont exactement les objets du jeu principal : ils tombent à l'endroit du bloc et
 sont ramassés par le code de butin existant, sans nouvelle mécanique à apprendre.
 
+#### Cinquième passe : une Veilleuse vraiment ardente, un Faubourg qui se joue
+
+*(cinquième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9septies)*
+
+**La Veilleuse (1er gardien).** La condition de victoire est inchangée (cinq mèches
+éteintes, puis trois impacts sur le cœur), mais le gardien ne pardonne plus
+l’immobilité :
+
+- après chaque impact sur le cœur, celui-ci souffle une **couronne de huit braises**
+  une demi-seconde plus tard (« LE CŒUR CRACHE DES CENDRES · écarte-toi ») ;
+- en phase 2, une mèche éteinte au hasard **rougeoie** (même anneau orangé que la
+  salve) puis recrache une braise environ toutes les sept secondes ;
+- chaque mèche éteinte porte désormais **son propre compte à rebours de rallumage,
+  11 à 13 s, visible en arc et en secondes** (« ÉTEINTE · 12s »), au lieu du
+  rallumage unique au hasard ;
+- les esprits de la phase 1 arrivent plus vite (168 px/s) et l’annonce de salve
+  dure 0,75 s.
+
+Combat simulé sur 14 graines (3 cœurs) : un joueur immobile sans esquive gagne
+5 fois sur 14, un joueur purement fuyant ne gagne jamais, un joueur aligné avec
+esquive active gagne 14 sur 14 (~28 s, ~2 cœurs restants).
+
+**Le Faubourg des veilles (stage 0).** Plus stratégique, sans un ennemi ni un
+projectile de plus :
+
+- **PRIME** — chaque vague ordinaire (1 à 4, jamais celle du gardien) désigne au
+  hasard **une famille de créatures** : losange d’or et mention « PRIME » au-dessus
+  de chaque membre, « · PRIME : … +400 » dans le bandeau d’objectif. L’abattre
+  paie **+400 points et un pas de combo** ;
+- **PRIORITÉ** — le bandeau d’objectif nomme la menace la plus urgente de l’écran,
+  dans un ordre unique : Volet claqueur armé → Garde-mèche → Facteur de cire →
+  Faux-cierge ;
+- **les runes paient dans l’ordre** — A et B rapportent 150 × (étape+1) points et
+  un pas de combo chacune, C rapporte 400 × (étape+1) et deux pas de combo ; la
+  cache facultative paie 100 × (étape+1) et un pas de combo. Tirer au hasard ne
+  rapporte rien.
+
 #### Le Faubourg remis dans son thème
 
 Le premier univers du monde 3 est un faubourg de nuit — toits, ruelle, fenêtres
@@ -528,7 +565,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues et seconde phase du premier gardien. |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse durcie (cendres, braise de mèche noire, rallumage individuel visible) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées). |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
@@ -558,7 +595,7 @@ Modifier les fichiers sources plutôt que le HTML autonome, qui est régénéré
 
 ### Prérequis
 
-Les tests `.cjs` demandent **Node.js**. Le test SQL `test_team_activity_sql.cjs` utilise aussi PostgreSQL WASM, installable avec `npm install --no-save --no-package-lock @electric-sql/pglite`. Les tests navigateur demandent **Python**, **Playwright** et **Chromium** :
+Les tests `.cjs` demandent **Node.js** (`npm test` déroule toute la suite, y compris `test_cloud_sync`, qui requiert `npm install` une fois pour PostgreSQL WASM). Les tests navigateur demandent **Python**, **Playwright** et **Chromium** :
 
 ```bash
 python -m pip install playwright

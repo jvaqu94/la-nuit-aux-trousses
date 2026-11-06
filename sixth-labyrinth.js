@@ -154,11 +154,16 @@ function breakBlock(w){
   const progress=puzzleProgress[w.row]||0;
   if(w.sequenceIndex===progress){
    puzzleProgress[w.row]=progress+1;
+   /* L'ordre paie : +1 combo par rune validée, +2 sur la troisième, et une
+      bourse croissante. Tirer au hasard n'ouvre rien ; tirer dans l'ordre
+      construit une chaîne. */
+   const rewardPts=w.sequenceIndex===2?400*(stage+1):150*(stage+1);
+   score+=rewardPts;combo=Math.min(8,combo+(w.sequenceIndex===2?2:1));
    const next=walls.find(v=>!v.dead&&v.switch&&v.row===w.row&&v.sequenceIndex===progress+1);
-   if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · vise la rune '+next.runeLabel,2.2)}
+   if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · +'+rewardPts+' · vise la rune '+next.runeLabel,2.2)}
    else{
     for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row){gate.dead=true;broken++}
-    say('LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT',3);
+    say('LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +'+rewardPts,3);
     tone(760,.3,'triangle',.08,1.35);
    }
   }
@@ -167,7 +172,7 @@ function breakBlock(w){
   say('RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT',2.8);
   tone(760,.3,'triangle',.08,1.35);
  }
- if(w.routeCache)say('CACHE DU FAUBOURG · butin découvert',2.4);
+ if(w.routeCache){const cachePts=100*(stage+1);score+=cachePts;combo=Math.min(8,combo+1);say('CACHE DU FAUBOURG · butin découvert · +'+cachePts+' · combo +1',2.4)}
  if(w.bonus){particle(w.x,w.y,w.bonus.color,20);tone(660,.22,'sine',.06,1.3)}
  releaseBonus(w);
 }
