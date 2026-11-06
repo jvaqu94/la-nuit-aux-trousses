@@ -69,21 +69,40 @@ function releaseBonus(w){
 }
 /* Les brèches alternent : la route dessine un vrai zigzag de labyrinthe. */
 const ROUTE=[1,5,2,6,3,7,4,0,2,5];
+/* Une ligne sur trois propose deux itinéraires lisibles :
+   passage étroit avec cache garanti, ou passage large sans détour. */
+const FORK_EVERY=3;
+const ROUTE_CACHE=[BONUS[1],BONUS[2],BONUS[0],BONUS[4],BONUS[3]];
 
-let walls=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false;
+let walls=[],routeRows=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false;
 
-function reset(){walls=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false}
+function reset(){walls=[];routeRows=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false}
 
 function material(){return MATERIALS[clamp(stage,0,4)]}
 
-/* Une rangée : huit cellules, une ou deux brèches, le reste est solide. */
+/* Une rangée : les lignes ordinaires gardent leur brèche en zigzag.
+   Une ligne sur trois devient une bifurcation : un couloir étroit qui cache
+   un butin garanti, ou un couloir large plus confortable. */
 function spawnRow(){
- const gaps=new Set([ROUTE[rowIndex%ROUTE.length]]);
- if(rowIndex%3===2)gaps.add((ROUTE[rowIndex%ROUTE.length]+3)%COLS);
+ const narrow=ROUTE[rowIndex%ROUTE.length];
+ const fork=rowIndex%FORK_EVERY===FORK_EVERY-1;
+ const wideStart=(narrow+4)%COLS;
+ const gaps=new Set([narrow]);
+ if(fork){gaps.add(wideStart);gaps.add((wideStart+1)%COLS)}
  const hp=3+clamp(stage,0,4);
+ let cachePlaced=false;
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
-  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex,bonus:rollBonus()});
+  let bonus=rollBonus(),routeCache=false;
+  if(fork&&!cachePlaced&&c===(narrow+1)%COLS){
+   bonus=ROUTE_CACHE[rowIndex%ROUTE_CACHE.length];
+   routeCache=true;cachePlaced=true;
+  }
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex,bonus,routeCache});
+ }
+ if(fork){
+  routeRows.push({row:rowIndex,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
+   wideX:wideStart*CELL+CELL,wideStart,cacheX:(narrow+1)*CELL+CELL/2});
  }
  rowIndex++;
 }
@@ -150,6 +169,8 @@ function tick(dt){
   timer=Math.max(2.1,3.4-clamp(stage,0,4)*.22);
  }
  const speed=scrollSpeed();
+ for(const route of routeRows)route.y+=speed*dt;
+ routeRows=routeRows.filter(route=>route.y<H+ROW_H);
  let pinned=false;
  for(const w of walls){
   if(w.dead)continue;
@@ -212,7 +233,7 @@ function drawBlock(g,w){
 }
 
 function draw(g){
- if(!active()||!walls.length)return;
+ if(!active()||(!walls.length&&!routeRows.length))return;
  const m=material();
  for(const w of walls){
   if(w.dead)continue;
@@ -223,6 +244,15 @@ function draw(g){
    continue;
   }
   drawBlock(g,w);
+ }
+ /* Les deux issues d'une bifurcation restent identifiées jusqu'à la sortie
+    de la rangée : le choix est visuel, pas caché dans le code. */
+ for(const route of routeRows){
+  if(route.y<34||route.y>H-28)continue;
+  g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
+  g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · BUTIN',route.narrowX,route.y-ROW_H/2-5);
+  g.fillStyle='#cfe6d8';g.fillText('LARGE · SÛR',route.wideX,route.y-ROW_H/2-5);
+  g.restore();
  }
  if(pinTime>.2){
   g.save();g.textAlign='center';g.fillStyle='#ff9d7a';
@@ -245,7 +275,7 @@ targetScrollSpeed=function(){
 window.SixthLabyrinth={
  tick,draw,reset,spawnRow,damageBlock,addPanel,
  get walls(){return walls},get pinTime(){return pinTime},get broken(){return broken},
- get speedBoost(){return 1.5},
+ get speedBoost(){return 1.5},get routeRows(){return routeRows},FORK_EVERY,
  MATERIALS,CELL,COLS,ROW_H,BONUS,BONUS_CHANCE,rollBonus,releaseBonus
 };
 })();
