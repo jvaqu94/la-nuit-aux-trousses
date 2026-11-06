@@ -198,6 +198,27 @@ Aperçu : `docs/apercu-monde-3.jpg` (décor, murs et acteurs dessinés par le co
 et `docs/bestiaire-monde-3.jpg` (13 formes, 5 gardiens et 5 objets).
 Le combat de la Veilleuse, jauge unique et lanternes tirées au sort : `docs/veilleuse-mondes-3.jpg`.
 
+#### Les cinq épreuves de maîtrise
+
+Chaque univers possède désormais une épreuve facultative active pendant ses quatre
+vagues ordinaires. Elle met en pratique le danger propre à cet univers, affiche
+sa progression dans le bandeau d'objectif et accorde des points sans bloquer la
+vague si le joueur préfère survivre :
+
+- **Faubourg des veilles — Sceaux :** percer trois Faux-cierges à distance avant
+  qu'ils ne mordent au contact.
+- **Clocher muet — Échos :** détruire trois cloches liées ; briser l'une suspend
+  les tirs de sa jumelle.
+- **Estran des pas perdus — Traces :** effacer trois empreintes en déclenchant
+  une esquive à travers leur zone de sel.
+- **Bois des lanternes rendues — Mèches :** vaincre trois Moucheurs portant des
+  flammes volées pour récupérer les mèches.
+- **Cadran noir — Chiffres :** vaincre trois Chiffres sans nom lorsqu'ils affichent
+  leur faiblesse, ce qui double les dégâts reçus.
+
+L'épreuve est remise à zéro à chaque vague ; sa validation rapporte un bonus
+supplémentaire. Les cinq gardiens conservent leurs conditions de victoire dédiées.
+
 #### Le labyrinthe destructible
 
 Le monde 3 ne se joue plus comme un simple défilement descendant. `sixth-labyrinth.js`
@@ -208,9 +229,10 @@ ajoute une troisième couche de pression :
   une brèche obligatoire, deux une rangée sur trois. La route alterne sur toute
   la largeur, donc il faut lire le mur et choisir sa colonne.
 - **Une bifurcation toutes les trois rangées** oppose deux itinéraires visibles :
-  un passage étroit avec un butin garanti dans le bloc voisin, ou un passage
-  deux fois plus large, plus facile à traverser mais sans cache garantie. Les
-  mentions « ÉTROIT · BUTIN » et « LARGE · SÛR » apparaissent au-dessus des issues.
+  un passage étroit avec une cache visible à détruire dans le bloc voisin, ou un passage
+  deux fois plus large, plus facile à traverser. Pour prendre la cache, il faut
+  s'aligner sur le bloc adjacent et le casser avant que la rangée ne pousse le joueur.
+  Les mentions « ÉTROIT · CACHE À CASSER » et « LARGE · SÛR » apparaissent au-dessus des issues.
 - Chaque bloc a une **solidité de 3 à 7 points** selon l’univers, des **fissures
   proportionnelles aux dégâts** et une **jauge de solidité** lisible sur téléphone.
   Les tirs l’entament, le détruire rapporte 30 points.
