@@ -451,7 +451,7 @@ for(const index of [0,2,4]){labScene(index,1);Lab.spawnRow();hpPerStage.push(Lab
 out.labyrinth.hpPerStage=hpPerStage;
 out.labyrinth.materials=Lab.MATERIALS.map(m=>m.name);
 
-/* Les bifurcations donnent un vrai choix : passage étroit avec butin garanti,
+/* Les bifurcations donnent un vrai choix : passage étroit avec cache à casser,
    ou passage large et plus sûr. Les lignes ordinaires restent inchangées. */
 labScene(0,1);
 for(let i=0;i<3;i++)Lab.spawnRow();
@@ -464,7 +464,7 @@ out.labyrinth.fork={
   cache:forkWalls.some(w=>w.routeCache&&w.bonus),
   narrow:fork?.narrowX,
   wide:fork?.wideX,
-  labels:/ÉTROIT · BUTIN/.test(read('sixth-labyrinth.js'))&&/LARGE · SÛR/.test(read('sixth-labyrinth.js'))
+  labels:/ÉTROIT · CACHE À CASSER/.test(read('sixth-labyrinth.js'))&&/LARGE · SÛR/.test(read('sixth-labyrinth.js'))
 };
 
 /* Les tirs cassent le décor : sans tir, pas de sortie. */
@@ -844,19 +844,15 @@ updateHUD();
 out.wicks.gauge.hiddenAfterHUD=document.getElementById('bossbar').classList.contains('hidden');
 gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
 
-/* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
-Camp.useClassicWorld();
-out.classicAfter=Camp.activeWorld;
-
 /* Épreuves propres aux cinq univers : une action distinctive par monde. */
 const trialCounts=[];
 function trialScene(index){
  freshWave(1);stage=index;world=worlds[index];
- mission.trial=0;mission.trialDone=false;
+ SH.mission.trial=0;SH.mission.trialDone=false;
 }
 trialScene(0);
 spawnEnemy({kind:'waxMimic',x:400,y:300,group:1,index:0,pattern:99});
-const trialMimic=enemies[enemies.length-1];trialMimic.cleanSealShot=true;reward(trialMimic);
+const trialMimic=enemies[enemies.length-1];damageEnemy(trialMimic,1,false);reward(trialMimic);
 trialCounts.push(SH.mission.trial);
 trialScene(1);
 spawnEnemy({kind:'crackedBell',x:300,y:300,group:1,index:0,pattern:99});
@@ -873,9 +869,13 @@ const trialSnuffer=enemies[enemies.length-1];trialSnuffer.stolen=1;reward(trialS
 trialCounts.push(SH.mission.trial);
 trialScene(4);
 spawnEnemy({kind:'unnamedDigit',x:400,y:300,group:1,index:0,pattern:99});
-const trialDigit=enemies[enemies.length-1];trialDigit.weakHit=true;reward(trialDigit);
+const trialDigit=enemies[enemies.length-1];trialDigit.digit=SH.mission.digit;damageEnemy(trialDigit,1,false);reward(trialDigit);
 trialCounts.push(SH.mission.trial);
 out.trials={counts:trialCounts,names:SH.TRIALS.map(t=>t.short),objective:SH.objectiveText()};
+
+/* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
+Camp.useClassicWorld();
+out.classicAfter=Camp.activeWorld;
 
 globalThis.__RESULT__=out;
 })();
@@ -1166,6 +1166,9 @@ assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés
 assert.ok(r.wicks.labelX.min >= 92, 'un libellé ne déborde pas à gauche : ' + r.wicks.labelX.min);
 assert.ok(r.wicks.labelX.max <= r.wicks.labelX.arena - 92, 'un libellé ne déborde pas à droite : ' + r.wicks.labelX.max);
 
+assert.deepEqual(r.trials.counts,[1,1,1,1,1],'chaque univers doit valider son épreuve avec sa mécanique propre');
+assert.deepEqual(r.trials.names,['SCEAUX','ÉCHOS','TRACES','MÈCHES','CHIFFRES'],'les cinq épreuves doivent rester distinctes');
+assert.ok(r.trials.objective.includes('ÉPREUVE CHIFFRES 1/3'),'la progression de l’épreuve doit rester visible dans le bandeau');
 assert.deepEqual(r.trials.counts,[1,1,1,1,1],'chaque univers doit valider son épreuve avec sa mécanique propre');
 assert.deepEqual(r.trials.names,['SCEAUX','ÉCHOS','TRACES','MÈCHES','CHIFFRES'],'les cinq épreuves doivent rester distinctes');
 assert.ok(r.trials.objective.includes('ÉPREUVE CHIFFRES 1/3'),'la progression de l’épreuve doit rester visible dans le bandeau');
