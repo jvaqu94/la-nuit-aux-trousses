@@ -1061,7 +1061,7 @@ assert.ok(r.labyrinth.speed.boosted <= 260, 'le défilement reste plafonné');
 assert.equal(r.labyrinth.speedWorld2, r.labyrinth.speed.classicSpeed, 'le monde 2 ne doit pas être accéléré');
 assert.equal(r.labyrinth.foreignSpeed, 74, 'le monde 1 garde sa vitesse');
 assert.deepEqual(r.labyrinth.foreign, [0, 0], 'aucun mur dans les mondes 1 et 2');
-assert.equal(r.labyrinth.rows.count, 64, 'dix rangées avec trois bifurcations et sans blocage artificiel du passage');
+assert.equal(r.labyrinth.rows.count, 67, 'dix rangées avec trois bifurcations et trois caches latérales facultatives');
 assert.ok(r.labyrinth.rows.gaps.every(n => n >= 1), 'chaque rangée doit laisser au moins une brèche');
 assert.ok(r.labyrinth.rows.gaps.some(n => n === 2), 'les bifurcations du Faubourg gardent une voie large et une voie courte scellée');
 assert.equal(r.labyrinth.rows.columns, 8, 'la route doit balayer toute la largeur');
@@ -1069,7 +1069,7 @@ assert.deepEqual(r.labyrinth.hpPerStage, [3, 5, 7], 'le décor durcit avec les u
 assert.deepEqual(r.labyrinth.materials, ['CIRE', 'BRONZE', 'SEL', 'BOIS', 'OBSIDIENNE'], 'une matière par univers');
 assert.equal(r.labyrinth.fork.every,3,'une bifurcation toutes les trois rangées');
 assert.equal(r.labyrinth.fork.count,1,'une bifurcation est créée sur la troisième rangée');
-assert.equal(r.labyrinth.fork.gaps,3,'les deux voies restent praticables et la voie large offre deux cases');
+assert.equal(r.labyrinth.fork.gaps,2,'les deux voies restent ouvertes ; la cache latérale ne condamne pas la voie large');
 assert.equal(r.labyrinth.fork.cache,true,'la cache facultative doit être dans un bloc adjacent à la voie large');
 assert.equal(r.labyrinth.fork.labels,true,'les deux routes et la cache facultative sont identifiées à l’écran');
 assert.deepEqual(r.labyrinth.puzzles,{cacheBreakable:true,cacheNotGate:true,cacheOptional:true,cacheWidth:50},'la cache du Faubourg est destructible et n’obstrue qu’une partie de la voie large');
