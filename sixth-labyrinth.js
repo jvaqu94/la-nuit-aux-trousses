@@ -111,7 +111,7 @@ function spawnRow(){
   for(const choice of choices){
    for(const c of choice.cells)walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp:99,max:99,hit:0,dead:false,row,
     bonus:null,locked:true,routeId:choice.routeId,gate:'bronze'});
-   walls.push({x:choice.x,y:-ROW_H-48,w:46,h:34,hp:2,max:2,hit:0,dead:false,row,
+   walls.push({x:choice.x,y:-ROW_H+48,w:46,h:34,hp:2,max:2,hit:0,dead:false,row,
     bonus:null,switch:true,routeId:choice.routeId});
   }
  }
