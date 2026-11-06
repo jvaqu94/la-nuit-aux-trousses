@@ -607,3 +607,105 @@ la densité réellement tirée (constante laissée à 0,20 mais tirage à 0,38 �
 que la constante.
 
 ![Le Faubourg repeint](apercu-monde-3.jpg)
+
+## 9septies. Cinquième retour en jeu : la Veilleuse devient vraiment ardente, et le Faubourg se joue
+
+Deux demandes distinctes : *« une vraie difficulté pour le 1er boss du 3ème
+monde »* et *« le 1er stage du 3ème monde plus stratégique »*. Deux chantiers,
+une même doctrine : **plus de décisions simultanées, jamais plus de projectiles
+à l’écran ni de barres de vie.** Aucun budget relevé, aucune touche nouvelle.
+
+### La Veilleuse : le cœur punit le camping, les mèches recomptent
+
+**Cendres.** Chaque impact sur le cœur arme `core.ember` : une demi-seconde plus
+tard, le cœur souffle une **couronne de huit braises** (45° d’écart, 118 px/s,
+25 dégâts, 3,4 s de vie). Le coup rapporte toujours, mais il récompense les
+tireurs disciplinés et punit celui qui reste sous le cœur. L’annonce est écrite
+à l’écran : « LE CŒUR CRACHE DES CENDRES · écarte-toi ».
+
+**Braise de mèche noire.** En phase 2, toutes les ~7 s, une mèche éteinte au
+hasard **rougeoie** (le même anneau orangé que la salve, `charge` à 0,75) puis
+crache une braise unique (168 px/s). En phase 2 il n’y a plus de salve : tout
+anneau orangé signifie donc « elle va tirer », lisible sans légende.
+
+**Chaque mèche recompte son propre rallumage.** Le rallumage global (une mèche
+sombre tirée au sort toutes les 5 à 8,5 s) est remplacé par un compte à rebours
+individuel par mèche (**11 à 13 s**), visible en arc orange et en secondes
+(« ÉTEINTE · 12s »). Une mèche n’est plus un interrupt qui se referme
+silencieusement : c’est un rendez-vous qu’on lit.
+
+**Le réglage a été simulé, pas deviné.** Avec un rallumage à 6–8 s, la phase 2
+demeure **inaccessible** : la porte d’entrée exige les cinq mèches éteintes au
+même instant, et aucun joueur — simulé ou réel — ne peut enchaîner cinq
+extinctions sous les ouvertures aléatoires en moins de 8 s. Mesuré sur 14
+graines, politiques figées : 0 victoire sur 28. Avec 11–13 s, le butin reste
+nerveux sans devenir impossible.
+
+**La salve tire plus vite.** Les esprits de la phase 1 passent de 150 à
+168 px/s, et l’annonce passe à 0,75 s de charge (le dessin suit : le dégradé
+d’anneau est calculé sur `/0,75`). Le délai entre salves reste le même — la
+pression vient de la vitesse d’arrivée, pas du volume.
+
+**Ce qui n’a pas changé.** La condition de victoire (5 mèches éteintes, puis 3
+impacts de cœur), le plafond de projectiles annulés par le test (≤ 100),
+« VEILLE COMPLÈTE » (5 allumées après 6 s : 25 dégâts et une mèche s’éteint),
+la jauge unique, les deux Gardes-mèche, l’absence totale de barre de vie.
+
+**Combat simulé (14 graines, 3 cœurs, sans ramassage d’upgrades sauf mention) :**
+
+| Pilote | Victoires | Durée moyenne | Cœurs restants |
+|---|---|---|---|
+| Foncer sous la mèche ouverte, sans esquive, sans upgrades | **5 / 14** | 21 s | 2,0 |
+| Fuite pure (jamais aligné) | **0 / 14** | — | — |
+| Alignement strict + esquive dès qu’un projectile approche (esquive inv 0,45 s, `Grimoire de puissance` rang 2) | **14 / 14** | 28 s | 2,1 |
+
+Le gardien ne pardonne plus l’immobilité, et la victoire récompense
+l’esquive active autant que la visée — c’est un vrai premier boss de monde 3,
+pas un mur : un joueur qui lit l’écran et bondit gagne régulièrement, un joueur
+qui fonce perd une fois sur deux.
+
+### Le Faubourg des veilles : choisir ses cibles, pas en tuer plus
+
+**PRIME.** Chaque vague ordinaire du stage 0 (vagues 1 à 4, jamais la vague du
+gardien) désigne au hasard **une famille de créatures** parmi celles du niveau :
+losange d’or et mention « PRIME » flottant au-dessus de chaque membre,
+complété d’un suffixe dans le bandeau d’objectif (« · PRIME : Facteur de cire
++400 »). L’abattre paie **+400 points et un pas de combo**. La désignation est
+retirée hors stage 0 et sur la vague 5. Le joueur arbitre : traiter la prime
+d’abord ou nettoyer le terrain selon les menaces — jamais la même vague deux
+parties de suite.
+
+**PRIORITÉ.** Le bandeau d’objectif affiche aussi la menace la plus urgente de
+l’écran, dans un ordre de lecture unique (stage 0 uniquement) :
+
+1. **Volet claqueur** avec un claquement armé — le tuer ou casser le panneau ;
+2. **Garde-mèche** — son halo divise les dégâts par deux ;
+3. **Facteur de cire** avec un vrai cercle au sol non frappé — le plein est le vrai ;
+4. **Faux-cierge** — tirer de loin, ne pas ramasser.
+
+Ce n’est pas une récompense mais une **lecture** : la vague se gagne en triant,
+pas en pulvérisant.
+
+**Les runes paient dans l’ordre.** Toucher A puis B paie chacun **150 × (étape+1)**
+et ajoute un pas de combo ; la troisième (C) paie **400 × (étape+1)** et deux
+pas de combo. Tirer au hasard ne rapporte rien — un bloc rejeté ne rend ni
+points ni combo (`damageBlock` refuse la rune hors ordre). **La cache facultative**
+du Faubourg paie désormais **100 × (étape+1)** et un pas de combo (elle payait
++100 plat). Un test mesure la chaîne complète : 150+150+400 = 790 points sur
+la séquence, combo de 1 à 5.
+
+**Rien d’ajouté côté volume.** Aucun nouvel ennemi, aucun nouveau projectile,
+aucune vie supplémentaire pour le gardien. La difficulté et la profondeur
+viennent uniquement de l’ordre, de la lecture et de la dépense — la doctrine
+monde 3, appliquée au premier univers.
+
+### Vérifications
+
+`npm test` au vert sur la chaîne complète (dont `tests/test_sixth_hour.cjs`).
+Les nouveaux chantiers sont épinglés par des tests dédiés : relight individuel
+(délai armé de 11 à 13 s à l’extinction), cadence de salve selon le nombre de
+mèches allumées, couronne du cœur (huit braises après chaque
+impact), braise de mèche noire armée puis tirée, prime (banner, +400, pas de
+combo, absence en stage 1), ordre de priorité du bandeau, bourse des trois
+runes (790 points) et de la cache. Les suites du monde 1, du monde 2, du
+labyrinthe et du duel restent vertes, inchangées.

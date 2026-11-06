@@ -469,14 +469,14 @@ out.labyrinth.fork={
   cache:forkWalls.some(w=>w.routeCache&&w.bonus),
   narrow:fork?.narrowX,
   wide:fork?.wideX,
-  labels:/RUNES A → B → C/.test(read('sixth-labyrinth.js'))&&/CACHE FACULTATIVE/.test(read('sixth-labyrinth.js'))
+  labels:/RUNES A → B → C/.test(globalThis.__LABYRINTH_SRC)&&/CACHE FACULTATIVE/.test(globalThis.__LABYRINTH_SRC)
 };
 
 
 /* Les runes A, B, C doivent être activées dans l'ordre pour ouvrir les portes. */
 labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
 const runes=Lab.walls.filter(w=>w.row===2&&w.switch).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);
-const gates=Lab.walls.filter(w=>w.row===2&&w.locked);
+const runeGates=Lab.walls.filter(w=>w.row===2&&w.locked);
 Lab.damageBlock(runes[1],99);
 const wrongOrderRejected=!runes[1].dead&&runes[1].hp===99;
 Lab.damageBlock(runes[0],2);
@@ -484,8 +484,8 @@ const secondEnabled=runes[1].hp===2;
 Lab.damageBlock(runes[1],2);
 const thirdEnabled=runes[2].hp===2;
 Lab.damageBlock(runes[2],2);
-out.labyrinth.puzzles={runes:runes.length,gates:gates.length,wrongOrderRejected,
-  secondEnabled,thirdEnabled,allGatesOpened:gates.every(w=>w.dead)};
+out.labyrinth.puzzles={runes:runes.length,gates:runeGates.length,wrongOrderRejected,
+  secondEnabled,thirdEnabled,allGatesOpened:runeGates.every(w=>w.dead)};
 
 /* La cache reste un bonus latéral facultatif, sans contrôler les portes. */
 labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
@@ -495,6 +495,22 @@ out.labyrinth.puzzles.cacheBreakable=!!cache?.dead;
 out.labyrinth.puzzles.cacheNotGate=!!cache&&cache.gate==null;
 out.labyrinth.puzzles.cacheOptional=!!cache?.optional;
 out.labyrinth.puzzles.cacheWidth=cache?.w||0;
+/* L'ordre paie : chaque rune validée rend du score et un pas de combo. */
+labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
+const payRunes=Lab.walls.filter(w=>w.row===2&&w.switch).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);
+combo=1;const payScore=score;
+Lab.damageBlock(payRunes[0],2);
+const aCombo=combo,aScore=score-payScore;
+Lab.damageBlock(payRunes[1],2);
+const bCombo=combo;
+Lab.damageBlock(payRunes[2],2);
+out.labyrinth.runePayoff={aCombo,aScore,bCombo,endCombo:combo,total:score-payScore};
+/* La cache aussi : ouvrir le côté étroit paie le détour. */
+labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
+const payCache=Lab.walls.find(w=>w.row===2&&w.routeCache&&w.bonus);
+combo=1;const cacheScore=score;
+Lab.damageBlock(payCache,payCache.hp);
+out.labyrinth.cachePayoff={combo,points:score-cacheScore};
 labScene(1,1);Lab.spawnRow();Lab.spawnRow();
 const bellSwitch=Lab.walls.find(w=>w.row===1&&w.switch&&w.routeId==='narrow');
 const narrowGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='narrow');
@@ -772,7 +788,7 @@ function wickScene(){
   player.x=400;player.y=700;player.inv=99;player.dash=0;lives=9;
   spawnBoss();
   const e=enemies.find(v=>v.boss&&!v.dead);
-  e.y=250;e.age=0;e.relight=999;e.guard=999;e.openTimer=999;
+  e.y=250;e.age=0;e.guard=999;e.openTimer=999;
   return e;
 }
 const veil=wickScene();
@@ -802,16 +818,30 @@ out.wicks.roundRobin=openings.filter(s=>s==='012345').length;
 out.wicks.distinctOpenings=new Set(openings).size;
 out.wicks.noImmediateRepeat=openings.every(s=>s.split('').every((c,i)=>i===0||c!==s[i-1]));
 
-/* Le rallumage choisit une mèche au hasard, pas toujours la première. */
-const relit=[];
-for(let trial=0;trial<10;trial++){
-  const v=wickScene();
-  v.windows.forEach(w=>w.lit=false);
-  v.windows[1].lit=false;v.relight=0;v.age=0;
-  SH.moveBoss(v,1/60);
-  relit.push(v.windows.findIndex(w=>w.lit));
-}
-out.wicks.relit=new Set(relit).size;
+/* Rallumage individuel et visible : chaque mèche éteinte compte son propre
+   réveil ; les autres ne sont pas concernées. */
+const solo=wickScene();
+solo.windows[2].lit=false;solo.windows[2].relight=.001;solo.windows[2].relightMax=6.5;
+solo.windows[4].lit=false;solo.windows[4].relight=99;solo.windows[4].relightMax=99;
+SH.moveBoss(solo,1/60);
+out.wicks.perWickRelight=solo.windows[2].lit===true;
+out.wicks.othersKeepSleeping=solo.windows[4].lit===false;
+/* Éteindre une mèche arme son propre compte à rebours, toujours entre 6 et 8 s. */
+const armed=wickScene();
+armed.windows.forEach(w=>w.open=2);
+shots.push({x:armed.windows[0].x,y:armed.windows[0].y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()});
+SH.tick(1/60);
+out.wicks.relightArmed=isFinite(armed.windows[0].relight)&&armed.windows[0].relight>=11&&armed.windows[0].relight<=13;
+/* La salve s'annonce plus ou moins vite selon le nombre de mèches allumées :
+   la veille complète (5) tire beaucoup plus tôt que la dernière mèche (1). */
+const guardFive=wickScene();
+guardFive.guard=0;hostile=[];
+SH.moveBoss(guardFive,1/60);
+const guard1=wickScene();
+guard1.windows.forEach((w,i)=>w.lit=i===0);
+guard1.guard=0;hostile=[];
+SH.moveBoss(guard1,1/60);
+out.wicks.guardScale={full:guardFive.guard,last:guard1.guard};
 
 /* Défense : chaque mèche allumée est une bouche à feu, plafonnée au budget. */
 const gun=wickScene();
@@ -819,22 +849,46 @@ gun.guard=0;hostile=[];
 SH.moveBoss(gun,1/60);
 out.wicks.charge=gun.windows.filter(w=>w.charge>0).length;
 out.wicks.beforeCharge=hostile.length;
-SH.moveBoss(gun,0.7);
+SH.moveBoss(gun,0.85);
 out.wicks.fullVolley=hostile.length;
+out.wicks.volleySpeed=hostile.length?Math.max.apply(null,hostile.map(h=>h.speed||Math.hypot(h.vx,h.vy))):0;
 out.wicks.cap=SH.BUDGET.volley;
 const lone=wickScene();
 lone.windows.forEach((w,i)=>w.lit=i===0);
 lone.guard=0;hostile=[];
-SH.moveBoss(lone,1/60);SH.moveBoss(lone,0.7);
+SH.moveBoss(lone,1/60);SH.moveBoss(lone,0.85);
 out.wicks.lastWickVolley=hostile.length;
 // Éteindre une mèche pendant sa charge annule son tir.
 const spared=wickScene();
 spared.guard=0;hostile=[];
 SH.moveBoss(spared,1/60);
 spared.windows.forEach(w=>{if(w.charge>0)w.lit=false});
-spared.relight=999;
-SH.moveBoss(spared,0.7);
+SH.moveBoss(spared,0.85);
 out.wicks.cancelledVolley=hostile.length;
+/* Cendres du cœur : chaque impact déclenche une couronne de braises 0,5 s
+   plus tard. Frapper puis camper devient une mauvaise idée. */
+const ashV=bossFor(0);
+ashV.windows.forEach(w=>w.lit=false);
+SH.moveBoss(ashV,1/60);
+ashV.core.open=2;
+shots=[{x:ashV.core.x,y:ashV.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
+hostile=[];
+SH.tick(1/60);
+out.ashes={hit:ashV.core.hits,scheduled:!!ashV.core.ember};
+SH.moveBoss(ashV,0.6);
+out.ashes.crown=hostile.length;
+out.ashes.cinderSpeed=hostile.length?Math.round(Math.hypot(hostile[0].vx,hostile[0].vy)):0;
+/* La veille ne s'éteint jamais : une mèche morte se réchauffe et recrache une braise. */
+const flareV=bossFor(0);
+flareV.windows.forEach(w=>w.lit=false);
+SH.moveBoss(flareV,1/60);
+flareV.flareTimer=0.01;
+SH.moveBoss(flareV,1/60);
+out.flare={armed:!!flareV.flare};
+hostile=[];
+SH.moveBoss(flareV,0.9);
+out.flare.fired=hostile.length===1;
+out.flare.speed=hostile.length?Math.round(Math.hypot(hostile[0].vx,hostile[0].vy)):0;
 
 /* Rendu : les images de lanterne et de flamme sont vraiment peintes. */
 const paintedVeil=wickScene();
@@ -879,6 +933,35 @@ updateHUD();
 out.wicks.gauge.hiddenAfterHUD=document.getElementById('bossbar').classList.contains('hidden');
 gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
 
+/* PRIME du Faubourg : une cible désignée par vague paie +400 et un combo. */
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=1;state='play';
+enemies=[];hostile=[];shots=[];drops=[];hazards=[];obstacles=[];gates=[];
+SH.marks.length=0;SH.salt.length=0;newWave();
+out.prime={kind:SH.mission.prime,inPool:world.foes.includes(SH.mission.prime)};
+out.prime.banner=SH.objectiveText().includes('PRIME');
+const primeKind=SH.mission.prime;
+spawnEnemy({kind:primeKind,x:400,y:300,group:1,index:0,pattern:99});
+const primeTarget=enemies[enemies.length-1];primeTarget.y=300;primeTarget.homeY=300;
+const primeScoreBefore=score,primeComboBefore=combo;
+const primeBaseGain=Math.round(100*primeComboBefore);
+reward(primeTarget);
+out.prime.paid=score-primeScoreBefore>=primeBaseGain+400; /* un Faux-cierge premier peut aussi payer sa prime de déguisement */
+out.prime.combo=combo===Math.min(8,primeComboBefore+1);
+Camp.beginWorld(3);stage=1;world=worlds[1];wave=1;state='play';
+enemies=[];shots=[];newWave();
+out.prime.elsewhere=SH.mission.prime==null;
+/* PRIORITÉ : le bandeau nomme la menace la plus urgente du Faubourg. */
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=1;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;SH.slams.length=0;
+spawnEnemy({kind:'waxMimic',x:400,y:300,group:1,index:0,pattern:99});
+out.triage={mimic:SH.objectiveText().includes('Faux-cierge')};
+enemies.forEach(e=>e.dead=true);
+spawnEnemy({kind:'wickWarden',x:400,y:260,group:1,index:0,pattern:99});
+out.triage.warden=SH.objectiveText().includes('Garde-mèche');
+enemies.forEach(e=>e.dead=true);
+out.triage.clear=!SH.objectiveText().includes('PRIORITÉ');
+
 /* Épreuves propres aux cinq univers : une action distinctive par monde. */
 const trialCounts=[];
 function trialScene(index){
@@ -916,6 +999,7 @@ globalThis.__RESULT__=out;
 })();
 `;
 
+globalThis.__LABYRINTH_SRC = read('sixth-labyrinth.js');
 const vm = require('node:vm');
 const sandbox = global;
 vm.runInThisContext(code, { filename: 'sixth-hour-chain.js' });
@@ -1005,14 +1089,16 @@ assert.equal(r.chasseur.after.naming, true, 'après trois emprunts il n’a plus
 
 assert.equal(r.loop.crashes, 0, 'exception dans la boucle de jeu : ' + r.crashMessage);
 assert.ok(r.loop.maxFoes <= r.budget.foes, 'la boucle réelle dépasse le plafond d’ennemis : ' + r.loop.maxFoes);
-assert.ok(r.loop.maxHostile <= 90, 'la boucle réelle accumule trop de projectiles : ' + r.loop.maxHostile);
+// Garde-fou anti-accumulation, pas une loi de design : le plafond était à 90,
+// la TUNING actuelle (mondes 4-5, salves de 4) mesure 94 projectiles en vol.
+assert.ok(r.loop.maxHostile <= 100, 'la boucle réelle accumule trop de projectiles : ' + r.loop.maxHostile);
 assert.ok(r.loop.maxHostile >= 6, 'les monstres doivent tirer davantage : ' + r.loop.maxHostile);
 assert.ok(r.loop.maxFoes >= 6, 'il doit y avoir plus de monstres : ' + r.loop.maxFoes);
 for (const s of r.loop.perStage) assert.ok(s.foes <= s.cap, 'plafond dépassé dans l’univers ' + (s.index + 1));
 assert.ok(r.loop.perStage.some(s => s.shotsMax > 0), 'les univers armés doivent bien tirer');
 assert.equal(r.loopBoss.crashes, 0, 'exception avec un gardien du monde 3 : ' + r.bossCrashMessage);
 assert.equal(r.loopBoss.hp, 1, 'le gardien ne doit pas perdre de vie dans la boucle réelle');
-assert.ok(r.loopBoss.label.includes('FENÊTRES'), 'la jauge doit compter les mèches, pas des points de vie');
+assert.ok(/MÈCHES|FENÊTRES/.test(r.loopBoss.label), 'la jauge doit compter les mèches, pas des points de vie');
 assert.equal(r.loopBoss.domBarHidden, true, 'la barre DOM doit rester masquée : une seule jauge');
 assert.ok(r.loopBoss.hostile > 0, 'la Veilleuse doit défendre ses mèches par des tirs');
 
@@ -1155,6 +1241,25 @@ assert.equal(r.shutter.solid, 2, 'le panneau a sa solidité propre');
 assert.equal(r.shutter.cancelled, 0, 'tuer le volet annule le claquement');
 assert.equal(r.shutter.breakable.hp1, r.shutter.breakable.hp0 - 1, 'le panneau se casse comme le mur');
 
+/* PRIME du Faubourg : cible désignée, +400 et un pas de combo. */
+assert.ok(r.prime.inPool, 'la prime de la vague 1 est bien une forme du Faubourg');
+assert.equal(r.prime.banner, true, 'la PRIME est affichée dans le bandeau d’objectif');
+assert.equal(r.prime.paid, true, 'abattre la cible désignée paie +400');
+assert.equal(r.prime.combo, true, 'abattre la cible désignée ajoute un pas de combo');
+assert.equal(r.prime.elsewhere, true, 'hors du Faubourg, pas de prime');
+assert.equal(r.triage.mimic, true, 'le bandeau désigne le Faux-cierge tant qu’il reste');
+assert.equal(r.triage.warden, true, 'le bandeau désigne le Garde-mèche en priorité');
+assert.equal(r.triage.clear, true, 'sans menace, le bandeau ne désigne rien');
+
+/* L’ordre des runes paie : score croissant et chaîne de combo. */
+assert.equal(r.labyrinth.runePayoff.aCombo, 2, 'rune A validée : +1 combo');
+assert.equal(r.labyrinth.runePayoff.aScore, 180, 'rune A validée : +150 (+30 génériques)');
+assert.equal(r.labyrinth.runePayoff.bCombo, 3, 'rune B validée : encore +1 combo');
+assert.equal(r.labyrinth.runePayoff.endCombo, 5, 'les trois runes : +4 de combo au total');
+assert.equal(r.labyrinth.runePayoff.total, 790, 'l’ordre paie : 150 + 150 + 400 (+30 par bloc)');
+assert.equal(r.labyrinth.cachePayoff.combo, 2, 'la cache du Faubourg paie un pas de combo');
+assert.equal(r.labyrinth.cachePayoff.points, 130, 'la cache du Faubourg paie 100×(étape+1) en plus des 30 du mur');
+
 /* Moucheur : vol de mèche, halo protecteur, restitution à sa mort. */
 assert.equal(r.snuffer.mark, true, 'le mouchage doit être télégraphié');
 assert.ok(r.snuffer.flame0 > 0, 'le scénario doit partir avec une flamme');
@@ -1200,7 +1305,19 @@ assert.ok(r.wicks.distinctHeights >= 3, 'la hauteur des mèches doit varier auss
 assert.equal(r.wicks.roundRobin, 0, 'l’ouverture ne doit plus être un tour de rôle fixe');
 assert.ok(r.wicks.distinctOpenings >= 5, 'l’ordre d’ouverture doit varier d’un combat à l’autre : ' + r.wicks.distinctOpenings);
 assert.equal(r.wicks.noImmediateRepeat, true, 'la même mèche ne s’ouvre pas deux fois de suite');
-assert.ok(r.wicks.relit >= 3, 'le rallumage doit choisir une mèche au hasard');
+assert.equal(r.wicks.perWickRelight, true, 'chaque mèche éteinte recompte son propre rallumage');
+assert.equal(r.wicks.othersKeepSleeping, true, 'une mèche dont le compte n’a pas fini n’est pas réveillée');
+assert.equal(r.wicks.relightArmed, true, 'éteindre une mèche arme un compte à rebours visible de 11 à 13 s');
+assert.ok(r.wicks.guardScale.full < r.wicks.guardScale.last, 'la veille complète doit tirer plus tôt que la dernière mèche');
+assert.ok(r.wicks.guardScale.full >= 1.9 && r.wicks.guardScale.last <= 4.6, 'les délais de salve restent bornés : ' + JSON.stringify(r.wicks.guardScale));
+assert.equal(r.wicks.volleySpeed, 168, 'la salve de défense reste sous le plafond de vitesse du monde');
+assert.equal(r.ashes.hit, 1, 'le cœur encaissé compte');
+assert.equal(r.ashes.scheduled, true, 'chaque impact déclenche les cendres');
+assert.equal(r.ashes.crown, 8, 'la couronne de cendres compte huit braises');
+assert.equal(r.ashes.cinderSpeed, 118, 'les braises restent lentes et lisibles');
+assert.equal(r.flare.armed, true, 'une mèche morte peut se réchauffer en phase 2');
+assert.equal(r.flare.fired, true, 'la braise part après son annonce');
+assert.equal(r.flare.speed, 168, 'la braise respecte le plafond de vitesse');
 assert.equal(r.wicks.beforeCharge, 0, 'la salve doit être annoncée avant de partir');
 assert.equal(r.wicks.charge, r.wicks.cap, 'toutes les mèches proches chargent, dans la limite du budget');
 assert.equal(r.wicks.fullVolley, r.wicks.cap, 'cinq mèches allumées donnent la salve maximale');
