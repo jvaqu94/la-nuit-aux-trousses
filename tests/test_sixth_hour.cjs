@@ -452,8 +452,8 @@ for(const index of [0,2,4]){labScene(index,1);Lab.spawnRow();hpPerStage.push(Lab
 out.labyrinth.hpPerStage=hpPerStage;
 out.labyrinth.materials=Lab.MATERIALS.map(m=>m.name);
 
-/* Les bifurcations donnent un vrai choix : passage étroit avec cache à casser,
-   ou passage large et plus sûr. Les lignes ordinaires restent inchangées. */
+/* Les bifurcations donnent deux passages praticables ; la cache est un
+   bonus facultatif dans le mur qui borde la voie large. */
 labScene(0,1);
 for(let i=0;i<3;i++)Lab.spawnRow();
 const fork=Lab.routeRows[0];
@@ -465,15 +465,15 @@ out.labyrinth.fork={
   cache:forkWalls.some(w=>w.routeCache&&w.bonus),
   narrow:fork?.narrowX,
   wide:fork?.wideX,
-  labels:/CIRE · SCEAU À BRISER/.test(read('sixth-labyrinth.js'))&&/LARGE · SANS DÉTOUR/.test(read('sixth-labyrinth.js'))
+  labels:/ÉTROIT · DIRECT/.test(read('sixth-labyrinth.js'))&&/LARGE · CACHE À DÉCOUVRIR/.test(read('sixth-labyrinth.js'))
 };
 
 
-/* Énigmes différentes : cire = sceau à briser ; bronze = cloche à choisir. */
+/* Faubourg : la cache se casse depuis la voie large, sans bloquer le passage. */
 labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
-const waxSeal=Lab.walls.find(w=>w.row===2&&w.gate==='wax');
-const waxHp=waxSeal&&waxSeal.hp;if(waxSeal)Lab.damageBlock(waxSeal,waxHp);
-out.labyrinth.puzzles={waxSealBroken:!!waxSeal?.dead};
+const cache=Lab.walls.find(w=>w.row===2&&w.routeCache&&w.bonus);
+const cacheHp=cache&&cache.hp;if(cache)Lab.damageBlock(cache,cacheHp);
+out.labyrinth.puzzles={cacheBreakable:!!cache?.dead,cacheNotGate:!!cache&&cache.gate==null};
 labScene(1,1);Lab.spawnRow();Lab.spawnRow();
 const bellSwitch=Lab.walls.find(w=>w.row===1&&w.switch&&w.routeId==='narrow');
 const narrowGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='narrow');
@@ -1060,7 +1060,7 @@ assert.ok(r.labyrinth.speed.boosted <= 260, 'le défilement reste plafonné');
 assert.equal(r.labyrinth.speedWorld2, r.labyrinth.speed.classicSpeed, 'le monde 2 ne doit pas être accéléré');
 assert.equal(r.labyrinth.foreignSpeed, 74, 'le monde 1 garde sa vitesse');
 assert.deepEqual(r.labyrinth.foreign, [0, 0], 'aucun mur dans les mondes 1 et 2');
-assert.equal(r.labyrinth.rows.count, 67, 'dix rangées avec trois bifurcations dont le sceau de cire');
+assert.equal(r.labyrinth.rows.count, 64, 'dix rangées avec trois bifurcations et sans blocage artificiel du passage');
 assert.ok(r.labyrinth.rows.gaps.every(n => n >= 1), 'chaque rangée doit laisser au moins une brèche');
 assert.ok(r.labyrinth.rows.gaps.some(n => n === 2), 'les bifurcations du Faubourg gardent une voie large et une voie courte scellée');
 assert.equal(r.labyrinth.rows.columns, 8, 'la route doit balayer toute la largeur');
@@ -1068,10 +1068,10 @@ assert.deepEqual(r.labyrinth.hpPerStage, [3, 5, 7], 'le décor durcit avec les u
 assert.deepEqual(r.labyrinth.materials, ['CIRE', 'BRONZE', 'SEL', 'BOIS', 'OBSIDIENNE'], 'une matière par univers');
 assert.equal(r.labyrinth.fork.every,3,'une bifurcation toutes les trois rangées');
 assert.equal(r.labyrinth.fork.count,1,'une bifurcation est créée sur la troisième rangée');
-assert.equal(r.labyrinth.fork.gaps,2,'la voie courte est fermée par un sceau, la voie large reste libre');
-assert.equal(r.labyrinth.fork.cache,true,'la cache doit être placée sur un bloc destructible voisin');
-assert.equal(r.labyrinth.fork.labels,true,'les deux routes du Faubourg sont identifiées à l’écran');
-assert.equal(r.labyrinth.puzzles.waxSealBroken,true,'le sceau du Faubourg doit être destructible');
+assert.equal(r.labyrinth.fork.gaps,3,'les deux voies restent praticables et la voie large offre deux cases');
+assert.equal(r.labyrinth.fork.cache,true,'la cache facultative doit être dans un bloc adjacent à la voie large');
+assert.equal(r.labyrinth.fork.labels,true,'les deux routes et la cache facultative sont identifiées à l’écran');
+assert.deepEqual(r.labyrinth.puzzles,{cacheBreakable:true,cacheNotGate:true},'la cache du Faubourg est destructible sans condamner une route');
 assert.deepEqual(r.labyrinth.puzzles.bronze,{switchBroken:true,narrowOpened:true,wideStillLocked:true},'la cloche choisie ouvre uniquement sa route dans le Clocher');
 assert.equal(r.labyrinth.shot.hp1, r.labyrinth.shot.hp0 - 1, 'un tir doit entamer le bloc');
 assert.equal(r.labyrinth.shot.consumed, true, 'le tir est arrêté par le décor');
