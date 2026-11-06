@@ -250,7 +250,7 @@ function draw(g){
  for(const route of routeRows){
   if(route.y<34||route.y>H-28)continue;
   g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
-  g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · BUTIN',route.narrowX,route.y-ROW_H/2-5);
+  g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · CACHE À CASSER',route.narrowX,route.y-ROW_H/2-5);
   g.fillStyle='#cfe6d8';g.fillText('LARGE · SÛR',route.wideX,route.y-ROW_H/2-5);
   g.restore();
  }
