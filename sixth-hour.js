@@ -49,7 +49,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'Éteins les mèches quand leur anneau s’ouvre. Ensuite, frappe le cœur uniquement pendant ses ouvertures : 3 impacts sont nécessaires.',
+ veilleuse:'Tire sur la flamme quand son anneau s’ouvre. Ensuite, frappe le cœur uniquement pendant ses ouvertures : 3 impacts sont nécessaires.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
