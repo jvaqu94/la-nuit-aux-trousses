@@ -14,7 +14,7 @@ for name in ['supabase-config.js', 'characters.js', 'music.js', 'game.js', 'onli
         code = 'window.MinuitRunnerSceneryData=' + json.dumps(scenes, separators=(',', ':')) + ';\n' + code
     if name == 'music.js':
         sources = {}
-        for track in ['menu', 'menu-sequel', 'forest', 'cemetery', 'castle', 'marsh', 'lanterns', 'sequel-city', 'sequel-desert', 'sequel-clockforest', 'sequel-train', 'sequel-palace']:
+        for track in ['menu', 'menu-sequel', 'forest', 'cemetery', 'castle', 'marsh', 'lanterns', 'sequel-city', 'sequel-desert', 'sequel-clockforest', 'sequel-train', 'sequel-palace', 'world3-faubourg', 'world3-clocher', 'world3-estran', 'world3-lanternes-rendues', 'world3-cadran-noir']:
             filename = {'menu':'nuitsorc-loop','menu-sequel':'sequel-menu'}.get(track,track)
             sources[track] = 'data:audio/mpeg;base64,' + base64.b64encode((ROOT / 'audio' / f'{filename}.mp3').read_bytes()).decode('ascii')
         sources.update({'boss-' + track: 'data:audio/mpeg;base64,' + base64.b64encode((ROOT / 'audio' / f'boss-{track}.mp3').read_bytes()).decode('ascii') for track in ['forest', 'cemetery', 'castle', 'marsh', 'lanterns']})

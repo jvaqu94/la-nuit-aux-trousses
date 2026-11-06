@@ -66,8 +66,15 @@ const sequelMusicThemes=[
  {id:'sequel-train',title:'Rails vers le soleil',root:130.81,step:.238,swing:.04,lead:'triangle',melody:[0,0,3,7,8,7,3,0,0,5,8,12,8,7,5,3],chords:[[0,3,7],[0,3,7],[-2,2,5],[-4,0,3]],bass:[0,0,-2,0],padEvery:4,bassEvery:2,pulseEvery:4,pulse:250,musicGain:.78,ambience:[560,.09,160,.052]},
  {id:'sequel-palace',title:'L’aube retenue',root:146.83,step:.365,swing:0,lead:'sine',melody:[0,null,4,7,9,7,4,null,12,11,9,7,4,2,0,null],chords:[[0,4,7],[-2,2,5],[0,4,7],[-4,0,4]],bass:[0,-2,0,-4],padEvery:4,bassEvery:4,pulseEvery:8,pulse:120,musicGain:.72,ambience:[500,.05,115,.044]}
  ];
-const activeMusicThemes=()=>window.Campaign?.activeWorld===2?sequelMusicThemes:musicThemes;
-window.MinuitSoundtrack={themes:[...musicThemes,...sequelMusicThemes],get activeThemes(){return activeMusicThemes()},get player(){return mp3Music}};
+const world3MusicThemes=[
+ {id:'world3-faubourg',title:'Fenêtres de cire',root:146.83,step:.36,swing:.05,lead:'sine',melody:[0,null,3,7,null,10,7,3,2,null,5,7,10,null,7,3],chords:[[0,3,7],[-2,2,5],[0,3,7],[-4,0,3]],bass:[0,-2,0,-4],padEvery:4,bassEvery:4,pulseEvery:8,pulse:122,musicGain:.7,ambience:[520,.07,135,.045]},
+ {id:'world3-clocher',title:'Le battant absent',root:92.5,step:.7,swing:0,lead:'sine',melody:[0,null,null,2,null,null,7,null,5,null,3,null,2,null,null,null],chords:[[0,3,7,14],[-2,2,5,10],[0,3,7,14],[-4,0,3,7]],bass:[0,-2,0,-4],padEvery:4,bassEvery:4,pulseEvery:8,pulse:72,musicGain:.58,ambience:[360,.04,80,.038]},
+ {id:'world3-estran',title:'Marée des empreintes',root:110,step:.42,swing:.1,lead:'triangle',melody:[0,null,2,5,null,7,5,2,0,null,-2,0,2,null,5,null],chords:[[0,2,7],[-2,2,5],[0,2,7],[-4,0,5]],bass:[0,-2,0,-4],padEvery:4,bassEvery:4,pulseEvery:8,pulse:152,musicGain:.66,ambience:[680,.1,180,.05]},
+ {id:'world3-lanternes-rendues',title:'La dernière flamme',root:130.81,step:.255,swing:.08,lead:'triangle',melody:[0,3,7,8,7,3,0,null,5,8,12,8,7,5,3,null],chords:[[0,3,7],[0,3,7],[-2,2,5],[-4,0,3]],bass:[0,0,-2,0],padEvery:4,bassEvery:2,pulseEvery:4,pulse:208,musicGain:.76,ambience:[620,.085,150,.05]},
+ {id:'world3-cadran-noir',title:'Le chiffre sans visage',root:123.47,step:.235,swing:0,lead:'sawtooth',melody:[0,1,5,7,6,1,0,7,12,11,7,5,1,0,-1,null],chords:[[0,1,7],[-2,5,8],[0,1,7],[1,5,8]],bass:[0,0,-2,1],padEvery:4,bassEvery:2,pulseEvery:4,pulse:265,musicGain:.8,ambience:[430,.06,105,.045]}
+ ];
+const activeMusicThemes=()=>window.Campaign?.activeWorld===3?world3MusicThemes:window.Campaign?.activeWorld===2?sequelMusicThemes:musicThemes;
+window.MinuitSoundtrack={themes:[...musicThemes,...sequelMusicThemes,...world3MusicThemes],get activeThemes(){return activeMusicThemes()},get player(){return mp3Music}};
 
 // Synthèse locale plus organique : harmoniques filtrées, souffle de bruit rose,
 // enveloppes douces et petite réverbération. Aucun échantillon distant.
@@ -132,7 +139,7 @@ function syncAudio(){
  const flight=['play','pause','choice','journey-wardrobe','arsenal'].includes(state)||(state==='settings'&&['play','pause','choice','journey-wardrobe','arsenal'].includes(previousState));
  master.gain.setTargetAtTime(prefs.sound?prefs.volume:0,now,.03);
  if(musicBus)musicBus.gain.setTargetAtTime(prefs.music?.65*(theme.musicGain||1):0,now,.12);
- const menuTheme=window.Campaign?.activeWorld===2?'menu-sequel':'menu';mp3Music?.sync(flight?theme.id:menuTheme,prefs.sound&&prefs.music,boss);
+ const menuTheme=window.Campaign?.activeWorld>=2?'menu-sequel':'menu';mp3Music?.sync(flight?theme.id:menuTheme,prefs.sound&&prefs.music,boss);
  if(ambienceGain)ambienceGain.gain.setTargetAtTime(prefs.sound&&prefs.music&&state==='play'?gain:0,now,.35);
  if(ambienceFilter)ambienceFilter.frequency.setTargetAtTime(cutoff,now,.45);
  if(ambienceLfo)ambienceLfo.frequency.setTargetAtTime(rate,now,.45);
