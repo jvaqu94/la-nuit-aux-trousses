@@ -205,14 +205,23 @@ Chacun a sa **jauge**, sa **condition de victoire**, son **échec doux** et sa *
 
 ### 6.1 La Veilleuse — *le registre des fenêtres*
 
-- **Jauge :** 5 fenêtres, allumées ou éteintes. **Pas de barre de vie.**
-- **Boucle :** elle fait une tournée annoncée entre les fenêtres. Une mèche n’est frappable que
-  pendant qu’elle la quitte (fenêtre de 1,6 s). Elle rallume une fenêtre toutes les 6 s.
+- **Jauge :** 5 fenêtres, allumées ou éteintes, sur **une seule** jauge dessinée dans l’arène.
+  **Pas de barre de vie.**
+- **Boucle :** chaque mèche est une **lanterne de fer forgé** posie dans la rue, avec sa flamme.
+  Une mèche tirée au sort parmi les allumées s’ouvre 1,7 s (anneau clair + « TIRE SUR LA FLAMME ») ;
+  c’est le seul moment où elle est frappable. L’ouverture change de mèche toutes les 1,9 à 3,1 s,
+  jamais deux fois de suite la même. Une mèche sombre se rallume au hasard toutes les 5 à 8,5 s.
+- **Défense :** toutes les 2,5 à 3,4 s, la Veilleuse arme une salve sur les **4 mèches allumées les
+  plus proches de vous**. Chaque mèche annonce son tir 0,6 s (anneau orangé + « ELLE VA TIRER »)
+  puis envoie un projectile vers votre position. **Éteindre une mèche pendant sa charge annule
+  son tir** : le contre-jeu est le même geste que la victoire.
 - **Victoire :** les 5 mèches éteintes en même temps.
 - **Échec doux :** si les 5 fenêtres sont allumées, la veille est complète : vous perdez un cœur, une
-  mèche se rallume, le combat continue. Jamais de mort sèche.
-- **Langue :** parcours en pointillé au sol + mèche qui blanchit quand elle devient frappable.
-- **Ce qu’elle exige :** être au bon endroit au bon moment. Zéro projectile, deux escortes maximum.
+  mèche **prise au hasard** se rallume, le combat continue. Jamais de mort sèche.
+- **Langue :** flamme qui vacille, anneau clair quand c’est frappable, anneau orangé quand ça va
+  tirer, mèche noircie et filet de fumée quand c’est éteint (« ÉTEINTE »).
+- **Ce qu’elle exige :** être au bon endroit au bon moment, sous le feu de ce qu’il reste allumé.
+  Deux escortes maximum.
 - **Verbe :** *placer*.
 
 ### 6.2 Le Sonneur sans battant — *la ligne de tir*
@@ -277,7 +286,7 @@ Chacun a sa **jauge**, sa **condition de victoire**, son **échec doux** et sa *
 
 | Boss | Jauge | Victoire | Source du danger | Interaction clé | Adds |
 |---|---|---|---|---|---|
-| La Veilleuse | 5 fenêtres | Tout éteindre | L’obscurité | Placement + fenêtre de 1,6 s | 2 |
+| La Veilleuse | 5 fenêtres | Tout éteindre | **Les mèches allumées tirent sur vous** | Placement + fenêtre de 1,7 s, charge annulable | 2 |
 | Le Sonneur | Résonance | 3 frappes | **Votre propre tir** | Ligne de tir | 0 |
 | Le Passeur | Sable intact | 3 brisures | **Votre propre trajet** | Mémoire spatiale | 0 |
 | La Cueilleuse | 3 charges | 3 cueillettes | Votre appauvrissement | Dépense volontaire | 0 |
@@ -431,9 +440,10 @@ hebdomadaires et duel gardent leur défilement et leur décor d'origine.
 
 ### Le butin dans les murs
 
-Le labyrinthe ne se contente plus de gêner : il récompense. Environ 38 % des blocs
+Le labyrinthe ne se contente plus de gêner : il récompense. Environ 20 % des blocs
 portent un sceau de cire **visible avant de casser**, ce qui transforme le mur en
-décision — quel bloc ouvrir, avec quel temps restant. Les cinq sceaux correspondent
+décision — quel bloc ouvrir, avec quel temps restant. (Voir §9sexies : le taux est
+passé de 38 % à 20 %.) Les cinq sceaux correspondent
 aux objets déjà ramassés par le jeu principal (`points`, `shield`, `candy`, `heal`,
 `upgrade`), donc rien de neuf à apprendre.
 
@@ -495,3 +505,105 @@ tracés pleins, et un test refuse tout pointillé dans un sprite.
 6. Épilogue du monde 2 et carte « La Sixième Heure », pour que l’enchaînement soit lisible.
 
 Chaque tranche est jouable et testable séparément ; aucune n’attend les suivantes.
+
+## 9quinquies. Troisième retour en jeu : la Veilleuse devient un vrai combat
+
+Quatre défauts signalés en jeu, quatre corrections.
+
+### Une seule jauge
+
+Les gardiens du monde 3 affichaient **deux** jauges superposées : celle dessinée sur
+le canvas, et la barre HTML `#bossbar` réaffichée par-dessus. Le jeu de base masque
+cette barre dans `updateHUD` pour tous les mondes ; c’est le monde 3 qui la
+ressuscitait. La barre est supprimée du monde 3 et la jauge canvas est enrichie :
+nom du gardien, remplissage, compte (« 2 / 5 FENÊTRES ALLUMÉES ») et **consigne en
+clair**, repliée sur la largeur du panneau pour ne jamais déborder.
+
+### Les flammes existaient seulement comme compteur
+
+Les cinq mèches n’étaient que des ronds abstraits et un chiffre. Ce sont maintenant des
+**lanternes de fer forgé** (`bossWick`) avec vitre, socle de laiton et chandelle, surmontées
+d’une **flamme en cinq couches** (`bossFlame`) qui vacille, éclaire d’un halo chaud et
+oscille légèrement. Éteinte, la lanterne garde une mèche noircie et lâche trois bouffées
+de fumée : l’état se lit d’un coup d’œil, pas dans un chiffre.
+
+### La Veilleuse défend ses mèches
+
+Avant, éteindre les cinq mèches était une promenade : aucun danger venait du gardien.
+Désormais, chaque mèche allumée est une **tourelle**. La Veilleuse arme une salve sur les
+quatre mèches les plus proches du joueur, dans la limite du budget du monde
+(`BUDGET.volley = 4`, vitesse plafonnée à 150). Le tir est **annoncé 0,6 s** avant de
+partir, et **une mèche éteinte pendant sa charge ne tire pas**. Le contre-jeu est donc le
+geste de victoire lui-même : foncer dans la fenêtre de tir malgré l’annonce. Chaque
+extinction retire une tourelle, si bien que le combat se calme à mesure qu’on avance — mais il
+commence désormais sous le feu de quatre lanternes à la fois, là où il était inoffensif.
+
+### Le hasard, partout
+
+Trois tirages aléatoires remplacent les emplacements fixes :
+
+| Élément | Avant | Maintenant |
+| --- | --- | --- |
+| Position des 5 mèches | `x = 110 + i × 145`, même hauteur | 5 colonnes tirées parmi 6, ±18 px, trois hauteurs (300 / 356 / 412) |
+| Ordre d’ouverture | tournée fixe | tirage parmi les allumées, sans répétition immédiate |
+| Rallumage | toujours la même fenêtre | mèche sombre tirée au sort |
+
+Un test refait huit combats : on observe des dispositions et des ordres d’ouverture
+différents à chaque fois. Reprendre un combat ne se joue plus comme le précédent.
+
+### Le combat reste gagnable
+
+Douze combats simulés avec un joueur qui court vers la mèche ouverte à 250 px/s et
+tire dès qu'il est à portée : **12 victoires sur 12**, durée médiane **16 s**, environ
+**5 salves essuyées**. La difficulté ajoutée est réelle — avant, le gardien ne tirait
+jamais — mais elle ne transforme pas le combat en mur : un joueur qui rate ses
+fenêtres paie en salves et en rallumages, pas en défaite automatique.
+
+### Garde-fous
+
+Huit mutations ont été rejouées une par une contre la suite ; chacune la fait tomber :
+barre DOM réaffichée, flamme non dessinée, salve supprimée, disposition redevenue fixe,
+ouverture redevenue un tour de rôle, salve sans annonce, consigne qui déborde du
+panneau, libellé qui sort de l’arène.
+
+![La Veilleuse](veilleuse-mondes-3.jpg)
+
+*Jauge unique en haut, cinq lanternes tirées au sort : anneau clair = frappable,
+anneau orangé = elle va tirer, fumée = éteinte.*
+
+## 9sexies. Quatrième retour en jeu : le fond du Faubourg, et moins de butin
+
+### Le fond n'était pas du même monde que ses habitants
+
+Les monstres du Faubourg avaient été redessinés en cire, fer forgé et volets, et les
+murs du labyrinthe sont en cire crème (`#e8d3ab`). Mais la peinture de fond, elle,
+était restée **bleu-violet froid presque noir** — et semée de **citrouilles, gargouilles,
+fantômes et toiles d'araignée** : le décor du monde 1, pas celui du monde 3.
+
+La peinture est refaite dans la famille des acteurs : plâtre couleur cire, tuiles
+brun chaud et terre cuite, volets de bois miel, ferronneries et laiton, lanternes à
+chandelle, sceaux de cire rouge sur les rebords. Les ombres sont aubergine chaud,
+jamais bleu. Aucun motif d'Halloween, aucun personnage.
+
+### Un fond doit reculer
+
+Une fois repeint, le décor était plus clair que les murs et les monstres : tout se
+confondait. La peinture source est donc **assombrie (×0,66), désaturée (18 %) et
+réchauffie dans les ombres**, puis le jeu applique son voile habituel. Le résultat
+reste chaud et raccord, mais les sprites et les blocs se détachent à nouveau.
+Le réglage est fait **dans le JPEG source**, pas dans le moteur : les mondes 1 et 2,
+les courses hebdomadaires et le duel ne sont pas touchés.
+
+### Moins de bonus dans les murs
+
+`BONUS_CHANCE` passe de **0,38 à 0,20**. À 38 %, presque un mur sur deux était une
+récompense : le labyrinthe devenait un distributeur et le choix du bloc à ouvrir
+n'avait plus d'enjeu. Mesure sur 4 000 tirages : **3 223 blocs vides (80,6 %)**,
+273 trésors, 161 boucliers, 162 bonbons, 111 soins, 70 reliques.
+
+Deux garde-fous, prouvés par mutation : le taux lui-même (remis à 0,38 → rouge) et
+la densité réellement tirée (constante laissée à 0,20 mais tirage à 0,38 → rouge,
+2 474 vides au lieu de 3 200). Le second attrape un garde-fou qui ne vérifierait
+que la constante.
+
+![Le Faubourg repeint](apercu-monde-3.jpg)

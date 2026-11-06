@@ -148,7 +148,7 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq mèches en même temps. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq lanternes en même temps, sachant que chaque mèche encore allumée vous tire dessus. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
@@ -195,7 +195,8 @@ version les montrait de face, ce qui les faisait paraître hors sujet à côté 
 personnage ; la refonte aligne enfin les ennemis sur la référence de qualité.
 
 Aperçu : `docs/apercu-monde-3.jpg` (décor, murs et acteurs dessinés par le code du jeu)
-et `docs/bestiaire-monde-3.jpg` (les 15 silhouettes face à la sorcière).
+et `docs/bestiaire-monde-3.jpg` (13 formes, 5 gardiens et 5 objets).
+Le combat de la Veilleuse, jauge unique et lanternes tirées au sort : `docs/veilleuse-mondes-3.jpg`.
 
 #### Le labyrinthe destructible
 
@@ -222,7 +223,7 @@ ajoute une troisième couche de pression :
 
 #### Le butin scellé dans les murs
 
-Environ **38 % des blocs** portent un **sceau de cire visible avant de casser** : le
+Environ **20 % des blocs** portent un **sceau de cire visible avant de casser** : le
 joueur choisit quel bloc ouvrir au lieu de subir un tirage invisible. Le pictogramme
 est tracé par le code (pas un caractère Unicode, qui manquerait dans la police) :
 

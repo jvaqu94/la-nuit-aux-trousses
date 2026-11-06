@@ -23,10 +23,20 @@ const ctx2d = new Proxy({
 
 const store = new Map();
 const els = new Map();
+/* classList réel : un stub vide rendrait tout garde-fou de visibilité aveugle. */
+function realClassList() {
+  const set = new Set();
+  return {
+    add: (...c) => c.forEach(x => set.add(x)),
+    remove: (...c) => c.forEach(x => set.delete(x)),
+    toggle(c, force) { const on = force === undefined ? !set.has(c) : !!force; on ? set.add(c) : set.delete(c); return on; },
+    contains: c => set.has(c)
+  };
+}
 function makeEl(id) {
   const el = {
     id, style: {}, dataset: {}, innerHTML: '', textContent: '', title: '', onclick: null,
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+    classList: realClassList(),
     getContext: () => ctx2d,
     getBoundingClientRect: () => ({ width: 800, height: 900, top: 0, left: 0 }),
     addEventListener() {}, removeEventListener() {}, setAttribute() {},
@@ -46,7 +56,7 @@ global.removeEventListener = () => {};
 global.MinuitArt = { witch: { src: 'witch.svg' }, hunter: { src: 'hunter.svg' } };
 global.document = {
   head: { appendChild() {}, insertAdjacentHTML() {} },
-  body: { innerHTML: '', classList: { add() {}, remove() {}, toggle() {}, contains: () => false }, appendChild() {} },
+  body: { innerHTML: '', classList: realClassList(), appendChild() {} },
   getElementById: el,
   querySelector: sel => (sel.includes('journey-result-screen') ? null : (sel === '.sidebar' || sel === '.arena' || sel === '.layout' ? el(sel) : null)),
   querySelectorAll: () => [],
@@ -299,7 +309,9 @@ for(let i=0;i<420;i++){
   try{update(1/60)}catch(err){bossCrashes++;if(bossCrashes===1)out.bossCrashMessage=String(err&&err.message||err)}
 }
 const liveBoss=enemies.find(e=>e.boss&&!e.dead);
-out.loopBoss={crashes:bossCrashes,hp:liveBoss&&liveBoss.hp,label:liveBoss&&liveBoss.label,hud:document.getElementById('bossphase').textContent};
+out.loopBoss={crashes:bossCrashes,hp:liveBoss&&liveBoss.hp,label:liveBoss&&liveBoss.label,
+  domBarHidden:document.getElementById('bossbar').classList.contains('hidden'),
+  hostile:hostile.length};
 
 /* 12 · Minutes rendues : 15 maximum, persistées */
 for(let i=0;i<20;i++)Camp.keepMinutes(1);
@@ -701,6 +713,121 @@ out.faubourg={foes:Camp.thirdWorlds[0].foes.slice(),
   names:Camp.thirdWorlds[0].foes.map(k=>SH.foeNames[k]),
   sprites:Camp.thirdWorlds[0].foes.every(k=>!!window.MinuitArt[k])};
 
+/* 24 · VEILLEUSE : une seule jauge, mèches dessinées, défense, tirage au sort. */
+function wickScene(){
+  Camp.beginWorld(3);stage=0;world=worlds[0];wave=5;state='play';
+  enemies=[];hostile=[];shots=[];drops=[];marks=[];
+  SH.marks.length=0;SH.start();
+  player.x=400;player.y=700;player.inv=99;player.dash=0;lives=9;
+  spawnBoss();
+  const e=enemies.find(v=>v.boss&&!v.dead);
+  e.y=250;e.age=0;e.relight=999;e.guard=999;e.openTimer=999;
+  return e;
+}
+const veil=wickScene();
+out.wicks={count:veil.windows.length,allLit:veil.windows.every(w=>w.lit),
+  assets:!!window.MinuitArt.bossWick&&!!window.MinuitArt.bossFlame};
+out.wicks.xs=veil.windows.map(w=>Math.round(w.x));
+out.wicks.ys=veil.windows.map(w=>Math.round(w.y));
+out.wicks.inBounds=veil.windows.every(w=>w.x>=80&&w.x<=720&&w.y>=300&&w.y<=416);
+out.wicks.spaced=veil.windows.every((w,i)=>veil.windows.every((o,j)=>i===j||Math.abs(w.x-o.x)>60));
+// Deux gardiens successifs ne doivent pas reproduire la même disposition.
+const layouts=[out.wicks.xs.join(',')];
+for(let i=0;i<6;i++){const v=wickScene();layouts.push(v.windows.map(w=>Math.round(w.x)).join(','))}
+out.wicks.distinctLayouts=new Set(layouts).size;
+const heights=[out.wicks.ys.join(',')];
+for(let i=0;i<6;i++){const v=wickScene();heights.push(v.windows.map(w=>Math.round(w.y)).join(','))}
+out.wicks.distinctHeights=new Set(heights).size;
+
+/* Quelle mèche s'ouvre est tiré au sort, pas un tour de rôle 0-1-2-3-4. */
+const openings=[];
+for(let trial=0;trial<8;trial++){
+  const v=wickScene();const seen=[];
+  for(let i=0;i<6;i++){v.openTimer=0;SH.moveBoss(v,1/60);seen.push(v.windows.indexOf(v.lastOpen))}
+  openings.push(seen.join(''));
+}
+out.wicks.openings=openings;
+out.wicks.roundRobin=openings.filter(s=>s==='012345').length;
+out.wicks.distinctOpenings=new Set(openings).size;
+out.wicks.noImmediateRepeat=openings.every(s=>s.split('').every((c,i)=>i===0||c!==s[i-1]));
+
+/* Le rallumage choisit une mèche au hasard, pas toujours la première. */
+const relit=[];
+for(let trial=0;trial<10;trial++){
+  const v=wickScene();
+  v.windows.forEach(w=>w.lit=false);
+  v.windows[1].lit=false;v.relight=0;v.age=0;
+  SH.moveBoss(v,1/60);
+  relit.push(v.windows.findIndex(w=>w.lit));
+}
+out.wicks.relit=new Set(relit).size;
+
+/* Défense : chaque mèche allumée est une bouche à feu, plafonnée au budget. */
+const gun=wickScene();
+gun.guard=0;hostile=[];
+SH.moveBoss(gun,1/60);
+out.wicks.charge=gun.windows.filter(w=>w.charge>0).length;
+out.wicks.beforeCharge=hostile.length;
+SH.moveBoss(gun,0.7);
+out.wicks.fullVolley=hostile.length;
+out.wicks.cap=SH.BUDGET.volley;
+const lone=wickScene();
+lone.windows.forEach((w,i)=>w.lit=i===0);
+lone.guard=0;hostile=[];
+SH.moveBoss(lone,1/60);SH.moveBoss(lone,0.7);
+out.wicks.lastWickVolley=hostile.length;
+// Éteindre une mèche pendant sa charge annule son tir.
+const spared=wickScene();
+spared.guard=0;hostile=[];
+SH.moveBoss(spared,1/60);
+spared.windows.forEach(w=>{if(w.charge>0)w.lit=false});
+spared.relight=999;
+SH.moveBoss(spared,0.7);
+out.wicks.cancelledVolley=hostile.length;
+
+/* Rendu : les images de lanterne et de flamme sont vraiment peintes. */
+const paintedVeil=wickScene();
+let wickImages=[],wickTexts=[];
+const realDrawImage=gfx.drawImage?gfx.drawImage.bind(gfx):null;
+gfx.drawImage=function(img,...rest){wickImages.push(img);return realDrawImage?realDrawImage(img,...rest):undefined};
+const realText=gfx.fillText.bind(gfx);
+gfx.fillText=function(t,...rest){wickTexts.push(String(t));return realText(t,...rest)};
+let wickCrash=null;
+try{SH.draw(gfx)}catch(err){wickCrash=String(err&&err.message||err)}
+out.wicks.draw={crash:wickCrash,images:wickImages.length,
+  lanterns:wickImages.filter(i=>i===window.MinuitArt.bossWick).length,
+  flames:wickImages.filter(i=>i===window.MinuitArt.bossFlame).length};
+// Mèche éteinte : plus de flamme, et un état lisible.
+paintedVeil.windows[0].lit=false;paintedVeil.windows[0].open=0;paintedVeil.windows[0].charge=0;
+wickImages=[];wickTexts=[];
+SH.draw(gfx);
+out.wicks.dark={flames:wickImages.filter(i=>i===window.MinuitArt.bossFlame).length,
+  label:wickTexts.some(t=>t.includes('ÉTEINTE'))};
+// Mèche ouverte : consigne de tir explicite.
+paintedVeil.windows[1].open=1;wickTexts=[];
+SH.draw(gfx);
+out.wicks.openLabel=wickTexts.some(t=>t.includes('TIRE SUR LA FLAMME'));
+// Mèches tirées aux extrêmes : les libellés ne sortent pas de l’arène.
+const edgeVeil=wickScene();
+edgeVeil.windows[0].x=80;edgeVeil.windows[0].open=1;
+edgeVeil.windows[1].x=720;edgeVeil.windows[1].charge=.4;
+edgeVeil.windows[2].x=80;edgeVeil.windows[2].lit=false;edgeVeil.windows[2].open=0;edgeVeil.windows[2].charge=0;
+const edgeX=[];
+gfx.fillText=function(t,...rest){if(/TIRE SUR LA FLAMME|ELLE VA TIRER|ÉTEINTE/.test(String(t)))edgeX.push(rest[0]);return realText(t,...rest)};
+SH.draw(gfx);
+out.wicks.labelX={min:Math.min(...edgeX),max:Math.max(...edgeX),count:edgeX.length,arena:W};
+
+// Jauge unique : le canvas porte le nom, le compte et la consigne, sans débord.
+wickTexts=[];
+const wickWidths=[];
+gfx.fillText=function(t,...rest){wickTexts.push(String(t));wickWidths.push(gfx.measureText(String(t)).width);return realText(t,...rest)};
+drawBossHealth(gfx,paintedVeil);
+out.wicks.gauge={texts:wickTexts.slice(),widest:Math.max(...wickWidths),
+  hidden:document.getElementById('bossbar').classList.contains('hidden')};
+updateHUD();
+out.wicks.gauge.hiddenAfterHUD=document.getElementById('bossbar').classList.contains('hidden');
+gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
+
 /* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
@@ -800,7 +927,9 @@ for (const s of r.loop.perStage) assert.ok(s.foes <= s.cap, 'plafond dépassé d
 assert.ok(r.loop.perStage.some(s => s.shotsMax > 0), 'les univers armés doivent bien tirer');
 assert.equal(r.loopBoss.crashes, 0, 'exception avec un gardien du monde 3 : ' + r.bossCrashMessage);
 assert.equal(r.loopBoss.hp, 1, 'le gardien ne doit pas perdre de vie dans la boucle réelle');
-assert.ok(r.loopBoss.hud.includes('FENÊTRES'), 'le HUD doit afficher la jauge, pas une barre de vie');
+assert.ok(r.loopBoss.label.includes('FENÊTRES'), 'la jauge doit compter les mèches, pas des points de vie');
+assert.equal(r.loopBoss.domBarHidden, true, 'la barre DOM doit rester masquée : une seule jauge');
+assert.ok(r.loopBoss.hostile > 0, 'la Veilleuse doit défendre ses mèches par des tirs');
 
 assert.equal(r.minutes, 15, 'quinze minutes rendues au maximum');
 assert.equal(r.save.legacyOK, true, 'une sauvegarde antérieure au monde 3 reste valide');
@@ -899,9 +1028,9 @@ assert.ok(r.labyrinth.loop.maxWalls > 8, 'le labyrinthe doit vraiment se remplir
 
 /* Butin caché dans les murs : sceau visible, tirage réel, bons objets. */
 assert.deepEqual(r.loot.kinds, ['points', 'shield', 'candy', 'heal', 'upgrade'], 'le mur doit donner les bonus du jeu principal');
-assert.ok(r.loot.chance > .3 && r.loot.chance < .45, 'taux de sceau raisonnable');
-assert.ok(r.loot.rolls.none > 1800 && r.loot.rolls.none < 3000, 'la plupart des blocs restent vides : ' + r.loot.rolls.none);
-for (const kind of r.loot.kinds) assert.ok(r.loot.rolls[kind] > 60, 'le sort ' + kind + ' ne sort jamais');
+assert.ok(r.loot.chance >= .15 && r.loot.chance <= .22, 'le sceau doit rester une occasion, pas la norme : ' + r.loot.chance);
+assert.ok(r.loot.rolls.none > 3000 && r.loot.rolls.none < 3400, 'environ quatre blocs sur cinq doivent rester vides : ' + r.loot.rolls.none);
+for (const kind of r.loot.kinds) assert.ok(r.loot.rolls[kind] > 30, 'le sort ' + kind + ' ne sort jamais');
 assert.equal(r.loot.bareDrops, 0, 'un bloc sans sceau ne doit rien lâcher');
 assert.deepEqual(r.loot.sealedDrops, ['shield'], 'le bloc scellé lâche exactement son bonus');
 assert.equal(r.loot.sealedAt, true, 'le bonus tombe là où le bloc a cassé');
@@ -910,7 +1039,8 @@ for (const kind of r.loot.kinds) {
   assert.equal(got.length, 1, kind + ' doit produire un seul objet');
   assert.ok(got[0] === kind || (kind === 'upgrade' && got[0] === 'points'), kind + ' produit le mauvais objet : ' + got);
 }
-assert.ok(r.loot.onRows.sealed > 8, 'les rangées doivent vraiment porter des sceaux');
+assert.ok(r.loot.onRows.sealed >= 4, 'les rangées doivent encore porter quelques sceaux');
+assert.ok(r.loot.onRows.sealed <= r.loot.onRows.blocks * .4, 'le mur ne doit pas devenir un distributeur de bonus : ' + r.loot.onRows.sealed + '/' + r.loot.onRows.blocks);
 assert.ok(r.loot.onRows.sealed < r.loot.onRows.blocks, 'tous les blocs ne sont pas scellés');
 assert.ok(r.loot.painted > 100, 'les sceaux doivent être dessinés');
 
@@ -957,9 +1087,43 @@ assert.equal(r.faubourg.foes.length, 4, 'le Faubourg gagne deux formes');
 assert.equal(r.faubourg.sprites, true, 'chaque forme du Faubourg a sa silhouette');
 assert.ok(r.faubourg.names.includes('Volet claqueur') && r.faubourg.names.includes('Faux-cierge'), 'les nouvelles formes sont nommées en français');
 
+/* La Veilleuse : une seule jauge, des flammes dessinées, une défense, du hasard. */
+assert.equal(r.wicks.count, 5, 'cinq mèches à éteindre');
+assert.equal(r.wicks.allLit, true, 'elles démarrent allumées');
+assert.equal(r.wicks.assets, true, 'lanterne et flamme ont leur visuel');
+assert.equal(r.wicks.inBounds, true, 'les mèches restent dans l’arène');
+assert.equal(r.wicks.spaced, true, 'deux mèches ne doivent pas se superposer');
+assert.ok(r.wicks.distinctLayouts >= 5, 'la disposition doit changer d’un gardien à l’autre');
+assert.ok(r.wicks.distinctHeights >= 3, 'la hauteur des mèches doit varier aussi');
+assert.equal(r.wicks.roundRobin, 0, 'l’ouverture ne doit plus être un tour de rôle fixe');
+assert.ok(r.wicks.distinctOpenings >= 5, 'l’ordre d’ouverture doit varier d’un combat à l’autre : ' + r.wicks.distinctOpenings);
+assert.equal(r.wicks.noImmediateRepeat, true, 'la même mèche ne s’ouvre pas deux fois de suite');
+assert.ok(r.wicks.relit >= 3, 'le rallumage doit choisir une mèche au hasard');
+assert.equal(r.wicks.beforeCharge, 0, 'la salve doit être annoncée avant de partir');
+assert.equal(r.wicks.charge, r.wicks.cap, 'toutes les mèches proches chargent, dans la limite du budget');
+assert.equal(r.wicks.fullVolley, r.wicks.cap, 'cinq mèches allumées donnent la salve maximale');
+assert.ok(r.wicks.fullVolley <= r.wicks.cap, 'la salve ne dépasse jamais le budget du monde');
+assert.equal(r.wicks.lastWickVolley, 1, 'une seule mèche allumée ne tire qu’un projectile');
+assert.equal(r.wicks.cancelledVolley, 0, 'éteindre une mèche pendant sa charge annule son tir');
+assert.equal(r.wicks.draw.crash, null, 'le rendu des mèches ne doit pas planter');
+assert.equal(r.wicks.draw.lanterns, 5, 'chaque mèche doit être dessinée comme une lanterne');
+assert.equal(r.wicks.draw.flames, 5, 'chaque mèche allumée doit porter une flamme dessinée');
+assert.equal(r.wicks.dark.flames, 4, 'une mèche éteinte n’a plus de flamme');
+assert.equal(r.wicks.dark.label, true, 'l’état éteint doit rester lisible');
+assert.equal(r.wicks.openLabel, true, 'la fenêtre de tir doit être annoncée');
+assert.equal(r.wicks.gauge.hidden, true, 'la barre DOM ne doit pas réapparaître');
+assert.equal(r.wicks.gauge.hiddenAfterHUD, true, 'updateHUD ne doit pas créer une seconde jauge');
+assert.ok(r.wicks.gauge.texts.some(t => t.includes('Veilleuse')), 'la jauge canvas porte le nom du gardien');
+assert.ok(r.wicks.gauge.texts.some(t => t.includes('Tire sur la flamme')), 'la jauge canvas porte la consigne');
+assert.ok(!r.wicks.gauge.texts.some(t => t.includes('PHASE')), 'les gardiens du monde 3 n’ont pas de phases de vie');
+assert.ok(r.wicks.gauge.widest <= 250, 'la consigne doit tenir dans le panneau de jauge : ' + r.wicks.gauge.widest);
+assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés');
+assert.ok(r.wicks.labelX.min >= 92, 'un libellé ne déborde pas à gauche : ' + r.wicks.labelX.min);
+assert.ok(r.wicks.labelX.max <= r.wicks.labelX.arena - 92, 'un libellé ne déborde pas à droite : ' + r.wicks.labelX.max);
+
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
-console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
+console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, Veilleuse à jauge unique avec mèches dessinées, salve de défense et tirage aléatoire, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 
 /* journey.js arme des minuteurs de fin de partie : on sort explicitement. */
 process.exit(0);

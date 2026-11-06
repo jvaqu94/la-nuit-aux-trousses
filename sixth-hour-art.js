@@ -249,7 +249,7 @@ asset('facelessEcho',`
 <path d="M-9 26Q-15 34-11 43L-5 39 0 44 5 39 11 43Q15 34 9 26Z" fill="url(#wax3)" fill-opacity=".7" stroke="#8d7a80" stroke-width="1.2"/>
 <path d="M-7 28-10 41M-2 28-3 42M2 28 3 42M7 28 10 41" stroke="#8d7a80" stroke-width="1.2"/>
 <path d="M-15-6Q-23 12-17 27L-11 22-6 28 0 22 6 28 11 22 17 27Q23 12 15-6Z" fill="url(#cloak3)" fill-opacity=".92" stroke="#b9a7c9" stroke-width="1.5"/>
-<path d="M-10 0Q-14 13-10 23M10 0Q14 13 10 23M0-2V22" stroke="#b9a7c9" stroke-opacity=".45" stroke-width="1.3"/>
+<path d="M-10 0Q-14 13-10 23M10 0Q14 13 10 23M0-2 L0 22" stroke="#b9a7c9" stroke-opacity=".45" stroke-width="1.3"/>
 <path d="M-14 2-23 9M14 2 23 9" stroke="url(#cloak3)" stroke-width="3.4"/>
 <path d="M-23 9-27 13M23 9 27 13" stroke="#b9a7c9" stroke-width="1.6"/>
 <ellipse cx="0" cy="-11" rx="21" ry="14" fill="url(#night3)" stroke="#c0aed0" stroke-width="1.6"/>
@@ -534,6 +534,43 @@ asset('mecheToken',`
 <path d="M-13 20 L13 20" stroke="#7d6a72" stroke-width="1.6"/>
 <circle cx="0" cy="-21" r="12" fill="none" stroke="#fff5cc" stroke-opacity=".35" stroke-width="1.2"/>
 <path d="M-13 -20 L13 -20 L13 20 L-13 20 Z" fill="url(#hatch3)"/>`);
+
+/* Mèches de la Veilleuse : lanterne de fer forgé et flamme, plus un point. */
+
+asset('bossWick',`
+<ellipse cx="0" cy="34" rx="24" ry="7" fill="#0d0b18" opacity=".35"/>
+<path d="M0-44 L0-36" stroke="#cf9f5f" stroke-width="2.4"/>
+<circle cx="0" cy="-46" r="4" fill="none" stroke="#dcbc7c" stroke-width="2"/>
+<path d="M-22-30 Q0-42 22-30 L22 26 L-22 26 Z" fill="#3a3244" stroke="#241d33" stroke-width="2"/>
+<path d="M-17-26 Q0-36 17-26 L17 21 L-17 21 Z" fill="url(#glass3)" stroke="#e8d6b0" stroke-width="1.4"/>
+<path d="M-17-26 Q0-36 17-26 L17 21 L-17 21 Z" fill="url(#void3)" opacity=".5"/>
+<path d="M0-33 L0 21" stroke="#4a4054" stroke-width="1.8"/>
+<path d="M-17-4 L17-4" stroke="#4a4054" stroke-width="1.8"/>
+<path d="M-13-22 Q-16-12-13-6" stroke="#fff8e8" stroke-opacity=".45" stroke-width="2"/>
+<path d="M-26 26 L26 26 L22 34 L-22 34 Z" fill="url(#bronze3)" stroke="#3a2f3c" stroke-width="1.6"/>
+<path d="M-9 6 L9 6 L9 22 L-9 22 Z" fill="url(#wax3)" stroke="#7d6a72" stroke-width="1.4"/>
+<ellipse cx="0" cy="6" rx="9" ry="3" fill="#f0dcb6" stroke="#7d6a72" stroke-width="1.1"/>
+<path d="M-9 8 Q-12 14-9 20 M9 8 Q12 14 9 20" stroke="#fff8e8" stroke-opacity=".6" stroke-width="1.5"/>
+<path d="M0 6 L0 0" stroke="#4a3b46" stroke-width="1.8"/>
+<circle cx="-19" cy="-28" r="1.8" fill="#cf9f5f"/><circle cx="19" cy="-28" r="1.8" fill="#cf9f5f"/>
+<circle cx="-19" cy="23" r="1.8" fill="#cf9f5f"/><circle cx="19" cy="23" r="1.8" fill="#cf9f5f"/>
+<path d="M-22-30 Q0-42 22-30 L22 26 L-22 26 Z" fill="url(#hatch3)"/>`);
+
+asset('bossFlame',`
+<path d="M0-44 Q14-26 12-12 Q10 4 0 10 Q-10 4 -12-12 Q-14-26 0-44 Z" fill="#e5854e" fill-opacity=".55"/>
+<path d="M0-38 Q11-23 9-11 Q7 2 0 7 Q-7 2 -9-11 Q-11-23 0-38 Z" fill="#f4a05a"/>
+<path d="M0-32 Q8-20 7-10 Q5 0 0 4 Q-5 0 -7-10 Q-8-20 0-32 Z" fill="#ffd9a0"/>
+<path d="M0-24 Q5-15 4-8 Q3-1 0 1 Q-3-1 -4-8 Q-5-15 0-24 Z" fill="#fff8e8"/>
+<path d="M0-16 Q2.4-11 2-7 Q1.4-3 0-2 Q-1.4-3 -2-7 Q-2.4-11 0-16 Z" fill="#ffffff"/>
+<path d="M-10-14 Q-14-6-11 2" stroke="#ffb064" stroke-opacity=".6" stroke-width="1.6"/>
+<path d="M10-14 Q14-6 11 2" stroke="#ffb064" stroke-opacity=".6" stroke-width="1.6"/>
+<ellipse cx="0" cy="8" rx="10" ry="4" fill="#e5854e" fill-opacity=".45"/>
+<ellipse cx="0" cy="7" rx="5" ry="2.4" fill="#ffd9a0" fill-opacity=".7"/>
+<circle cx="-13" cy="-30" r="1.6" fill="#ffd9a0" fill-opacity=".6"/>
+<circle cx="13" cy="-24" r="1.4" fill="#ffd9a0" fill-opacity=".5"/>
+<circle cx="9" cy="-40" r="1.2" fill="#fff8e8" fill-opacity=".5"/>
+<circle cx="-8" cy="-42" r="1.1" fill="#fff8e8" fill-opacity=".45"/>
+<path d="M-6-40 Q0-48 6-40" stroke="#ffb064" stroke-opacity=".35" stroke-width="1.4"/>`);
 
 const WARDEN_ARMS=[[-43.5,-16],[43.5,-16],[-43.5,17],[43.5,17],[-11,36],[11,36]];
 const VEILLEUSE_CUPS=[[0,-44],[42,-16],[24,43],[-24,43],[-42,-16]];
