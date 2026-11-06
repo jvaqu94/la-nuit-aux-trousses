@@ -226,9 +226,9 @@ ajoute une troisième couche de pression :
 
 - **Défilement ×1,5** (plafonné à 260), uniquement quand `Campaign.activeWorld===3`.
 - Des **rangées de décor solide** descendent vers le joueur : huit cellules,
-  une brèche sur les rangées ordinaires ; sur les bifurcations, une issue étroite
-  d'une cellule et une issue large de deux cellules. La route alterne sur toute
-  la largeur, donc il faut lire le mur et choisir sa colonne.
+  une brèche sur les rangées ordinaires ; sur les bifurcations du Faubourg,
+  deux passages (un étroit et un large) sont initialement fermés par trois portes
+  de cire. La route alterne sur toute la largeur, donc il faut lire le mur et choisir sa colonne.
 - **Deux énigmes de route différentes dès les premiers univers :** au Faubourg,
   trois runes de cire doivent être touchées dans l'ordre A → B → C ; une seule
   est vulnérable à la fois et la troisième ouvre les deux passages. Une cache
