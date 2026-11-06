@@ -451,6 +451,22 @@ for(const index of [0,2,4]){labScene(index,1);Lab.spawnRow();hpPerStage.push(Lab
 out.labyrinth.hpPerStage=hpPerStage;
 out.labyrinth.materials=Lab.MATERIALS.map(m=>m.name);
 
+/* Les bifurcations donnent un vrai choix : passage étroit avec butin garanti,
+   ou passage large et plus sûr. Les lignes ordinaires restent inchangées. */
+labScene(0,1);
+for(let i=0;i<3;i++)Lab.spawnRow();
+const fork=Lab.routeRows[0];
+const forkWalls=Lab.walls.filter(w=>w.row===2);
+out.labyrinth.fork={
+  every:Lab.FORK_EVERY,
+  count:Lab.routeRows.length,
+  gaps:Lab.COLS-forkWalls.length,
+  cache:forkWalls.some(w=>w.routeCache&&w.bonus),
+  narrow:fork?.narrowX,
+  wide:fork?.wideX,
+  labels:/ÉTROIT · BUTIN/.test(read('sixth-labyrinth.js'))&&/LARGE · SÛR/.test(read('sixth-labyrinth.js'))
+};
+
 /* Les tirs cassent le décor : sans tir, pas de sortie. */
 labScene(1,1);Lab.spawnRow();
 const target=Lab.walls[0];
