@@ -148,7 +148,7 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq lanternes en même temps, sachant que chaque mèche encore allumée vous tire dessus. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq mèches, puis frapper trois fois son cœur lorsqu'il s'ouvre. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
@@ -229,11 +229,11 @@ ajoute une troisième couche de pression :
   une brèche sur les rangées ordinaires ; sur les bifurcations, une issue étroite
   d'une cellule et une issue large de deux cellules. La route alterne sur toute
   la largeur, donc il faut lire le mur et choisir sa colonne.
-- **Une bifurcation toutes les trois rangées** oppose deux itinéraires visibles :
-  un passage étroit avec une cache visible à détruire dans le bloc voisin, ou un passage
-  deux fois plus large, plus facile à traverser. Pour prendre la cache, il faut
-  s'aligner sur le bloc adjacent et le casser avant que la rangée ne pousse le joueur.
-  Les mentions « ÉTROIT · CACHE À CASSER » et « LARGE · SÛR » apparaissent au-dessus des issues.
+- **Deux énigmes de route différentes dès les premiers univers :** au Faubourg,
+  le raccourci est fermé par un sceau de cire à briser tandis que le détour reste libre ;
+  au Clocher, deux cloches verrouillent deux passages et le joueur doit choisir celle
+  qu'il aligne avec son tir automatique pour n'ouvrir qu'une seule route. Les autres
+  univers conservent les bifurcations risque/récompense, une toutes les trois rangées.
 - Chaque bloc a une **solidité de 3 à 7 points** selon l’univers, des **fissures
   proportionnelles aux dégâts** et une **jauge de solidité** lisible sur téléphone.
   Les tirs l’entament, le détruire rapporte 30 points.
@@ -526,7 +526,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, budgets plafonnés, cinq gardiens sans barre de vie, minutes rendues. |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues et seconde phase du premier gardien. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
