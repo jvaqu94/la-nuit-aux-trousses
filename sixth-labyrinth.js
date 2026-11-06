@@ -93,13 +93,12 @@ function spawnRow(){
  const hp=3+clamp(stage,0,4);
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
-  const bonus=rollBonus();
-  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache:false});
- }
- if(fork&&stage===0){
-  // Faubourg de cire : la voie courte est scellée, la voie large reste libre.
-  walls.push({x:narrow*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp:5,max:5,hit:0,dead:false,row,
-   bonus:ROUTE_CACHE[row%ROUTE_CACHE.length],routeCache:true,gate:'wax',routeId:'narrow'});
+  // Au Faubourg, la cache est dans le mur qui borde la grande voie :
+  // elle se tire depuis le couloir, sans condamner ni ralentir le passage.
+  const cacheCell=(wideStart+2)%COLS;
+  const routeCache=fork&&stage===0&&c===cacheCell;
+  const bonus=routeCache?ROUTE_CACHE[row%ROUTE_CACHE.length]:rollBonus();
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache});
  }
  if(fork&&stage===1){
   // Clocher : les deux itinéraires sont verrouillés. Il faut choisir une cloche
@@ -116,7 +115,7 @@ function spawnRow(){
   }
  }
  if(fork)routeRows.push({row,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
-  wideX:wideStart*CELL+CELL,wideStart,cacheX:(narrow+1)*CELL+CELL/2,
+  wideX:wideStart*CELL+CELL,wideStart,cacheX:((wideStart+2)%COLS)*CELL+CELL/2,
   switches:stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
  rowIndex++;
 }
@@ -140,7 +139,7 @@ function breakBlock(w){
   say('RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT',2.8);
   tone(760,.3,'triangle',.08,1.35);
  }
- if(w.gate==='wax')say('SCEAU DE CIRE BRISÉ · passage court ouvert',2.4);
+ if(w.routeCache)say('CACHE DU FAUBOURG · butin découvert',2.4);
  if(w.bonus){particle(w.x,w.y,w.bonus.color,20);tone(660,.22,'sine',.06,1.3)}
  releaseBonus(w);
 }
@@ -278,8 +277,8 @@ function draw(g){
   if(route.y<34||route.y>H-28)continue;
   g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
   if(route.stage===0){
-   g.fillStyle='#ffd9a0';g.fillText('CIRE · SCEAU À BRISER',route.narrowX,route.y-ROW_H/2-5);
-   g.fillStyle='#cfe6d8';g.fillText('LARGE · SANS DÉTOUR',route.wideX,route.y-ROW_H/2-5);
+   g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · DIRECT',route.narrowX,route.y-ROW_H/2-5);
+   g.fillStyle='#cfe6d8';g.fillText('LARGE · CACHE À DÉCOUVRIR',route.wideX,route.y-ROW_H/2-5);
   }else if(route.stage===1){
    g.fillStyle='#cfe6d8';g.fillText('CLOCHE A · OUVRIR',route.narrowX,route.y-ROW_H/2-5);
    g.fillText('CLOCHE B · OUVRIR',route.wideX,route.y-ROW_H/2-5);
