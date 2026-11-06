@@ -41,7 +41,7 @@ const VICTORY={
 /* Une phrase par univers, écrite comme une consigne de jeu, pas comme une
    énigme : ce qu'il faut faire, et ce qui arrive si on ne le fait pas. */
 const RULES=[
- 'TUE le Garde-mèche : son halo protège les autres monstres. Au labyrinthe, choisis entre le couloir étroit et la voie large : un mur adjacent cache une récompense facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge.',
+ 'TUE le Garde-mèche : son halo protège les autres monstres. Au labyrinthe, tire sur les trois runes dans l’ordre A → B → C pour ouvrir les portes ; une cache latérale reste facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge.',
  'CHOISIS une cloche du labyrinthe : aligne-toi dessous et tire pour ouvrir uniquement son passage. En combat, briser une cloche suspend les tirs de sa jumelle pendant 1,5 seconde.',
  'ÉVITE le sel blanc : il te ralentit. Il tombe là où tu étais, pas là où tu es.',
  'ALLUME les lanternes en les touchant. TUE le Moucheur : il souffle une mèche et s’en sert pour protéger les autres — le tuer te la rend.',
