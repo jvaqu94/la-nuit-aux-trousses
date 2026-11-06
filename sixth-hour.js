@@ -49,7 +49,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'Tire sur une mèche quand son anneau s’ouvre.',
+ veilleuse:'Tire sur la flamme quand son anneau s’ouvre. Chaque mèche allumée te tire dessus.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
@@ -430,6 +430,18 @@ reward=function(e){
  return baseReward(e);
 };
 
+/* Les mèches de la Veilleuse ne sont jamais deux fois au même endroit :
+   colonnes mélangées, hauteur et phase de flamme tirées au sort. */
+function makeWicks(){
+ const cols=[100,215,330,445,560,675];
+ for(let i=cols.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));const t=cols[i];cols[i]=cols[j];cols[j]=t}
+ return cols.slice(0,5).map(x=>({
+  x:clamp(x+rng()*36-18,80,720),
+  y:300+Math.floor(rng()*3)*56,
+  lit:true,open:0,charge:0,age:0,seed:rng()*Math.PI*2
+ }));
+}
+
 /* --- Gardiens : cinq jauges, cinq victoires ------------------------------ */
 const baseSpawnBoss=spawnBoss;
 spawnBoss=function(){
@@ -440,8 +452,9 @@ spawnBoss=function(){
   phase:1,phaseShield:0,phaseFlash:0,damageBudget:0,budgetRate:0,poison:0,poisonTick:0,hit:0,blockHit:0,
   timer:0,step:0,value:0,label:'',lossStart:window.Journey?.run?.stats.lifeLoss||0};
  if(kind==='veilleuse'){
-  boss.windows=[0,1,2,3,4].map(i=>({x:110+i*145,y:330,lit:true,open:0}));
-  boss.tour=0;boss.relight=6;boss.label='FENÊTRE';
+  boss.windows=makeWicks();
+  boss.tour=0;boss.relight=5+rng()*3;boss.label='FENÊTRE';
+  boss.openTimer=1.2;boss.guard=2.6;boss.lastOpen=null;boss.volley=null;
  }else if(kind==='sonneur'){
   boss.bell={x:400,y:330,r:58};boss.clapper={x:400,y:236,r:24,down:false};
   boss.resonance=0;boss.strikes=0;boss.ring=0;boss.label='RÉSONANCE';
@@ -476,25 +489,68 @@ function moveBoss(e,dt,oldX,oldY){
  return true;
 }
 
-/* 1 · La Veilleuse — placement et fenêtre. Aucun projectile. */
+/* 1 · La Veilleuse — elle défend ses mèches. Chaque fenêtre encore allumée
+   peut tirer : plus il en reste, plus la salve est dense. Éteindre une mèche
+   supprime donc une bouche à feu, ce qui rend la suivante plus accessible. */
 function tickVeilleuse(e,dt){
  const windows=e.windows;
- for(const w of windows)w.open=Math.max(0,w.open-dt);
- if(e.timer>=2.2){
-  e.timer=0;windows[e.tour].open=1.6;
-  e.tour=(e.tour+1)%windows.length;
+ for(const w of windows){
+  w.open=Math.max(0,w.open-dt);
+  w.charge=Math.max(0,(w.charge||0)-dt);
+  w.age=(w.age||0)+dt;
  }
- const target=windows[e.tour];
+ // Quelle mèche s'ouvre est tiré au sort, jamais deux fois la même de suite.
+ e.openTimer=(e.openTimer||0)-dt;
+ if(e.openTimer<=0){
+  e.openTimer=1.9+rng()*1.2;
+  const lit=windows.filter(w=>w.lit);
+  const pool=lit.length?lit:windows;
+  const rest=pool.filter(w=>w!==e.lastOpen);
+  const from=rest.length?rest:pool;
+  const pick=from[Math.floor(rng()*from.length)];
+  pick.open=1.7;e.lastOpen=pick;
+ }
+ const target=e.lastOpen||windows[0];
  e.x+=(target.x-e.x)*Math.min(1,dt*2.4);e.y+=(250-e.y)*Math.min(1,dt*2);
+ // Salve de cire : annoncée par une charge visible sur chaque mèche tireuse.
+ e.guard=(e.guard||0)-dt;
+ if(e.guard<=0&&!e.volley){
+  const lit=windows.filter(w=>w.lit);
+  if(lit.length){
+   e.guard=2.5+rng()*.9;
+   const count=Math.min(BUDGET.volley,lit.length);
+   const picked=lit.slice().sort((a,b)=>Math.abs(a.x-player.x)-Math.abs(b.x-player.x)).slice(0,count);
+   for(const w of picked)w.charge=.6;
+   e.volley=picked;
+  }else e.guard=1;
+ }
+ if(e.volley&&e.volley.every(w=>w.charge<=0)){
+  for(const w of e.volley){
+   if(!w.lit)continue;
+   const aim=Math.atan2(player.y-w.y,player.x-w.x);
+   shootHostile({x:w.x,y:w.y,boss:true,phase:1},'spirit',[0],Math.min(150,BUDGET.shotSpeed),aim);
+   particle(w.x,w.y,'#ffd9a0',6);
+  }
+  tone(260,.16,'triangle',.05,.8);
+  e.volley=null;
+ }
  e.relight-=dt;
  if(e.relight<=0){
-  e.relight=6;
+  e.relight=5+rng()*3.5;
   const dark=windows.filter(w=>!w.lit);
-  if(dark.length){dark[0].lit=true;say('UNE FENÊTRE SE RALLUME',1.8)}
+  if(dark.length){
+   const w=dark[Math.floor(rng()*dark.length)];
+   w.lit=true;w.open=0;w.seed=rng()*Math.PI*2;w.age=0;
+   particle(w.x,w.y,'#ffd9a0',14);say('UNE MÈCHE SE RALLUME',1.8);
+  }
  }
  const lit=windows.filter(w=>w.lit).length;
  e.value=(5-lit)/5;e.label=lit+' / 5 FENÊTRES ALLUMÉES';
- if(lit===5&&e.age>6){e.relight=6;hurt(25,'la veille complète');say('VEILLE COMPLÈTE · une mèche se rallume',2.4);windows[0].lit=false}
+ if(lit===5&&e.age>6){
+  e.relight=5+rng()*3;hurt(25,'la veille complète');
+  say('VEILLE COMPLÈTE · une seule mèche s’éteint',2.4);
+  windows[Math.floor(rng()*windows.length)].lit=false;
+ }
 }
 
 /* 2 · Le Sonneur — la ligne de tir. Ton propre tir automatique est le danger. */
@@ -670,6 +726,61 @@ function drawItem(g,key,x,y,size,label,color){
  g.restore();
 }
 
+/* Les mèches du gardien : lanterne de fer, flamme qui vacille, fumée quand
+   elle est éteinte, et anneau de charge quand elle s'apprête à tirer. */
+function drawWicks(g,e){
+ const lantern=window.MinuitArt?.bossWick,fire=window.MinuitArt?.bossFlame;
+ for(const [i,w] of e.windows.entries()){
+  const t=(w.age||0)+(w.seed||0),flick=.92+Math.sin(t*9)*.06+Math.sin(t*23)*.03;
+  const sway=Math.sin(t*4.2)*1.8;
+  g.save();
+  if(w.lit){
+   const halo=g.createRadialGradient(w.x,w.y,3,w.x,w.y,62);
+   halo.addColorStop(0,'#ffd9a055');halo.addColorStop(.5,'#e5854e22');halo.addColorStop(1,'#e5854e00');
+   g.fillStyle=halo;g.beginPath();g.arc(w.x,w.y,62,0,Math.PI*2);g.fill();
+  }
+  if(lantern?.complete&&lantern.naturalWidth)g.drawImage(lantern,w.x-37,w.y-11,74,74);
+  if(w.lit){
+   if(fire?.complete&&fire.naturalWidth){
+    const size=54*flick;
+    g.drawImage(fire,w.x-size/2+sway,w.y+2-size/2,size,size);
+   }else{
+    g.fillStyle='#ffd9a0';g.beginPath();g.ellipse(w.x+sway,w.y-6,7*flick,15*flick,0,0,Math.PI*2);g.fill();
+   }
+  }else{
+   // Mèche noircie et filet de fumée : on voit qu'elle est prise.
+   g.strokeStyle='#4a3b46';g.lineWidth=2.4;
+   g.beginPath();g.moveTo(w.x,w.y+14);g.lineTo(w.x,w.y+6);g.stroke();
+   for(let i=0;i<3;i++){
+    const rise=(t*22+i*16)%48;
+    g.globalAlpha=Math.max(0,.34-rise/150);g.fillStyle='#b9a7c9';
+    g.beginPath();g.arc(w.x+Math.sin((t+i)*2)*5,w.y+4-rise,3+i*1.1,0,Math.PI*2);g.fill();
+   }
+   g.globalAlpha=1;
+  }
+  if(w.charge>0){
+   const pulse=1-w.charge/.6;
+   g.strokeStyle='#ff9d7a';g.lineWidth=2.6;g.globalAlpha=.5+pulse*.5;
+   g.beginPath();g.arc(w.x,w.y,30+pulse*8,0,Math.PI*2);g.stroke();g.globalAlpha=1;
+  }
+  if(w.open>0)ring(g,w.x,w.y,32,'#fff5cc');
+  g.textAlign='center';
+  /* Libellé recentré si la mèche est tirée au bord de l’arène. */
+  const lx=clamp(w.x,92,W-92);
+  if(w.open>0){
+   g.fillStyle='#fff5cc';g.font='bold '+(compactView()?'16px':'12px')+' Arial';
+   g.fillText('TIRE SUR LA FLAMME',lx,w.y-44-(i%2)*14);
+  }else if(w.charge>0){
+   g.fillStyle='#ff9d7a';g.font='bold '+(compactView()?'14px':'10px')+' Arial';
+   g.fillText('ELLE VA TIRER',lx,w.y-44-(i%2)*14);
+  }else if(!w.lit){
+   g.fillStyle='#8d7a9c';g.font=(compactView()?'13px':'9px')+' Arial';
+   g.fillText('ÉTEINTE',lx,w.y-40-(i%2)*13);
+  }
+  g.restore();
+ }
+}
+
 /* La minute à rendre : cadran de montre, aiguille qui tourne, état explicite. */
 function drawMinute(g,m){
  const total=window.Campaign?.progress?.minutesKept||0;
@@ -748,11 +859,7 @@ function draw(g){
  if(meche)drawItem(g,'mecheToken',meche.x,meche.y,46,'MÈCHE · +1 FLAMME','#f4c98f');
  const e=boss;
  if(!e||e.dead)return;
- if(e.kind==='veilleuse')for(const w of e.windows){
-  ring(g,w.x,w.y,24,w.lit?'#ffd9a0':'#6b5a7d',!w.lit);
-  g.save();g.fillStyle=w.lit?'#ffd9a0':'#4a3a5c';g.beginPath();g.arc(w.x,w.y,w.open>0?12:8,0,Math.PI*2);g.fill();
-  if(w.open>0){g.fillStyle='#ffe6bd';g.font='10px Arial';g.textAlign='center';g.fillText('MÈCHE',w.x,w.y-32)}g.restore();
- }
+ if(e.kind==='veilleuse')drawWicks(g,e);
  if(e.kind==='sonneur'){
   ring(g,e.bell.x,e.bell.y,e.bell.r,'#cfe6d8');
   g.save();g.globalAlpha=.12+e.resonance/260;g.fillStyle='#cfe6d8';g.beginPath();g.arc(e.bell.x,e.bell.y,e.bell.r,0,Math.PI*2);g.fill();g.restore();
@@ -780,27 +887,34 @@ drawBossHealth=function(g,e){
  if(!active()||!bossKinds.has(e.kind))return baseDrawBossHealth(g,e);
  if(e.y<150)return;
  const width=250,left=clamp(e.x-width/2,12,W-width-12),top=e.y-118;
- g.save();g.fillStyle='#120f24eb';g.fillRect(left-8,top-26,width+16,58);
+ g.save();
+ /* La consigne est repliée sur la largeur du panneau : jamais de texte qui déborde. */
+ const howFont=compactView()?'11px Arial':'9px Arial';
+ g.font=howFont;
+ const how=[];let line='';
+ for(const word of String(HOWTO[e.kind]||'').split(' ')){
+  const next=line?line+' '+word:word;
+  if(line&&g.measureText(next).width>width){how.push(line);line=word}else line=next;
+ }
+ if(line)how.push(line);
+ g.fillStyle='#120f24eb';g.fillRect(left-8,top-26,width+16,63+how.length*13);
  g.textAlign='center';g.fillStyle='#f8d8b6';g.font=compactView()?'bold 16px Georgia':'13px Georgia';
  g.fillText(world.boss,left+width/2,top-8);
  g.fillStyle='#3b2946';g.fillRect(left,top,width,7);
  g.fillStyle=world.moon;g.fillRect(left,top,width*clamp(e.value||0,0,1),7);
  g.fillStyle='#e2d7e6';g.font=compactView()?'13px Arial':'10px Arial';
- g.fillText(e.label||'',left+width/2,top+22);g.restore();
+ g.fillText(e.label||'',left+width/2,top+22);
+ g.fillStyle='#bda9c8';g.font=howFont;
+ how.forEach((text,i)=>g.fillText(text,left+width/2,top+40+i*13));g.restore();
 };
 
+/* Une seule jauge pour les gardiens du monde 3 : celle dessinée sur le canvas,
+   comme dans les mondes 1 et 2. Le jeu de base masque #bossbar dans updateHUD ;
+   la réafficher ici créait une seconde jauge superposée. */
 const baseUpdateHUD=updateHUD;
 updateHUD=function(...args){
  const result=baseUpdateHUD(...args);
  refreshObjective();
- if(!active())return result;
- const e=enemies.find(v=>v.boss&&!v.dead);
- if(e&&bossKinds.has(e.kind)){
-  $('bossbar').classList.remove('hidden');
-  $('bossname').textContent=world.boss;
-  $('bosshp').style.width=Math.round(clamp(e.value||0,0,1)*100)+'%';
-  $('bossphase').textContent=(e.label||'')+' · '+HOWTO[e.kind];
- }
  return result;
 };
 

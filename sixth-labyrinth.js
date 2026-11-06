@@ -44,7 +44,10 @@ function drawSeal(g,kind){
  else if(kind==='heal'){g.rect(-1.7,-5.5,3.4,11);g.rect(-5.5,-1.7,11,3.4);g.fill()}
  else{g.moveTo(0,-6);g.lineTo(5,2);g.lineTo(1.8,2);g.lineTo(1.8,6);g.lineTo(-1.8,6);g.lineTo(-1.8,2);g.lineTo(-5,2);g.closePath();g.fill()}
 }
-const BONUS_CHANCE=.38;
+/* Rareté du butin : un sceau doit rester une occasion, pas la norme.
+   À 38 %, presque un mur sur deux était une récompense et le labyrinthe
+   devenait un distributeur ; 20 % rend le choix du bloc à ouvrir décisif. */
+const BONUS_CHANCE=.20;
 function rollBonus(){
  if(rng()>=BONUS_CHANCE)return null;
  const total=BONUS.reduce((n,b)=>n+b.weight,0);
