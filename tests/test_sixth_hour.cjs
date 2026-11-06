@@ -444,7 +444,7 @@ const gapsPerRow=[],hpPerStage=[];
 for(let i=0;i<10;i++){
   const before=Lab.walls.length;Lab.spawnRow();
   const row=Lab.walls.slice(before);
-  gapsPerRow.push(Lab.COLS-row.length);
+  gapsPerRow.push(Lab.COLS-row.filter(w=>!w.switch).length);
 }
 out.labyrinth.rows={count:Lab.walls.length,gaps:gapsPerRow,
   columns:new Set(Lab.walls.map(w=>Math.round((w.x-Lab.CELL/2)/Lab.CELL))).size};
@@ -452,8 +452,7 @@ for(const index of [0,2,4]){labScene(index,1);Lab.spawnRow();hpPerStage.push(Lab
 out.labyrinth.hpPerStage=hpPerStage;
 out.labyrinth.materials=Lab.MATERIALS.map(m=>m.name);
 
-/* Les bifurcations donnent deux passages praticables ; la cache est un
-   bonus facultatif dans le mur qui borde la voie large. */
+/* Faubourg : les trois runes s'activent dans l'ordre et ouvrent les deux voies. */
 labScene(0,1);
 for(let i=0;i<3;i++)Lab.spawnRow();
 const fork=Lab.routeRows[0];
@@ -461,20 +460,37 @@ const forkWalls=Lab.walls.filter(w=>w.row===2);
 out.labyrinth.fork={
   every:Lab.FORK_EVERY,
   count:Lab.routeRows.length,
-  gaps:Lab.COLS-forkWalls.length,
+  gates:forkWalls.filter(w=>w.locked).length,
+  runes:forkWalls.filter(w=>w.switch).length,
   cache:forkWalls.some(w=>w.routeCache&&w.bonus),
   narrow:fork?.narrowX,
   wide:fork?.wideX,
-  labels:/ÉTROIT · DIRECT/.test(read('sixth-labyrinth.js'))&&/LARGE · CACHE À DÉCOUVRIR/.test(read('sixth-labyrinth.js'))
+  labels:/RUNES A → B → C/.test(read('sixth-labyrinth.js'))&&/CACHE FACULTATIVE/.test(read('sixth-labyrinth.js'))
 };
 
 
-/* Faubourg : la cache se casse depuis la voie large, sans bloquer le passage. */
+/* Les runes A, B, C doivent être activées dans l'ordre pour ouvrir les portes. */
+labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
+const runes=Lab.walls.filter(w=>w.row===2&&w.switch).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);
+const gates=Lab.walls.filter(w=>w.row===2&&w.locked);
+Lab.damageBlock(runes[1],99);
+const wrongOrderRejected=!runes[1].dead&&runes[1].hp===99;
+Lab.damageBlock(runes[0],2);
+const secondEnabled=runes[1].hp===2;
+Lab.damageBlock(runes[1],2);
+const thirdEnabled=runes[2].hp===2;
+Lab.damageBlock(runes[2],2);
+out.labyrinth.puzzles={runes:runes.length,gates:gates.length,wrongOrderRejected,
+  secondEnabled,thirdEnabled,allGatesOpened:gates.every(w=>w.dead)};
+
+/* La cache reste un bonus latéral facultatif, sans contrôler les portes. */
 labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
 const cache=Lab.walls.find(w=>w.row===2&&w.routeCache&&w.bonus);
 const cacheHp=cache&&cache.hp;if(cache)Lab.damageBlock(cache,cacheHp);
-out.labyrinth.puzzles={cacheBreakable:!!cache?.dead,cacheNotGate:!!cache&&cache.gate==null,
-  cacheOptional:!!cache?.optional,cacheWidth:cache?.w||0};
+out.labyrinth.puzzles.cacheBreakable=!!cache?.dead;
+out.labyrinth.puzzles.cacheNotGate=!!cache&&cache.gate==null;
+out.labyrinth.puzzles.cacheOptional=!!cache?.optional;
+out.labyrinth.puzzles.cacheWidth=cache?.w||0;
 labScene(1,1);Lab.spawnRow();Lab.spawnRow();
 const bellSwitch=Lab.walls.find(w=>w.row===1&&w.switch&&w.routeId==='narrow');
 const narrowGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='narrow');
@@ -1061,18 +1077,28 @@ assert.ok(r.labyrinth.speed.boosted <= 260, 'le défilement reste plafonné');
 assert.equal(r.labyrinth.speedWorld2, r.labyrinth.speed.classicSpeed, 'le monde 2 ne doit pas être accéléré');
 assert.equal(r.labyrinth.foreignSpeed, 74, 'le monde 1 garde sa vitesse');
 assert.deepEqual(r.labyrinth.foreign, [0, 0], 'aucun mur dans les mondes 1 et 2');
-assert.equal(r.labyrinth.rows.count, 67, 'dix rangées avec trois bifurcations et trois caches latérales facultatives');
-assert.ok(r.labyrinth.rows.gaps.every(n => n >= 1), 'chaque rangée doit laisser au moins une brèche');
-assert.ok(r.labyrinth.rows.gaps.some(n => n === 2), 'les bifurcations du Faubourg gardent une voie large et une voie courte scellée');
+assert.equal(r.labyrinth.rows.count, 82, 'dix rangées avec trois bifurcations, portes de cire, runes et caches');
+assert.ok(r.labyrinth.rows.gaps.every(n => n >= 0), 'les rangées ne doivent jamais compter de cellules en double');
+assert.ok(r.labyrinth.rows.gaps.some(n => n === 0), 'les bifurcations du Faubourg commencent fermées par les portes du puzzle');
 assert.equal(r.labyrinth.rows.columns, 8, 'la route doit balayer toute la largeur');
 assert.deepEqual(r.labyrinth.hpPerStage, [3, 5, 7], 'le décor durcit avec les univers');
 assert.deepEqual(r.labyrinth.materials, ['CIRE', 'BRONZE', 'SEL', 'BOIS', 'OBSIDIENNE'], 'une matière par univers');
 assert.equal(r.labyrinth.fork.every,3,'une bifurcation toutes les trois rangées');
 assert.equal(r.labyrinth.fork.count,1,'une bifurcation est créée sur la troisième rangée');
-assert.equal(r.labyrinth.fork.gaps,2,'les deux voies restent ouvertes ; la cache latérale ne condamne pas la voie large');
+assert.equal(r.labyrinth.fork.gates,3,'les trois cellules de passage sont verrouillées avant la résolution');
+assert.equal(r.labyrinth.fork.runes,3,'le puzzle comporte trois runes à activer');
 assert.equal(r.labyrinth.fork.cache,true,'la cache facultative doit être dans un bloc adjacent à la voie large');
-assert.equal(r.labyrinth.fork.labels,true,'les deux routes et la cache facultative sont identifiées à l’écran');
-assert.deepEqual(r.labyrinth.puzzles,{cacheBreakable:true,cacheNotGate:true,cacheOptional:true,cacheWidth:50},'la cache du Faubourg est destructible et n’obstrue qu’une partie de la voie large');
+assert.equal(r.labyrinth.fork.labels,true,'les runes et la cache facultative sont identifiées à l’écran');
+assert.equal(r.labyrinth.puzzles.runes,3,'trois runes sont présentes');
+assert.equal(r.labyrinth.puzzles.gates,3,'trois portes bloquent les passages');
+assert.equal(r.labyrinth.puzzles.wrongOrderRejected,true,'une rune inactive ne peut pas être activée hors ordre');
+assert.equal(r.labyrinth.puzzles.secondEnabled,true,'la rune B devient vulnérable après A');
+assert.equal(r.labyrinth.puzzles.thirdEnabled,true,'la rune C devient vulnérable après B');
+assert.equal(r.labyrinth.puzzles.allGatesOpened,true,'la troisième rune ouvre toutes les portes');
+assert.equal(r.labyrinth.puzzles.cacheBreakable,true,'la cache latérale reste destructible');
+assert.equal(r.labyrinth.puzzles.cacheNotGate,true,'la cache ne commande pas les portes');
+assert.equal(r.labyrinth.puzzles.cacheOptional,true,'la cache reste facultative');
+assert.equal(r.labyrinth.puzzles.cacheWidth,88,'la cache forme une alcôve distincte du passage');
 assert.deepEqual(r.labyrinth.puzzles.bronze,{switchBroken:true,narrowOpened:true,wideStillLocked:true},'la cloche choisie ouvre uniquement sa route dans le Clocher');
 assert.equal(r.labyrinth.shot.hp1, r.labyrinth.shot.hp0 - 1, 'un tir doit entamer le bloc');
 assert.equal(r.labyrinth.shot.consumed, true, 'le tir est arrêté par le décor');
