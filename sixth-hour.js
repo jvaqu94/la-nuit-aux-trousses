@@ -902,7 +902,23 @@ function draw(g){
  if(meche)drawItem(g,'mecheToken',meche.x,meche.y,46,'MÈCHE · +1 FLAMME','#f4c98f');
  const e=boss;
  if(!e||e.dead)return;
- if(e.kind==='veilleuse')drawWicks(g,e);
+ if(e.kind==='veilleuse'){
+  drawWicks(g,e);
+  if(e.phase===2&&e.core){
+   const c=e.core,pulse=1+Math.sin(ambient*9)*.12;
+   g.save();g.globalAlpha=.35;g.fillStyle='#ffd9a0';g.beginPath();g.arc(c.x,c.y,58*pulse,0,Math.PI*2);g.fill();
+   g.globalAlpha=1;ring(g,c.x,c.y,c.open>0?39:29,c.open>0?'#fff5cc':'#8d7a9c',c.open<=0);
+   const glow=g.createRadialGradient(c.x,c.y,2,c.x,c.y,28);
+   glow.addColorStop(0,c.open>0?'#fff5cc':'#8d7a9c');glow.addColorStop(1,'#e5854e00');
+   g.fillStyle=glow;g.beginPath();g.arc(c.x,c.y,28,0,Math.PI*2);g.fill();
+   g.fillStyle=c.open>0?'#fff5cc':'#8d7a9c';g.beginPath();g.arc(c.x,c.y,10,0,Math.PI*2);g.fill();
+   g.textAlign='center';g.font='bold '+(compactView()?'16px':'12px')+' Arial';
+   g.fillStyle=c.open>0?'#fff5cc':'#c8b9d5';
+   g.fillText(c.open>0?'FRAPPE LE CŒUR':'CŒUR FERMÉ',c.x,c.y-48);
+   g.fillText('IMPACTS '+c.hits+'/3',c.x,c.y+52);
+   g.restore();
+  }
+ }
  if(e.kind==='sonneur'){
   ring(g,e.bell.x,e.bell.y,e.bell.r,'#cfe6d8');
   g.save();g.globalAlpha=.12+e.resonance/260;g.fillStyle='#cfe6d8';g.beginPath();g.arc(e.bell.x,e.bell.y,e.bell.r,0,Math.PI*2);g.fill();g.restore();
