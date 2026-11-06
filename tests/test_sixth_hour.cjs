@@ -114,6 +114,10 @@ function freshWave(w){
   newWave();
 }
 freshWave(1);out.rule1=SH.RULES[0];
+const flowSchedule=makeSchedule();
+beginTransition(false);
+out.waveFlow={interval:flowSchedule[1].time-flowSchedule[0].time,transition};
+transition=0;
 freshWave(2);out.wave2Blocks=SH.waveBlocks();
 freshWave(3);waveTime=0;out.wave3Blocks=SH.waveBlocks();waveTime=23;out.wave3Held=SH.waveBlocks();
 SH.tick(0.02);out.wave3Minute=!!SH.minute;
@@ -934,6 +938,8 @@ assert.equal(r.apply.count, 5);
 assert.notEqual(r.apply.first, r.apply.classic, 'applyWorld(3) doit remplacer les univers');
 assert.equal(r.apply.runId, 'world3-normal', 'records séparés du monde 3');
 
+assert.ok(r.waveFlow.interval <= 1.01, 'les apparitions du monde 3 doivent rester rapprochées');
+assert.ok(r.waveFlow.transition <= .25, 'la transition entre vagues du monde 3 doit être quasi immédiate');
 assert.equal(r.wave2Blocks, true, 'vague 2 : la minute doit être rendue');
 assert.equal(r.wave3Blocks, true, 'vague 3 : tenue de 22 s');
 assert.equal(r.wave3Held, true, 'vague 3 : la minute libérée doit encore être ramassée');
