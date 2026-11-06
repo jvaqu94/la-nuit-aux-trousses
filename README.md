@@ -204,9 +204,13 @@ Le monde 3 ne se joue plus comme un simple défilement descendant. `sixth-labyri
 ajoute une troisième couche de pression :
 
 - **Défilement ×1,5** (plafonné à 260), uniquement quand `Campaign.activeWorld===3`.
-- Des **rangées de décor solide** descendent vers le joueur : huit cellules, une
-  brèche obligatoire, deux une rangée sur trois. La route alterne sur toute la
-  largeur, donc il faut lire le mur et choisir sa colonne.
+- Des **rangées de décor solide** descendent vers le joueur : huit cellules,
+  une brèche obligatoire, deux une rangée sur trois. La route alterne sur toute
+  la largeur, donc il faut lire le mur et choisir sa colonne.
+- **Une bifurcation toutes les trois rangées** oppose deux itinéraires visibles :
+  un passage étroit avec un butin garanti dans le bloc voisin, ou un passage
+  deux fois plus large, plus facile à traverser mais sans cache garantie. Les
+  mentions « ÉTROIT · BUTIN » et « LARGE · SÛR » apparaissent au-dessus des issues.
 - Chaque bloc a une **solidité de 3 à 7 points** selon l’univers, des **fissures
   proportionnelles aux dégâts** et une **jauge de solidité** lisible sur téléphone.
   Les tirs l’entament, le détruire rapporte 30 points.
@@ -514,7 +518,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `scenery/` | Images sources des décors, dont `sixth-*.jpg` pour le monde 3. |
 | `sixth-hour-art.js` | Silhouettes SVG et couches d’animation des 10 formes et 5 gardiens du monde 3. |
 | `sixth-scenery.js` | Décors peints du monde 3, embarqués (généré par `tools/build_sixth_scenery.py`). |
-| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, rangées à brèche, butin scellé, coincement du joueur. |
+| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, bifurcations risque/récompense, butin scellé, coincement du joueur. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
 | `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
 | `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |
