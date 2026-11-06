@@ -848,6 +848,35 @@ gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
 
+/* Épreuves propres aux cinq univers : une action distinctive par monde. */
+const trialCounts=[];
+function trialScene(index){
+ freshWave(1);stage=index;world=worlds[index];
+ mission.trial=0;mission.trialDone=false;
+}
+trialScene(0);
+spawnEnemy({kind:'waxMimic',x:400,y:300,group:1,index:0,pattern:99});
+const trialMimic=enemies[enemies.length-1];trialMimic.cleanSealShot=true;reward(trialMimic);
+trialCounts.push(SH.mission.trial);
+trialScene(1);
+spawnEnemy({kind:'crackedBell',x:300,y:300,group:1,index:0,pattern:99});
+const trialBell=enemies[enemies.length-1];
+spawnEnemy({kind:'crackedBell',x:500,y:300,group:1,index:1,pattern:99});
+reward(trialBell);trialCounts.push(SH.mission.trial);
+trialScene(2);
+SH.salt.push({x:400,y:650,r:62,age:1,life:3});
+player.x=400;player.y=650;player.dash=.2;SH.tick(.01);
+trialCounts.push(SH.mission.trial);
+trialScene(3);
+spawnEnemy({kind:'snufferHand',x:400,y:300,group:1,index:0,pattern:99});
+const trialSnuffer=enemies[enemies.length-1];trialSnuffer.stolen=1;reward(trialSnuffer);
+trialCounts.push(SH.mission.trial);
+trialScene(4);
+spawnEnemy({kind:'unnamedDigit',x:400,y:300,group:1,index:0,pattern:99});
+const trialDigit=enemies[enemies.length-1];trialDigit.weakHit=true;reward(trialDigit);
+trialCounts.push(SH.mission.trial);
+out.trials={counts:trialCounts,names:SH.TRIALS.map(t=>t.short),objective:SH.objectiveText()};
+
 globalThis.__RESULT__=out;
 })();
 `;
@@ -1137,6 +1166,9 @@ assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés
 assert.ok(r.wicks.labelX.min >= 92, 'un libellé ne déborde pas à gauche : ' + r.wicks.labelX.min);
 assert.ok(r.wicks.labelX.max <= r.wicks.labelX.arena - 92, 'un libellé ne déborde pas à droite : ' + r.wicks.labelX.max);
 
+assert.deepEqual(r.trials.counts,[1,1,1,1,1],'chaque univers doit valider son épreuve avec sa mécanique propre');
+assert.deepEqual(r.trials.names,['SCEAUX','ÉCHOS','TRACES','MÈCHES','CHIFFRES'],'les cinq épreuves doivent rester distinctes');
+assert.ok(r.trials.objective.includes('ÉPREUVE CHIFFRES 1/3'),'la progression de l’épreuve doit rester visible dans le bandeau');
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
 console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, Veilleuse à jauge unique avec mèches dessinées, salve de défense et tirage aléatoire, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
