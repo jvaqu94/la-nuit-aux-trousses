@@ -74,9 +74,9 @@ const ROUTE=[1,5,2,6,3,7,4,0,2,5];
 const FORK_EVERY=3;
 const ROUTE_CACHE=[BONUS[1],BONUS[2],BONUS[0],BONUS[4],BONUS[3]];
 
-let walls=[],routeRows=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false;
+let walls=[],routeRows=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false,puzzleProgress={};
 
-function reset(){walls=[];routeRows=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false}
+function reset(){walls=[];routeRows=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false;puzzleProgress={}}
 
 function material(){return MATERIALS[clamp(stage,0,4)]}
 
@@ -88,8 +88,10 @@ function spawnRow(){
  const forkEvery=stage===1?2:FORK_EVERY;
  const fork=row%forkEvery===forkEvery-1;
  const wideStart=(narrow+4)%COLS;
+ const cacheCell=(wideStart+2)%COLS;
  const gaps=new Set([narrow]);
  if(fork){gaps.add(wideStart);gaps.add((wideStart+1)%COLS)}
+ if(fork&&stage===0)gaps.add(cacheCell);
  const hp=3+clamp(stage,0,4);
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
@@ -97,11 +99,21 @@ function spawnRow(){
   walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache:false});
  }
  if(fork&&stage===0){
-  // Une cache latérale mord légèrement sur la voie large, sans la fermer :
-  // le joueur peut la détruire depuis le couloir ou poursuivre sans s'arrêter.
-  const cacheX=wideStart*CELL+175;
-  walls.push({x:cacheX,y:-ROW_H,w:50,h:ROW_H-8,hp:4,max:4,hit:0,dead:false,row,
-   bonus:ROUTE_CACHE[row%ROUTE_CACHE.length],routeCache:true,optional:true});
+  // Faubourg : les deux voies sont fermées par des portes de cire.
+  // Il faut toucher les trois runes dans l'ordre A -> B -> C. Une seule
+  // rune est vulnérable à la fois ; la troisième ouvre les deux itinéraires.
+  const routeCells=[narrow,wideStart,(wideStart+1)%COLS];
+  for(const c of routeCells)walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,
+   hp:99,max:99,hit:0,dead:false,row,bonus:null,locked:true,routeId:'wax-puzzle',gate:'wax'});
+  const runeXs=[narrow*CELL+CELL/2,wideStart*CELL+CELL/2,(wideStart+1)*CELL+CELL/2];
+  runeXs.forEach((x,index)=>walls.push({x,y:-ROW_H+48,w:46,h:34,
+   hp:index===0?2:99,max:index===0?2:99,hit:0,dead:false,row,bonus:null,
+   switch:true,sequenceIndex:index,runeLabel:String.fromCharCode(65+index)}));
+  // Une cache dans une alcôve latérale : elle ne commande pas l'ouverture
+  // des portes et reste facultative après la résolution des runes.
+  walls.push({x:cacheCell*CELL+CELL/2,y:-ROW_H,w:CELL-12,h:ROW_H-8,
+   hp:4,max:4,hit:0,dead:false,row,bonus:ROUTE_CACHE[row%ROUTE_CACHE.length],
+   routeCache:true,optional:true});
  }
  if(fork&&stage===1){
   // Clocher : les deux itinéraires sont verrouillés. Il faut choisir une cloche
@@ -118,8 +130,9 @@ function spawnRow(){
   }
  }
  if(fork)routeRows.push({row,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
-  wideX:wideStart*CELL+CELL,wideStart,cacheX:wideStart*CELL+175,
-  switches:stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
+  wideX:wideStart*CELL+CELL,wideStart,cacheX:cacheCell*CELL+CELL/2,
+  switches:stage===0?[narrow*CELL+CELL/2,wideStart*CELL+CELL/2,(wideStart+1)*CELL+CELL/2]:
+   stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
  rowIndex++;
 }
 
@@ -137,7 +150,19 @@ function breakBlock(w){
  w.dead=true;broken++;
  score+=30;particle(w.x,w.y,material().glow,14);
  tone(320,.16,'triangle',.05,1.1);
- if(w.switch){
+ if(w.switch&&stage===0){
+  const progress=puzzleProgress[w.row]||0;
+  if(w.sequenceIndex===progress){
+   puzzleProgress[w.row]=progress+1;
+   const next=walls.find(v=>!v.dead&&v.switch&&v.row===w.row&&v.sequenceIndex===progress+1);
+   if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · vise la rune '+next.runeLabel,2.2)}
+   else{
+    for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row){gate.dead=true;broken++}
+    say('LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT',3);
+    tone(760,.3,'triangle',.08,1.35);
+   }
+  }
+ }else if(w.switch){
   for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row&&gate.routeId===w.routeId){gate.dead=true;broken++}
   say('RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT',2.8);
   tone(760,.3,'triangle',.08,1.35);
@@ -149,6 +174,7 @@ function breakBlock(w){
 
 function damageBlock(w,amount){
  if(w.dead||w.locked)return;
+ if(w.switch&&stage===0&&(w.sequenceIndex!==(puzzleProgress[w.row]||0)))return;
  w.hp-=amount;w.hit=.16;
  particle(w.x,w.y,material().fill,4);
  if(w.hp<=0)breakBlock(w);
@@ -244,9 +270,12 @@ function drawBlock(g,w){
  g.fillStyle='#0f0c1acc';g.fillRect(x+8,y+w.h-9,w.w-16,4);
  g.fillStyle=m.glow;g.fillRect(x+8,y+w.h-9,(w.w-16)*clamp(w.hp/w.max,0,1),4);
  if(w.switch){
-  g.save();g.strokeStyle='#d7f0e4';g.lineWidth=3;g.beginPath();g.arc(0,-2,10,0,TAU);g.stroke();
+  g.save();const activeRune=stage!==0||w.sequenceIndex===(puzzleProgress[w.row]||0);
+  g.globalAlpha=activeRune?1:.42;g.strokeStyle=stage===0?'#f2c77e':'#d7f0e4';g.lineWidth=3;
+  g.beginPath();g.arc(0,-2,10,0,TAU);g.stroke();
   g.beginPath();g.moveTo(-6,-2);g.lineTo(6,-2);g.moveTo(0,-8);g.lineTo(0,7);g.stroke();
-  g.fillStyle='#f4e0a5';g.font='bold 9px Arial';g.textAlign='center';g.fillText('CHOISIS',0,20);g.restore();
+  g.fillStyle='#f4e0a5';g.font='bold 10px Arial';g.textAlign='center';
+  g.fillText(stage===0?(w.runeLabel||'A'):'✦',0,20);g.restore();
  }
  if(w.locked){g.fillStyle='#d7f0e4';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCELLÉ',0,4)}
  if(w.gate==='wax'){g.fillStyle='#8e253e';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCEAU',0,4)}
@@ -280,8 +309,9 @@ function draw(g){
   if(route.y<34||route.y>H-28)continue;
   g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
   if(route.stage===0){
-   g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · DIRECT',route.narrowX,route.y-ROW_H/2-5);
-   g.fillStyle='#cfe6d8';g.fillText('LARGE · CACHE À DÉCOUVRIR',route.wideX,route.y-ROW_H/2-5);
+   g.fillStyle='#ffd9a0';g.fillText('RUNES A → B → C',route.narrowX,route.y-ROW_H/2-5);
+   g.fillStyle='#cfe6d8';g.fillText('TIRE SUR LA RUNE ALLUMÉE',route.wideX,route.y-ROW_H/2-5);
+   g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5);
   }else if(route.stage===1){
    g.fillStyle='#cfe6d8';g.fillText('CLOCHE A · OUVRIR',route.narrowX,route.y-ROW_H/2-5);
    g.fillText('CLOCHE B · OUVRIR',route.wideX,route.y-ROW_H/2-5);
