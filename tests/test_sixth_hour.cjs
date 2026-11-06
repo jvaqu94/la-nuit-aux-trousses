@@ -114,6 +114,10 @@ function freshWave(w){
   newWave();
 }
 freshWave(1);out.rule1=SH.RULES[0];
+const flowSchedule=makeSchedule();
+beginTransition(false);
+out.waveFlow={interval:flowSchedule[1].time-flowSchedule[0].time,transition};
+transition=0;
 freshWave(2);out.wave2Blocks=SH.waveBlocks();
 freshWave(3);waveTime=0;out.wave3Blocks=SH.waveBlocks();waveTime=23;out.wave3Held=SH.waveBlocks();
 SH.tick(0.02);out.wave3Minute=!!SH.minute;
@@ -205,7 +209,8 @@ for(const w of v.windows)shots.push({x:w.x,y:w.y,vx:0,vy:-100,life:1,damage:5,pi
 SH.tick(1/60);
 out.veilleuse={lit:v.windows.filter(w=>w.lit).length};
 v.windows.forEach(w=>{w.lit=false});SH.moveBoss(v,1/60);
-out.veilleuse.value=v.value;
+out.veilleuse.value=v.value;out.veilleuse.phase=v.phase;
+v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;
 
 /* 11b · Le Sonneur : tirer sur la cloche monte la résonance, le battant se frappe à côté */
 let s=bossFor(1);
@@ -443,13 +448,59 @@ const gapsPerRow=[],hpPerStage=[];
 for(let i=0;i<10;i++){
   const before=Lab.walls.length;Lab.spawnRow();
   const row=Lab.walls.slice(before);
-  gapsPerRow.push(Lab.COLS-row.length);
+  gapsPerRow.push(Lab.COLS-row.filter(w=>!w.switch).length);
 }
 out.labyrinth.rows={count:Lab.walls.length,gaps:gapsPerRow,
   columns:new Set(Lab.walls.map(w=>Math.round((w.x-Lab.CELL/2)/Lab.CELL))).size};
 for(const index of [0,2,4]){labScene(index,1);Lab.spawnRow();hpPerStage.push(Lab.walls[0].max)}
 out.labyrinth.hpPerStage=hpPerStage;
 out.labyrinth.materials=Lab.MATERIALS.map(m=>m.name);
+
+/* Faubourg : les trois runes s'activent dans l'ordre et ouvrent les deux voies. */
+labScene(0,1);
+for(let i=0;i<3;i++)Lab.spawnRow();
+const fork=Lab.routeRows[0];
+const forkWalls=Lab.walls.filter(w=>w.row===2);
+out.labyrinth.fork={
+  every:Lab.FORK_EVERY,
+  count:Lab.routeRows.length,
+  gates:forkWalls.filter(w=>w.locked).length,
+  runes:forkWalls.filter(w=>w.switch).length,
+  cache:forkWalls.some(w=>w.routeCache&&w.bonus),
+  narrow:fork?.narrowX,
+  wide:fork?.wideX,
+  labels:/RUNES A → B → C/.test(read('sixth-labyrinth.js'))&&/CACHE FACULTATIVE/.test(read('sixth-labyrinth.js'))
+};
+
+
+/* Les runes A, B, C doivent être activées dans l'ordre pour ouvrir les portes. */
+labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
+const runes=Lab.walls.filter(w=>w.row===2&&w.switch).sort((a,b)=>a.sequenceIndex-b.sequenceIndex);
+const gates=Lab.walls.filter(w=>w.row===2&&w.locked);
+Lab.damageBlock(runes[1],99);
+const wrongOrderRejected=!runes[1].dead&&runes[1].hp===99;
+Lab.damageBlock(runes[0],2);
+const secondEnabled=runes[1].hp===2;
+Lab.damageBlock(runes[1],2);
+const thirdEnabled=runes[2].hp===2;
+Lab.damageBlock(runes[2],2);
+out.labyrinth.puzzles={runes:runes.length,gates:gates.length,wrongOrderRejected,
+  secondEnabled,thirdEnabled,allGatesOpened:gates.every(w=>w.dead)};
+
+/* La cache reste un bonus latéral facultatif, sans contrôler les portes. */
+labScene(0,1);for(let i=0;i<3;i++)Lab.spawnRow();
+const cache=Lab.walls.find(w=>w.row===2&&w.routeCache&&w.bonus);
+const cacheHp=cache&&cache.hp;if(cache)Lab.damageBlock(cache,cacheHp);
+out.labyrinth.puzzles.cacheBreakable=!!cache?.dead;
+out.labyrinth.puzzles.cacheNotGate=!!cache&&cache.gate==null;
+out.labyrinth.puzzles.cacheOptional=!!cache?.optional;
+out.labyrinth.puzzles.cacheWidth=cache?.w||0;
+labScene(1,1);Lab.spawnRow();Lab.spawnRow();
+const bellSwitch=Lab.walls.find(w=>w.row===1&&w.switch&&w.routeId==='narrow');
+const narrowGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='narrow');
+const wideGate=Lab.walls.find(w=>w.row===1&&w.locked&&w.routeId==='wide');
+if(bellSwitch)Lab.damageBlock(bellSwitch,bellSwitch.hp);
+out.labyrinth.puzzles.bronze={switchBroken:!!bellSwitch?.dead,narrowOpened:!!narrowGate?.dead,wideStillLocked:!!wideGate&&!wideGate.dead};
 
 /* Les tirs cassent le décor : sans tir, pas de sortie. */
 labScene(1,1);Lab.spawnRow();
@@ -828,6 +879,35 @@ updateHUD();
 out.wicks.gauge.hiddenAfterHUD=document.getElementById('bossbar').classList.contains('hidden');
 gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
 
+/* Épreuves propres aux cinq univers : une action distinctive par monde. */
+const trialCounts=[];
+function trialScene(index){
+ freshWave(1);stage=index;world=worlds[index];
+ SH.mission.trial=0;SH.mission.trialDone=false;
+}
+trialScene(0);
+spawnEnemy({kind:'waxMimic',x:400,y:300,group:1,index:0,pattern:99});
+const trialMimic=enemies[enemies.length-1];damageEnemy(trialMimic,1,false);reward(trialMimic);
+trialCounts.push(SH.mission.trial);
+trialScene(1);
+spawnEnemy({kind:'crackedBell',x:300,y:300,group:1,index:0,pattern:99});
+const trialBell=enemies[enemies.length-1];
+spawnEnemy({kind:'crackedBell',x:500,y:300,group:1,index:1,pattern:99});
+reward(trialBell);trialCounts.push(SH.mission.trial);
+trialScene(2);
+SH.salt.push({x:400,y:650,r:62,age:1,life:3});
+player.x=400;player.y=650;player.dash=.2;SH.tick(.01);
+trialCounts.push(SH.mission.trial);
+trialScene(3);
+spawnEnemy({kind:'snufferHand',x:400,y:300,group:1,index:0,pattern:99});
+const trialSnuffer=enemies[enemies.length-1];trialSnuffer.stolen=1;reward(trialSnuffer);
+trialCounts.push(SH.mission.trial);
+trialScene(4);
+spawnEnemy({kind:'unnamedDigit',x:400,y:300,group:1,index:0,pattern:99});
+const trialDigit=enemies[enemies.length-1];trialDigit.digit=SH.mission.digit;damageEnemy(trialDigit,1,false);reward(trialDigit);
+trialCounts.push(SH.mission.trial);
+out.trials={counts:trialCounts,names:SH.TRIALS.map(t=>t.short),objective:SH.objectiveText()};
+
 /* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
@@ -858,6 +938,8 @@ assert.equal(r.apply.count, 5);
 assert.notEqual(r.apply.first, r.apply.classic, 'applyWorld(3) doit remplacer les univers');
 assert.equal(r.apply.runId, 'world3-normal', 'records séparés du monde 3');
 
+assert.ok(r.waveFlow.interval <= 1.01, 'les apparitions du monde 3 doivent rester rapprochées');
+assert.ok(r.waveFlow.transition <= .25, 'la transition entre vagues du monde 3 doit être quasi immédiate');
 assert.equal(r.wave2Blocks, true, 'vague 2 : la minute doit être rendue');
 assert.equal(r.wave3Blocks, true, 'vague 3 : tenue de 22 s');
 assert.equal(r.wave3Held, true, 'vague 3 : la minute libérée doit encore être ramassée');
@@ -902,7 +984,10 @@ for (const b of r.bosses) {
 assert.equal(new Set(r.bosses.map(b => b.victory)).size, 5, 'cinq conditions de victoire différentes');
 
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
-assert.equal(r.veilleuse.value, 1, 'la jauge de la Veilleuse est complète quand tout est éteint');
+assert.equal(r.veilleuse.value, .5, 'éteindre les mèches déclenche la seconde phase sans tuer le boss');
+assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après les cinq mèches');
+assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
+assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
 assert.equal(r.sonneur.strikes, 0, 'la cloche n’est pas le battant');
 assert.equal(r.sonneur.strikesAfter, 1, 'le battant se frappe hors de l’ombre de la cloche');
@@ -998,12 +1083,29 @@ assert.ok(r.labyrinth.speed.boosted <= 260, 'le défilement reste plafonné');
 assert.equal(r.labyrinth.speedWorld2, r.labyrinth.speed.classicSpeed, 'le monde 2 ne doit pas être accéléré');
 assert.equal(r.labyrinth.foreignSpeed, 74, 'le monde 1 garde sa vitesse');
 assert.deepEqual(r.labyrinth.foreign, [0, 0], 'aucun mur dans les mondes 1 et 2');
-assert.equal(r.labyrinth.rows.count, 67, 'dix rangées pleines moins leurs brèches');
-assert.ok(r.labyrinth.rows.gaps.every(n => n >= 1), 'chaque rangée doit laisser au moins une brèche');
-assert.ok(r.labyrinth.rows.gaps.some(n => n === 2), 'certaines rangées offrent deux brèches');
+assert.equal(r.labyrinth.rows.count, 82, 'dix rangées avec trois bifurcations, portes de cire, runes et caches');
+assert.ok(r.labyrinth.rows.gaps.every(n => n >= 0), 'les rangées ne doivent jamais compter de cellules en double');
+assert.ok(r.labyrinth.rows.gaps.some(n => n === 0), 'les bifurcations du Faubourg commencent fermées par les portes du puzzle');
 assert.equal(r.labyrinth.rows.columns, 8, 'la route doit balayer toute la largeur');
 assert.deepEqual(r.labyrinth.hpPerStage, [3, 5, 7], 'le décor durcit avec les univers');
 assert.deepEqual(r.labyrinth.materials, ['CIRE', 'BRONZE', 'SEL', 'BOIS', 'OBSIDIENNE'], 'une matière par univers');
+assert.equal(r.labyrinth.fork.every,3,'une bifurcation toutes les trois rangées');
+assert.equal(r.labyrinth.fork.count,1,'une bifurcation est créée sur la troisième rangée');
+assert.equal(r.labyrinth.fork.gates,3,'les trois cellules de passage sont verrouillées avant la résolution');
+assert.equal(r.labyrinth.fork.runes,3,'le puzzle comporte trois runes à activer');
+assert.equal(r.labyrinth.fork.cache,true,'la cache facultative doit être dans un bloc adjacent à la voie large');
+assert.equal(r.labyrinth.fork.labels,true,'les runes et la cache facultative sont identifiées à l’écran');
+assert.equal(r.labyrinth.puzzles.runes,3,'trois runes sont présentes');
+assert.equal(r.labyrinth.puzzles.gates,3,'trois portes bloquent les passages');
+assert.equal(r.labyrinth.puzzles.wrongOrderRejected,true,'une rune inactive ne peut pas être activée hors ordre');
+assert.equal(r.labyrinth.puzzles.secondEnabled,true,'la rune B devient vulnérable après A');
+assert.equal(r.labyrinth.puzzles.thirdEnabled,true,'la rune C devient vulnérable après B');
+assert.equal(r.labyrinth.puzzles.allGatesOpened,true,'la troisième rune ouvre toutes les portes');
+assert.equal(r.labyrinth.puzzles.cacheBreakable,true,'la cache latérale reste destructible');
+assert.equal(r.labyrinth.puzzles.cacheNotGate,true,'la cache ne commande pas les portes');
+assert.equal(r.labyrinth.puzzles.cacheOptional,true,'la cache reste facultative');
+assert.equal(r.labyrinth.puzzles.cacheWidth,88,'la cache forme une alcôve distincte du passage');
+assert.deepEqual(r.labyrinth.puzzles.bronze,{switchBroken:true,narrowOpened:true,wideStillLocked:true},'la cloche choisie ouvre uniquement sa route dans le Clocher');
 assert.equal(r.labyrinth.shot.hp1, r.labyrinth.shot.hp0 - 1, 'un tir doit entamer le bloc');
 assert.equal(r.labyrinth.shot.consumed, true, 'le tir est arrêté par le décor');
 assert.equal(r.labyrinth.shot.broken, true, 'le bloc doit céder sous les tirs');
@@ -1121,9 +1223,12 @@ assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés
 assert.ok(r.wicks.labelX.min >= 92, 'un libellé ne déborde pas à gauche : ' + r.wicks.labelX.min);
 assert.ok(r.wicks.labelX.max <= r.wicks.labelX.arena - 92, 'un libellé ne déborde pas à droite : ' + r.wicks.labelX.max);
 
+assert.deepEqual(r.trials.counts,[1,1,1,1,1],'chaque univers doit valider son épreuve avec sa mécanique propre');
+assert.deepEqual(r.trials.names,['SCEAUX','ÉCHOS','TRACES','MÈCHES','CHIFFRES'],'les cinq épreuves doivent rester distinctes');
+assert.ok(r.trials.objective.includes('ÉPREUVE CHIFFRES 1/3'),'la progression de l’épreuve doit rester visible dans le bandeau');
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
 
-console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, Veilleuse à jauge unique avec mèches dessinées, salve de défense et tirage aléatoire, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
+console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, cinq épreuves de maîtrise spécifiques au monde 3, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, Veilleuse à jauge unique avec mèches dessinées, salve de défense et tirage aléatoire, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 
 /* journey.js arme des minuteurs de fin de partie : on sort explicitement. */
 process.exit(0);

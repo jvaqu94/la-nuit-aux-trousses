@@ -148,7 +148,7 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq lanternes en même temps, sachant que chaque mèche encore allumée vous tire dessus. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq mèches, puis frapper trois fois son cœur lorsqu'il s'ouvre. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
@@ -198,15 +198,44 @@ Aperçu : `docs/apercu-monde-3.jpg` (décor, murs et acteurs dessinés par le co
 et `docs/bestiaire-monde-3.jpg` (13 formes, 5 gardiens et 5 objets).
 Le combat de la Veilleuse, jauge unique et lanternes tirées au sort : `docs/veilleuse-mondes-3.jpg`.
 
+#### Les cinq épreuves de maîtrise
+
+Chaque univers possède désormais une épreuve facultative active pendant ses quatre
+vagues ordinaires. Elle met en pratique le danger propre à cet univers, affiche
+sa progression dans le bandeau d'objectif et accorde des points sans bloquer la
+vague si le joueur préfère survivre :
+
+- **Faubourg des veilles — Sceaux :** percer trois Faux-cierges à distance avant
+  qu'ils ne mordent au contact.
+- **Clocher muet — Échos :** détruire trois cloches liées ; briser l'une suspend
+  les tirs de sa jumelle.
+- **Estran des pas perdus — Traces :** effacer trois empreintes en déclenchant
+  une esquive à travers leur zone de sel.
+- **Bois des lanternes rendues — Mèches :** vaincre trois Moucheurs portant des
+  flammes volées pour récupérer les mèches.
+- **Cadran noir — Chiffres :** vaincre trois Chiffres sans nom lorsqu'ils affichent
+  leur faiblesse, ce qui double les dégâts reçus.
+
+L'épreuve est remise à zéro à chaque vague ; sa validation rapporte un bonus
+supplémentaire. Les cinq gardiens conservent leurs conditions de victoire dédiées.
+
 #### Le labyrinthe destructible
 
 Le monde 3 ne se joue plus comme un simple défilement descendant. `sixth-labyrinth.js`
 ajoute une troisième couche de pression :
 
 - **Défilement ×1,5** (plafonné à 260), uniquement quand `Campaign.activeWorld===3`.
-- Des **rangées de décor solide** descendent vers le joueur : huit cellules, une
-  brèche obligatoire, deux une rangée sur trois. La route alterne sur toute la
-  largeur, donc il faut lire le mur et choisir sa colonne.
+- Des **rangées de décor solide** descendent vers le joueur : huit cellules,
+  une brèche sur les rangées ordinaires ; sur les bifurcations du Faubourg,
+  deux passages (un étroit et un large) sont initialement fermés par trois portes
+  de cire. La route alterne sur toute la largeur, donc il faut lire le mur et choisir sa colonne.
+- **Deux énigmes de route différentes dès les premiers univers :** au Faubourg,
+  trois runes de cire doivent être touchées dans l'ordre A → B → C ; une seule
+  est vulnérable à la fois et la troisième ouvre les deux passages. Une cache
+  latérale reste facultative et ne commande pas l'ouverture des portes ;
+  au Clocher, deux cloches verrouillent deux passages et le joueur choisit
+  celle qu'il aligne avec son tir automatique pour n'ouvrir qu'une seule route.
+  Les autres univers conservent les bifurcations risque/récompense.
 - Chaque bloc a une **solidité de 3 à 7 points** selon l’univers, des **fissures
   proportionnelles aux dégâts** et une **jauge de solidité** lisible sur téléphone.
   Les tirs l’entament, le détruire rapporte 30 points.
@@ -499,7 +528,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, budgets plafonnés, cinq gardiens sans barre de vie, minutes rendues. |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues et seconde phase du premier gardien. |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
@@ -514,7 +543,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `scenery/` | Images sources des décors, dont `sixth-*.jpg` pour le monde 3. |
 | `sixth-hour-art.js` | Silhouettes SVG et couches d’animation des 10 formes et 5 gardiens du monde 3. |
 | `sixth-scenery.js` | Décors peints du monde 3, embarqués (généré par `tools/build_sixth_scenery.py`). |
-| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, rangées à brèche, butin scellé, coincement du joueur. |
+| `sixth-labyrinth.js` | Monde 3 · labyrinthe destructible : défilement ×1,5, puzzle des trois runes au Faubourg, cloches de route au Clocher, caches facultatives, coincement du joueur. |
 | `tests/` | Tests Node, Python et Playwright, ainsi que leurs captures. |
 | `tools/generate_music.py` | Montage stéréo des cinq adaptations à partir du thème fourni, avec NumPy, SciPy, SoundFile et lameenc. |
 | `tools/package.py` | Génération du HTML autonome et des archives, avec les MP3 incorporés. |

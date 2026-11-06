@@ -69,22 +69,70 @@ function releaseBonus(w){
 }
 /* Les brèches alternent : la route dessine un vrai zigzag de labyrinthe. */
 const ROUTE=[1,5,2,6,3,7,4,0,2,5];
+/* Une ligne sur trois propose deux itinéraires lisibles :
+   passage étroit avec cache garanti, ou passage large sans détour. */
+const FORK_EVERY=3;
+const ROUTE_CACHE=[BONUS[1],BONUS[2],BONUS[0],BONUS[4],BONUS[3]];
 
-let walls=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false;
+let walls=[],routeRows=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false,puzzleProgress={};
 
-function reset(){walls=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false}
+function reset(){walls=[];routeRows=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false;puzzleProgress={}}
 
 function material(){return MATERIALS[clamp(stage,0,4)]}
 
-/* Une rangée : huit cellules, une ou deux brèches, le reste est solide. */
+/* Une rangée : les lignes ordinaires gardent leur brèche en zigzag.
+   Une ligne sur trois devient une bifurcation : un couloir étroit qui cache
+   un butin garanti, ou un couloir large plus confortable. */
 function spawnRow(){
- const gaps=new Set([ROUTE[rowIndex%ROUTE.length]]);
- if(rowIndex%3===2)gaps.add((ROUTE[rowIndex%ROUTE.length]+3)%COLS);
+ const row=rowIndex,narrow=ROUTE[row%ROUTE.length];
+ const forkEvery=stage===1?2:FORK_EVERY;
+ const fork=row%forkEvery===forkEvery-1;
+ const wideStart=(narrow+4)%COLS;
+ const cacheCell=(wideStart+2)%COLS;
+ const gaps=new Set([narrow]);
+ if(fork){gaps.add(wideStart);gaps.add((wideStart+1)%COLS)}
+ if(fork&&stage===0)gaps.add(cacheCell);
  const hp=3+clamp(stage,0,4);
  for(let c=0;c<COLS;c++){
   if(gaps.has(c))continue;
-  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row:rowIndex,bonus:rollBonus()});
+  const bonus=rollBonus();
+  walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp,max:hp,hit:0,dead:false,row,bonus,routeCache:false});
  }
+ if(fork&&stage===0){
+  // Faubourg : les deux voies sont fermées par des portes de cire.
+  // Il faut toucher les trois runes dans l'ordre A -> B -> C. Une seule
+  // rune est vulnérable à la fois ; la troisième ouvre les deux itinéraires.
+  const routeCells=[narrow,wideStart,(wideStart+1)%COLS];
+  for(const c of routeCells)walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,
+   hp:99,max:99,hit:0,dead:false,row,bonus:null,locked:true,routeId:'wax-puzzle',gate:'wax'});
+  const runeXs=[narrow*CELL+CELL/2,wideStart*CELL+CELL/2,(wideStart+1)*CELL+CELL/2];
+  runeXs.forEach((x,index)=>walls.push({x,y:-ROW_H+48,w:46,h:34,
+   hp:index===0?2:99,max:index===0?2:99,hit:0,dead:false,row,bonus:null,
+   switch:true,sequenceIndex:index,runeLabel:String.fromCharCode(65+index)}));
+  // Une cache dans une alcôve latérale : elle ne commande pas l'ouverture
+  // des portes et reste facultative après la résolution des runes.
+  walls.push({x:cacheCell*CELL+CELL/2,y:-ROW_H,w:CELL-12,h:ROW_H-8,
+   hp:4,max:4,hit:0,dead:false,row,bonus:ROUTE_CACHE[row%ROUTE_CACHE.length],
+   routeCache:true,optional:true});
+ }
+ if(fork&&stage===1){
+  // Clocher : les deux itinéraires sont verrouillés. Il faut choisir une cloche
+  // et l'aligner avec le tir automatique pour ouvrir uniquement sa route.
+  const choices=[
+   {routeId:'narrow',cells:[narrow],x:narrow*CELL+CELL/2},
+   {routeId:'wide',cells:[wideStart,(wideStart+1)%COLS],x:wideStart*CELL+CELL}
+  ];
+  for(const choice of choices){
+   for(const c of choice.cells)walls.push({x:c*CELL+CELL/2,y:-ROW_H,w:CELL-6,h:ROW_H,hp:99,max:99,hit:0,dead:false,row,
+    bonus:null,locked:true,routeId:choice.routeId,gate:'bronze'});
+   walls.push({x:choice.x,y:-ROW_H+48,w:46,h:34,hp:2,max:2,hit:0,dead:false,row,
+    bonus:null,switch:true,routeId:choice.routeId});
+  }
+ }
+ if(fork)routeRows.push({row,y:-ROW_H,narrowX:narrow*CELL+CELL/2,
+  wideX:wideStart*CELL+CELL,wideStart,cacheX:cacheCell*CELL+CELL/2,
+  switches:stage===0?[narrow*CELL+CELL/2,wideStart*CELL+CELL/2,(wideStart+1)*CELL+CELL/2]:
+   stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
  rowIndex++;
 }
 
@@ -102,12 +150,31 @@ function breakBlock(w){
  w.dead=true;broken++;
  score+=30;particle(w.x,w.y,material().glow,14);
  tone(320,.16,'triangle',.05,1.1);
+ if(w.switch&&stage===0){
+  const progress=puzzleProgress[w.row]||0;
+  if(w.sequenceIndex===progress){
+   puzzleProgress[w.row]=progress+1;
+   const next=walls.find(v=>!v.dead&&v.switch&&v.row===w.row&&v.sequenceIndex===progress+1);
+   if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · vise la rune '+next.runeLabel,2.2)}
+   else{
+    for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row){gate.dead=true;broken++}
+    say('LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT',3);
+    tone(760,.3,'triangle',.08,1.35);
+   }
+  }
+ }else if(w.switch){
+  for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row&&gate.routeId===w.routeId){gate.dead=true;broken++}
+  say('RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT',2.8);
+  tone(760,.3,'triangle',.08,1.35);
+ }
+ if(w.routeCache)say('CACHE DU FAUBOURG · butin découvert',2.4);
  if(w.bonus){particle(w.x,w.y,w.bonus.color,20);tone(660,.22,'sine',.06,1.3)}
  releaseBonus(w);
 }
 
 function damageBlock(w,amount){
- if(w.dead)return;
+ if(w.dead||w.locked)return;
+ if(w.switch&&stage===0&&(w.sequenceIndex!==(puzzleProgress[w.row]||0)))return;
  w.hp-=amount;w.hit=.16;
  particle(w.x,w.y,material().fill,4);
  if(w.hp<=0)breakBlock(w);
@@ -150,6 +217,8 @@ function tick(dt){
   timer=Math.max(2.1,3.4-clamp(stage,0,4)*.22);
  }
  const speed=scrollSpeed();
+ for(const route of routeRows)route.y+=speed*dt;
+ routeRows=routeRows.filter(route=>route.y<H+ROW_H);
  let pinned=false;
  for(const w of walls){
   if(w.dead)continue;
@@ -200,6 +269,16 @@ function drawBlock(g,w){
  // Petite jauge de solidité, lisible même sur téléphone.
  g.fillStyle='#0f0c1acc';g.fillRect(x+8,y+w.h-9,w.w-16,4);
  g.fillStyle=m.glow;g.fillRect(x+8,y+w.h-9,(w.w-16)*clamp(w.hp/w.max,0,1),4);
+ if(w.switch){
+  g.save();const activeRune=stage!==0||w.sequenceIndex===(puzzleProgress[w.row]||0);
+  g.globalAlpha=activeRune?1:.42;g.strokeStyle=stage===0?'#f2c77e':'#d7f0e4';g.lineWidth=3;
+  g.beginPath();g.arc(0,-2,10,0,TAU);g.stroke();
+  g.beginPath();g.moveTo(-6,-2);g.lineTo(6,-2);g.moveTo(0,-8);g.lineTo(0,7);g.stroke();
+  g.fillStyle='#f4e0a5';g.font='bold 10px Arial';g.textAlign='center';
+  g.fillText(stage===0?(w.runeLabel||'A'):'✦',0,20);g.restore();
+ }
+ if(w.locked){g.fillStyle='#d7f0e4';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCELLÉ',0,4)}
+ if(w.gate==='wax'){g.fillStyle='#8e253e';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCEAU',0,4)}
  if(w.bonus){
   // Cire à cacheter et glyphe : on voit quel bloc vaut la peine d'être ouvert.
   g.fillStyle=w.bonus.color;g.globalAlpha=.9;
@@ -212,7 +291,7 @@ function drawBlock(g,w){
 }
 
 function draw(g){
- if(!active()||!walls.length)return;
+ if(!active()||(!walls.length&&!routeRows.length))return;
  const m=material();
  for(const w of walls){
   if(w.dead)continue;
@@ -223,6 +302,24 @@ function draw(g){
    continue;
   }
   drawBlock(g,w);
+ }
+ /* Les deux issues d'une bifurcation restent identifiées jusqu'à la sortie
+    de la rangée : le choix est visuel, pas caché dans le code. */
+ for(const route of routeRows){
+  if(route.y<34||route.y>H-28)continue;
+  g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
+  if(route.stage===0){
+   g.fillStyle='#ffd9a0';g.fillText('RUNES A → B → C',route.narrowX,route.y-ROW_H/2-5);
+   g.fillStyle='#cfe6d8';g.fillText('TIRE SUR LA RUNE ALLUMÉE',route.wideX,route.y-ROW_H/2-5);
+   g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5);
+  }else if(route.stage===1){
+   g.fillStyle='#cfe6d8';g.fillText('CLOCHE A · OUVRIR',route.narrowX,route.y-ROW_H/2-5);
+   g.fillText('CLOCHE B · OUVRIR',route.wideX,route.y-ROW_H/2-5);
+  }else{
+   g.fillStyle='#ffd9a0';g.fillText('ÉTROIT · CACHE À CASSER',route.narrowX,route.y-ROW_H/2-5);
+   g.fillStyle='#cfe6d8';g.fillText('LARGE · SÛR',route.wideX,route.y-ROW_H/2-5);
+  }
+  g.restore();
  }
  if(pinTime>.2){
   g.save();g.textAlign='center';g.fillStyle='#ff9d7a';
@@ -245,7 +342,7 @@ targetScrollSpeed=function(){
 window.SixthLabyrinth={
  tick,draw,reset,spawnRow,damageBlock,addPanel,
  get walls(){return walls},get pinTime(){return pinTime},get broken(){return broken},
- get speedBoost(){return 1.5},
+ get speedBoost(){return 1.5},get routeRows(){return routeRows},FORK_EVERY,
  MATERIALS,CELL,COLS,ROW_H,BONUS,BONUS_CHANCE,rollBonus,releaseBonus
 };
 })();
