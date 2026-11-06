@@ -1,12 +1,12 @@
 /* Boucles MP3 locales et arrivée du boss. Aucun service distant. */
 (()=>{
 'use strict';
-const paths={menu:'audio/nuitsorc-loop.mp3','menu-sequel':'audio/sequel-menu.mp3',forest:'audio/forest.mp3',cemetery:'audio/cemetery.mp3',castle:'audio/castle.mp3',marsh:'audio/marsh.mp3',lanterns:'audio/lanterns.mp3','sequel-city':'audio/sequel-city.mp3','sequel-desert':'audio/sequel-desert.mp3','sequel-clockforest':'audio/sequel-clockforest.mp3','sequel-train':'audio/sequel-train.mp3','sequel-palace':'audio/sequel-palace.mp3',defeat:'audio/defeat.mp3'};
+const paths={menu:'audio/nuitsorc-loop.mp3','menu-sequel':'audio/sequel-menu.mp3',forest:'audio/forest.mp3',cemetery:'audio/cemetery.mp3',castle:'audio/castle.mp3',marsh:'audio/marsh.mp3',lanterns:'audio/lanterns.mp3','sequel-city':'audio/sequel-city.mp3','sequel-desert':'audio/sequel-desert.mp3','sequel-clockforest':'audio/sequel-clockforest.mp3','sequel-train':'audio/sequel-train.mp3','sequel-palace':'audio/sequel-palace.mp3','world3-faubourg':'audio/world3-faubourg.mp3','world3-clocher':'audio/world3-clocher.mp3','world3-estran':'audio/world3-estran.mp3','world3-lanternes-rendues':'audio/world3-lanternes-rendues.mp3','world3-cadran-noir':'audio/world3-cadran-noir.mp3',defeat:'audio/defeat.mp3'};
 const bossArrivalPaths={forest:'audio/boss-forest.mp3',cemetery:'audio/boss-cemetery.mp3',castle:'audio/boss-castle.mp3',marsh:'audio/boss-marsh.mp3',lanterns:'audio/boss-lanterns.mp3'};
 // Longueurs de composition avant encodage. LAME ajoute 1105 échantillons de
 // délai et un bourrage final : ils sont exclus de la lecture et du raccord.
-const samples={menu:4197935,'menu-sequel':3932926,forest:2638999,cemetery:2757879,castle:2791095,marsh:2566203,lanterns:2664286,'sequel-city':3863805,'sequel-desert':3967486,'sequel-clockforest':4070013,'sequel-train':4128765,'sequel-palace':4000893};
-const baseRates={menu:1,'menu-sequel':1,'sequel-city':1.02,'sequel-desert':.98,'sequel-clockforest':.94,'sequel-train':1.04,'sequel-palace':.9,forest:1,cemetery:.88,castle:1.02,marsh:.94,lanterns:1.08};
+const samples={menu:4197935,'menu-sequel':3932926,forest:2638999,cemetery:2757879,castle:2791095,marsh:2566203,lanterns:2664286,'sequel-city':3863805,'sequel-desert':3967486,'sequel-clockforest':4070013,'sequel-train':4128765,'sequel-palace':4000893,'world3-faubourg':4157566,'world3-clocher':3900669,'world3-estran':2935294,'world3-lanternes-rendues':3964030,'world3-cadran-noir':3974397};
+const baseRates={menu:1,'menu-sequel':1,'sequel-city':1.02,'sequel-desert':.98,'sequel-clockforest':.94,'sequel-train':1.04,'sequel-palace':.9,'world3-faubourg':.98,'world3-clocher':.82,'world3-estran':.96,'world3-lanternes-rendues':1.04,'world3-cadran-noir':1.08,forest:1,cemetery:.88,castle:1.02,marsh:.94,lanterns:1.08};
 const encoderDelay=1105/44100;
 class MinuitMusicPlayer{
  constructor(context,destination,effectsDestination=destination){
