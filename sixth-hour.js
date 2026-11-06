@@ -575,7 +575,7 @@ function tickVeilleuse(e,dt){
   e.volley=null;
  }
  e.relight-=dt;
- if(e.relight<=0){
+ if(e.relight<=0&&windows.some(w=>w.lit)){
   e.relight=5+rng()*3.5;
   const dark=windows.filter(w=>!w.lit);
   if(dark.length){
