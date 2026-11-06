@@ -32,7 +32,7 @@ const foeKinds=new Set(Object.keys(foeNames));
 const bossKinds=new Set(['veilleuse','sonneur','passeur','cueilleuse','chasseur']);
 /* Une condition de victoire par gardien : aucune n'est « vider la barre ». */
 const VICTORY={
- veilleuse:'Éteins les 5 mèches',
+ veilleuse:'Éteins les 5 mèches, puis frappe le cœur 3 fois',
  sonneur:'Frappe 3 fois le battant',
  passeur:'Brise 3 fois le sable',
  cueilleuse:'Force 3 cueillettes',
@@ -49,7 +49,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'Tire sur la flamme quand son anneau s’ouvre. Chaque mèche allumée te tire dessus.',
+ veilleuse:'Éteins les mèches quand leur anneau s’ouvre. Ensuite, frappe le cœur uniquement pendant ses ouvertures : 3 impacts sont nécessaires.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
@@ -157,7 +157,7 @@ const baseSchedule=makeSchedule;
 makeSchedule=function(){
  if(!active())return baseSchedule();
  const forms=world.foes,list=[];
- if(wave===5){list.push({time:1,x:260,kind:forms[0],pattern:99,group:1,index:0},{time:1.4,x:540,kind:forms[1],pattern:99,group:1,index:1});return list}
+ if(wave===5){for(let i=0;i<8;i++)list.push({time:.8+i*.8,x:90+(i*173)%620,kind:forms[i%forms.length],pattern:99,group:1+Math.floor(i/2),index:i%2});return list}
  const count=16+wave*3;
  for(let i=0;i<count;i++)list.push({time:1+i*1.5,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
  return list;
@@ -484,7 +484,7 @@ spawnBoss=function(){
   timer:0,step:0,value:0,label:'',lossStart:window.Journey?.run?.stats.lifeLoss||0};
  if(kind==='veilleuse'){
   boss.windows=makeWicks();
-  boss.tour=0;boss.relight=5+rng()*3;boss.label='FENÊTRE';
+  boss.tour=0;boss.relight=5+rng()*3;boss.label='MÈCHES';boss.core=null;
   boss.openTimer=1.2;boss.guard=2.6;boss.lastOpen=null;boss.volley=null;
  }else if(kind==='sonneur'){
   boss.bell={x:400,y:330,r:58};boss.clapper={x:400,y:236,r:24,down:false};
@@ -524,6 +524,15 @@ function moveBoss(e,dt,oldX,oldY){
    peut tirer : plus il en reste, plus la salve est dense. Éteindre une mèche
    supprime donc une bouche à feu, ce qui rend la suivante plus accessible. */
 function tickVeilleuse(e,dt){
+ if(e.phase===2){
+  const core=e.core;if(!core)return;
+  core.x=400+Math.sin(e.age*.82)*155;core.y=305+Math.sin(e.age*.57)*34;
+  core.open=Math.max(0,core.open-dt);core.flash=Math.max(0,core.flash-dt);
+  core.openTimer-=dt;core.attack-=dt;
+  if(core.openTimer<=0){core.open=1.15;core.openTimer=2.35;say('LE CŒUR S’OUVRE · aligne tes tirs',1.5)}
+  if(core.attack<=0){core.attack=2.1;const aim=Math.atan2(player.y-core.y,player.x-core.x);shootHostile({x:core.x,y:core.y,boss:true,phase:2},'spirit',[-.18,0,.18],145,aim)}
+  e.value=.5+core.hits/6;e.label='CŒUR · '+core.hits+'/3 IMPACTS';return;
+ }
  const windows=e.windows;
  for(const w of windows){
   w.open=Math.max(0,w.open-dt);
@@ -576,7 +585,8 @@ function tickVeilleuse(e,dt){
   }
  }
  const lit=windows.filter(w=>w.lit).length;
- e.value=(5-lit)/5;e.label=lit+' / 5 FENÊTRES ALLUMÉES';
+ e.value=Math.min(.49,(5-lit)/5*.49);e.label=lit+' / 5 MÈCHES RESTANTES';
+ if(lit===0&&!e.core){e.phase=2;e.relight=Infinity;e.core={x:400,y:305,r:29,open:0,openTimer:1.1,attack:1.5,hits:0,flash:0};e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LES MÈCHES SONT ÉTEINTES · le cœur apparaît. Frappe-le pendant ses ouvertures.',4);particle(e.x,e.y,'#ffd9a0',34);tone(180,.5,'sine',.09,.65)}
  if(lit===5&&e.age>6){
   e.relight=5+rng()*3;hurt(25,'la veille complète');
   say('VEILLE COMPLÈTE · une seule mèche s’éteint',2.4);
@@ -703,7 +713,9 @@ function hitTargets(){
  if(!e||e.dead||!active())return;
  for(const shot of shots){
   if(shot.life<=0)continue;
-  if(e.kind==='veilleuse'){
+  if(e.kind==='veilleuse'&&e.phase===2&&e.core){
+   const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;consume(shot);particle(core.x,core.y,'#fff0bd',24);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3',2)}
+  }else if(e.kind==='veilleuse'){
    for(const w of e.windows)if(w.lit&&w.open>0&&near(shot.x,shot.y,w.x,w.y,26)){
     w.lit=false;w.open=0;consume(shot);particle(w.x,w.y,'#ffd9a0',16);tone(560,.2,'sine',.07,1.2);
     say('MÈCHE ÉTEINTE · '+e.windows.filter(v=>!v.lit).length+'/5',1.6);break;
@@ -1027,6 +1039,7 @@ document.head.appendChild(style);
 
 window.SixthHour={
  BUDGET,TUNING,foeNames,VICTORY,RULES,HOWTO,HABITS,TRIALS,fireDelay,objectiveText,
+ bossDelay:()=>active()?7.5:16,
  moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,
  isFoeKind:k=>foeKinds.has(k),isBossKind:k=>bossKinds.has(k),
  get boss(){return boss},get mission(){return mission},get habits(){return habits},
