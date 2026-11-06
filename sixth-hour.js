@@ -41,7 +41,7 @@ const VICTORY={
 /* Une phrase par univers, écrite comme une consigne de jeu, pas comme une
    énigme : ce qu'il faut faire, et ce qui arrive si on ne le fait pas. */
 const RULES=[
- 'TUE le Garde-mèche : son halo protège les autres monstres. Au labyrinthe, le raccourci est scellé : tire sur le sceau pour l’ouvrir, ou prends la voie large. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge.',
+ 'TUE le Garde-mèche : son halo protège les autres monstres. Au labyrinthe, choisis entre le couloir étroit et la voie large : un mur adjacent cache une récompense facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge.',
  'CHOISIS une cloche du labyrinthe : aligne-toi dessous et tire pour ouvrir uniquement son passage. En combat, briser une cloche suspend les tirs de sa jumelle pendant 1,5 seconde.',
  'ÉVITE le sel blanc : il te ralentit. Il tombe là où tu étais, pas là où tu es.',
  'ALLUME les lanternes en les touchant. TUE le Moucheur : il souffle une mèche et s’en sert pour protéger les autres — le tuer te la rend.',
@@ -159,7 +159,9 @@ makeSchedule=function(){
  const forms=world.foes,list=[];
  if(wave===5){for(let i=0;i<8;i++)list.push({time:.8+i*.8,x:90+(i*173)%620,kind:forms[i%forms.length],pattern:99,group:1+Math.floor(i/2),index:i%2});return list}
  const count=16+wave*3;
- for(let i=0;i<count;i++)list.push({time:1+i*1.5,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
+ // Entrée plus vive et cadence régulière : la vague suivante ne démarre
+ // pas par une longue attente après la transition.
+ for(let i=0;i<count;i++)list.push({time:.35+i*1.35,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
  return list;
 };
 
