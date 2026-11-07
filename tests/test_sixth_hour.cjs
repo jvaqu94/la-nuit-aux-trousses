@@ -221,39 +221,23 @@ for(let i=0;i<5;i++){
   out.bosses.push({kind:e.kind,hp,max:e.max,unchanged:e.hp===hp,label:e.label,value:e.value,victory:SH.VICTORY[e.kind]});
 }
 
-/* 11a · La Veilleuse v2 : scellés I → II → III imbriqués, puis trois mèches, puis le cœur */
+/* 11a · La Veilleuse v4 : tout tient aux bougies — trois mèches fendent la cire ; le cœur bat à nu sur le torse. Plus aucun scellé. */
 let v=bossFor(0);
-const vialXY=n=>({x:v.x+(n-2)*58,y:v.y+64});
-out.veilleuse={vialsSpawn:v.vials.map(vial=>vial.state)};
-// un scellé figé absorbe le tir sans céder
-shots=[{x:vialXY(2).x,y:vialXY(2).y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
-SH.tick(1/60);
-out.veilleuse.frozen={state:v.vials[1].state,consumed:shots[0].life<=0};
-// les mèches seules ne suffisent pas : sans les scellés, le cœur reste fermé
-v.windows.forEach(w=>{w.lit=false});SH.moveBoss(v,1/60);
-out.veilleuse.gateWicksOnly=v.phase;
-// briser I -> II -> III via le vrai chemin de tir
-for(const n of [1,2,3]){
-  const pos=vialXY(n);
-  shots=[{x:pos.x,y:pos.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
-  SH.tick(1/60);
-  out.veilleuse['after'+n]=v.vials.map(vial=>vial.state);
-}
-out.veilleuse.vialBurst=hostile.length;
-out.veilleuse.label=v.label;
+out.veilleuse={noVials:!('vials' in v)};
+// une mèche éteinte : la cire tient bon, le cœur reste fermé
+v.windows.forEach((w,i)=>{w.lit=i!==0});
 SH.moveBoss(v,1/60);
-out.veilleuse.phase=v.phase;out.veilleuse.value=v.value;out.veilleuse.lit=0;
-v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;out.veilleuse.coreHome=v.core.home;
-// les scellés seuls ne suffisent pas non plus : cinq mèches allumées, aucun cœur
-let w2b=bossFor(0);
-const vialXY2=n=>({x:w2b.x+(n-2)*58,y:w2b.y+64});
-for(const n of [1,2,3]){
-  const pos=vialXY2(n);
-  shots=[{x:pos.x,y:pos.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
-  SH.tick(1/60);
-}
-SH.moveBoss(w2b,1/60);
-out.veilleuse.gateSealsOnly=w2b.phase;
+out.veilleuse.oneWick=v.phase;
+// trois mèches éteintes : la cire se fend, le cœur s'expose, ancré sur le torse
+v.windows.forEach((w,i)=>{w.lit=i>=3});
+SH.moveBoss(v,1/60);
+out.veilleuse.phase=v.phase;out.veilleuse.value=v.value;out.veilleuse.lit=0;out.veilleuse.label=v.label;
+out.veilleuse.corePinned=Math.abs(v.core.y-(v.y+26))<.001&&v.core.x===v.x;
+// hors flash, le cœur est scellé : le tir encaisse et n'entame rien
+v.core.open=0;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);
+out.veilleuse.blocked=v.core.hits;
+// pendant le flash : un impact, et la couronne de braises
+v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];hostile=[];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;out.veilleuse.corePinned2=Math.abs(v.core.x-v.x)<.001;
 
 /* 11a bis · Couronnes de l'heure : maîtrise, vitesse, veille calme */
 Camp.progress.crowns={veilleuse:[],sonneur:[],passeur:[],cueilleuse:[],chasseur:[]};
@@ -945,11 +929,13 @@ SH.moveBoss(gun,0.85);
 out.wicks.fullVolley=hostile.length;
 out.wicks.volleySpeed=hostile.length?Math.max.apply(null,hostile.map(h=>h.speed||Math.hypot(h.vx,h.vy))):0;
 out.wicks.cap=SH.BUDGET.volley;
+/* La phase 2 commence à trois mèches éteintes : le minimum en phase 1 est
+   trois mèches allumées. La salve suit le nombre de mèches allumées. */
 const lone=wickScene();
-lone.windows.forEach((w,i)=>w.lit=i===0);
+lone.windows.forEach((w,i)=>w.lit=i<3);
 lone.guard=0;hostile=[];
 SH.moveBoss(lone,1/60);SH.moveBoss(lone,0.85);
-out.wicks.lastWickVolley=hostile.length;
+out.wicks.threeLitVolley=hostile.length;
 // Éteindre une mèche pendant sa charge annule son tir.
 const spared=wickScene();
 spared.guard=0;hostile=[];
@@ -960,7 +946,6 @@ out.wicks.cancelledVolley=hostile.length;
 /* Cendres du cœur : chaque impact déclenche une couronne de braises 0,5 s
    plus tard. Frapper puis camper devient une mauvaise idée. */
 const ashV=bossFor(0);
-ashV.vials.forEach(vial=>vial.state='broken');
 ashV.windows.forEach(w=>w.lit=false);
 SH.moveBoss(ashV,1/60);
 ashV.core.open=2;
@@ -973,7 +958,6 @@ out.ashes.crown=hostile.length;
 out.ashes.cinderSpeed=hostile.length?Math.round(Math.hypot(hostile[0].vx,hostile[0].vy)):0;
 /* La veille ne s'éteint jamais : une mèche morte se réchauffe et recrache une braise. */
 const flareV=bossFor(0);
-flareV.vials.forEach(vial=>vial.state='broken');
 flareV.windows.forEach(w=>w.lit=false);
 SH.moveBoss(flareV,1/60);
 flareV.flareTimer=0.01;
@@ -1183,18 +1167,14 @@ for (const b of r.bosses) {
 }
 assert.equal(new Set(r.bosses.map(b => b.victory)).size, 5, 'cinq conditions de victoire différentes');
 
-assert.deepEqual(r.veilleuse.vialsSpawn, ['next','locked','locked'], 'au départ, seul le scellé I luit');
-assert.deepEqual(r.veilleuse.frozen, { state:'locked', consumed:true }, 'un scellé figé encaisse le tir sans céder');
-assert.equal(r.veilleuse.gateWicksOnly, 1, 'sans les scellés, les mèches ne révèlent pas le cœur');
-assert.deepEqual(r.veilleuse.after1, ['broken','next','locked'], 'briser le scellé I fait luire le II');
-assert.deepEqual(r.veilleuse.after2, ['broken','broken','next'], 'briser le scellé II fait luire le III');
-assert.deepEqual(r.veilleuse.after3, ['broken','broken','broken'], 'les trois scellés cèdent dans l’ordre');
-assert.equal(r.veilleuse.gateSealsOnly, 1, 'sans trois mèches, les scellés seuls ne révèlent pas le cœur');
+assert.equal(r.veilleuse.noVials, true, 'plus aucun scellé : la Veilleuse v4 vit et meurt par les bougies');
+assert.equal(r.veilleuse.oneWick, 1, 'une seule mèche éteinte ne fend pas la cire');
+assert.equal(r.veilleuse.blocked, 0, 'hors flash, le cœur n’encaisse aucun tir');
+assert.equal(r.veilleuse.phase, 2, 'trois mèches éteintes suffisent : la cire se fend, le cœur bat');
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
-assert.equal(r.veilleuse.value, .5, 'scellés et mèches révèlent la seconde phase sans tuer le boss');
-assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après scellés et mèches');
-assert.equal(r.veilleuse.vialBurst, 18, 'chaque scellé brisé souffle six braises (3 × 6)');
-assert.notEqual(r.veilleuse.coreHome, 400, 'le cœur se dérobe après chaque impact');
+assert.equal(r.veilleuse.value, .5, 'trois mèches révèlent la seconde phase sans tuer le boss');
+assert.equal(r.veilleuse.corePinned, true, 'le cœur bat ancré sur le torse — aucune dérive aléatoire');
+assert.equal(r.veilleuse.corePinned2, true, 'le cœur reste épinglé au torse après chaque impact');
 assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
 assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
@@ -1479,7 +1459,7 @@ assert.equal(r.wicks.beforeCharge, 0, 'la salve doit être annoncée avant de pa
 assert.equal(r.wicks.charge, r.wicks.cap, 'toutes les mèches proches chargent, dans la limite du budget');
 assert.equal(r.wicks.fullVolley, r.wicks.cap, 'cinq mèches allumées donnent la salve maximale');
 assert.ok(r.wicks.fullVolley <= r.wicks.cap, 'la salve ne dépasse jamais le budget du monde');
-assert.equal(r.wicks.lastWickVolley, 1, 'une seule mèche allumée ne tire qu’un projectile');
+assert.equal(r.wicks.threeLitVolley, 3, 'trois mèches allumées donnent une salve de trois projectiles');
 assert.equal(r.wicks.cancelledVolley, 0, 'éteindre une mèche pendant sa charge annule son tir');
 assert.equal(r.wicks.draw.crash, null, 'le rendu des mèches ne doit pas planter');
 assert.equal(r.wicks.draw.lanterns, 5, 'chaque mèche doit être dessinée comme une lanterne');
@@ -1490,7 +1470,7 @@ assert.equal(r.wicks.openLabel, true, 'la fenêtre de tir doit être annoncée')
 assert.equal(r.wicks.gauge.hidden, true, 'la barre DOM ne doit pas réapparaître');
 assert.equal(r.wicks.gauge.hiddenAfterHUD, true, 'updateHUD ne doit pas créer une seconde jauge');
 assert.ok(r.wicks.gauge.texts.some(t => t.includes('Veilleuse')), 'la jauge canvas porte le nom du gardien');
-assert.ok(r.wicks.gauge.texts.some(t => t.includes('scellés')), 'la jauge canvas porte la consigne');
+assert.ok(r.wicks.gauge.texts.some(t => /m[èe]ches/i.test(t)), 'la jauge canvas porte la consigne');
 assert.ok(!r.wicks.gauge.texts.some(t => t.includes('PHASE')), 'les gardiens du monde 3 n’ont pas de phases de vie');
 assert.ok(r.wicks.gauge.widest <= 250, 'la consigne doit tenir dans le panneau de jauge : ' + r.wicks.gauge.widest);
 assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés');

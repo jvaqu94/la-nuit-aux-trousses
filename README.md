@@ -148,13 +148,13 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — briser les trois scellés I → II → III, puis éteindre trois mèches ; le cœur s'ouvre enfin et se frappe trois fois. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteignez au moins trois mèches : la cire se fend, le cœur bat à nu sur le torse — trois impacts pendant le flash. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
 | Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
 
-**La tranche Faubourg + Veilleuse a été refondue en mode verticale** : des conditions imbriquées plutôt que parallèles. Les **plis cachetés** du Faubourg tombent un par vague (I, II, III) et ne rapportent leur **+1000** que ramassés dans l'ordre ; **Les trois scellés** enferment le cœur de la Veilleuse derrière deux serrures à défaire ensemble. La victoire propre se couronne désormais : les **Couronnes de l'heure** (11 au total, 3 pour la Veilleuse) récompensent la manière de gagner — jamais la puissance. La Veilleuse réclame « Sans Brisure », « Veille calme » et « Sous 90 secondes ». Deuxième passe (retour en jeu) : vagues 1 et 2 plus longues, indications majeures annoncées en **popup qui met le vol en pause** (une fois par appareil), **le halo du Garde-mèche immunise tout l’écran, porteur compris, par cycles** (allumé 2 s / éteint 2,6 s — cercle sur chaque monstre, frappe pendant le creux), **un popup translucide laisse le jeu en pause et visible en arrière-plan au lieu de le cacher**, **l’objectif persistant est une puce absolue** qui ne fait plus bouger la fenêtre (fini les sauts quand le texte passe à 3 lignes), et **le terrain PC ne pulse plus en zoom/dézoom** ; **la Veilleuse densifiée** (braises à chaque scellé brisé, cœur qui se dérobe après chaque coup). Inspirations revendiquées : les *spell cards* et les médailles de **Touhou Project** (maîtrise de la manière de gagner), et les conditions de **Into the Breach** (chaque action sous condition, la victoire comme échecs). Les autres gardiens attribuent déjà les deux couronnes génériques ; le reste suit le même schéma. Détail dans `docs/monde-3-gameplay.md` §9sexies.
+**La tranche Faubourg + Veilleuse a été refondue en mode verticale** : des conditions imbriquées plutôt que parallèles. Les **plis cachetés** du Faubourg tombent un par vague (I, II, III) et ne rapportent leur **+1000** que ramassés dans l'ordre ; **les trois mèches** sont toute la serrure du cœur de la Veilleuse (scellés retirés depuis — §9novies). La victoire propre se couronne désormais : les **Couronnes de l'heure** (11 au total, 3 pour la Veilleuse) récompensent la manière de gagner — jamais la puissance. La Veilleuse réclame « Sans Brisure », « Veille calme » et « Sous 90 secondes ». Deuxième passe (retour en jeu) : vagues 1 et 2 plus longues, indications majeures annoncées en **popup qui met le vol en pause** (une fois par appareil), **le halo du Garde-mèche immunise tout l’écran, porteur compris, par cycles** (allumé 2 s / éteint 2,6 s — cercle sur chaque monstre, frappe pendant le creux), **un popup translucide laisse le jeu en pause et visible en arrière-plan au lieu de le cacher**, **l’objectif persistant est une puce absolue** qui ne fait plus bouger la fenêtre (fini les sauts quand le texte passe à 3 lignes), et **le terrain PC ne pulse plus en zoom/dézoom** ; Quatrième passe (retour en jeu) : **PRIME réellement visible** (+400 par cible PRIME abattue, pluie d’étincelles, bannière distincte et rappel « +400/cible » dans l’objectif), le **halo du Garde-mèche devient un vrai télégraphe** (flash doré plein écran + anneau d’ondes sur chaque monstre + anneau pointillé or animé tant que le bouclier tient) ; **la Veilleuse densifiée** (couronne de braises à chaque impact, cœur ancré sur le torse). Inspirations revendiquées : les *spell cards* et les médailles de **Touhou Project** (maîtrise de la manière de gagner), et les conditions de **Into the Breach** (chaque action sous condition, la victoire comme échecs). Les autres gardiens attribuent déjà les deux couronnes génériques ; le reste suit le même schéma. Détail dans `docs/monde-3-gameplay.md` §9novies.
 
 #### Lisibilité : des consignes, plus des énigmes
 
@@ -273,9 +273,8 @@ sont ramassés par le code de butin existant, sans nouvelle mécanique à appren
 
 *(sixième retour en jeu — voir `docs/monde-3-gameplay.md`, sections 9septies–9octies)*
 
-**La Veilleuse (1er gardien).** La condition de victoire est inchangée (cinq mèches
-éteintes, puis trois impacts sur le cœur), mais le gardien ne pardonne plus
-l’immobilité :
+**La Veilleuse (1er gardien).** La condition de victoire est inchangée (au moins trois mèches éteintes, puis trois impacts sur le cœur), mais le gardien ne pardonne plus
+l’immobilité (les scellés ont été retirés depuis — voir la sixième passe ci-dessous).
 
 - après chaque impact sur le cœur, celui-ci souffle une **couronne de huit braises**
   une demi-seconde plus tard (« LE CŒUR CRACHE DES CENDRES · écarte-toi ») ;
@@ -305,6 +304,28 @@ projectile de plus :
   un pas de combo chacune, C rapporte 400 × (étape+1) et deux pas de combo ; la
   cache facultative paie 100 × (étape+1) et un pas de combo. Tirer au hasard ne
   rapporte rien.
+
+#### Sixième passe : prime visible, halo explicite, la Veilleuse v4
+
+*(sixième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9novies)*
+
+- **PRIME** — abattre une cible désignée rapportait déjà +400, mais rien ne se
+  voyait. Chaque cible PRIME abattue déclenche maintenant une **pluie
+  d’étincelles** et une bannière distincte (« ★ PRIME ABATTUE · … ★ +400 »),
+  et l’objectif annonce « PRIME : … (+400/cible) » : chaque cible PRIME de la
+  vague paie, toute la vague.
+- **Le halo du Garde-mèche devient un bouclier qui se voit** : quand il se
+  déclenche, un **flash doré plein écran**, un **anneau d’ondes** sur chaque
+  monstre immunisé (or au déploiement, gris au repli), et l’anneau pointillé
+  devient **or et animé** tant que le bouclier tient. Déploiement et repli se
+  lisent d’un coup d’œil — doublés d’un **gong** grave.
+- **La Veilleuse v4** — les scellés disparaissent (le test les jugeait
+  illisibles). Toute la longueur du combat tient aux bougies : **trois mèches
+  éteintes** fendent la cire ; le cœur s’expose **ancré sur le torse** — plus
+  aucune dérive, plus de jeu de devinettes. Phase 1 : un charbon respirant à
+  peine visible sous la cire. Phase 2 : un **cœur géant qui bat** (rouge quand
+  il frappe, terne fermé), avec « FRAPPE LE CŒUR » / « CŒUR FERMÉ » et
+  « IMPACTS n/3 » à l’écran. Trois impacts pendant le flash tuent le gardien.
 
 #### Le Faubourg remis dans son thème
 
@@ -568,7 +589,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v2 (trois scellés imbriqués, cendres, braise de mèche noire, rallumage individuel visible) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées, plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v4 (trois mèches fendent la cire, cœur ancré sur le torse, trois impacts pendant le flash, couronne de braises après chaque coup) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées, plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |

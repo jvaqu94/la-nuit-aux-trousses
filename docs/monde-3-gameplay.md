@@ -735,6 +735,8 @@ n’est isolé. Les inspirations revendiquées :
 
 ### La Veilleuse v2 — « Les trois scellés »
 
+> **Remplacée (§9novies).** Les scellés ont été retirés en v4 : la Veilleuse ne parle plus que bougies.
+
 - **Trois fioles de cire scellée** (I, II, III) pendent sous le corps du gardien.
   Seule la fiole du **bon numéro** cède : I brisé d’abord, puis II, puis III.
 - Une fiole **figée** (numéro trop tôt) encaisse le tir mais ne se brise pas :
@@ -796,13 +798,12 @@ conditions, de l’ordre et de la lecture.
 
 ### Vérifications
 
-`tests/test_sixth_hour.cjs` épingle : spaw des trois scellés (I luisant, II-III figés),
-rejet du scellé figé (tir absorbé sans brisure), brisure en ordre avec déblocage du suivant,
-gate double (mèches seules → pas de cœur ; scellés seuls → pas de cœur), label de jauge,
-chute et chaîne des plis (vagues 1→2→3, mauvais ordre, complet à trois), attribution des
-couronnes (veilleuse propre+rapide+calme ; sonneur raté sans maîtrise ; sonneur propre et
-rapide), code `Monde3_3` (saut admin, stage 2, monde 3), `Monde3_9` rejeté, saut refusé
-hors admin. Suites des mondes 1, 2 et 3, du duel et du cloud : vertes.
+`tests/test_sixth_hour.cjs` épingle : plus aucun scellé (spawn v4), gate à trois mèches,
+labels de jauge (« MÈCHES ÉTEINTES n/3 »), cœur ancré au torse (avant et après impact),
+tir hors flash encaouté sans effet, impact pendant le flash, rallumage individuel des
+mèches, plis (vagues 1→2→3, mauvais ordre, complet à trois), attribution des couronnes,
+code `Monde3_3` (saut admin, stage 2, monde 3), `Monde3_9` rejeté, saut refusé hors admin.
+Suites des mondes 1, 2 et 3, du duel et du cloud : vertes.
 
 ## 9septies. Deuxième retour en jeu : lisibilité, rythme et intensité
 
@@ -841,6 +842,8 @@ reste vulnérable en permanence — la priorité du jeu est limpide : tue-le en 
 Le Moucheur volant une mèche immunise de la même façon.
 
 ### La Veilleuse densifiée (v3)
+
+> **Supersédé (§9novies).** Le « cœur qui se dérobe » est aboli : le cœur est ancré sur le torse ; les six braises par scellé disparaissent avec les scellés.
 
 - chaque scellé brisé souffle une **couronne de six braises** radiales ;
 - le cœur **se dérobe** après chaque impact (225 / 400 / 575), fini le camping sur une cible fixe ;
@@ -889,3 +892,49 @@ L'objectif (`#sixthObjective`) n'entre plus dans le flux du `.heading.game-statu
 une **puce absolue centrée** (max 2 lignes, ellipsis, `pointer-events:none`) posée sur le
 bord supérieur de l'arène. La hauteur de la zone au-dessus du jeu est maintenant constante —
 quelle que soit la largeur de l'écran, le terrain ne bouge jamais.
+
+## 9novies. Quatrième retour en jeu : la Veilleuse v4 — le cœur à nu
+
+Le test unanime : les briques à casser (scellés I → II → III) n’étaient pas claires.
+Le v4 retire le système entier plutôt que de l’expliquer encore — la seule serrure
+qui compte est l’arcade des bougies.
+
+### Les scellés disparaissent
+
+- `boss.vials`, `vialPos`, `nextVial`, l’enchaînement I → II → III, le bouchon
+  « SCELLÉ FIGÉ », le +250 par scellé : tout est retiré du code.
+- Le cœur n’apparaît qu’après **au moins trois mèches éteintes** — rien d’autre.
+  Gate unique, lisible, nocturne : `wicksDown >= 3`.
+- Les plis cachetés du Faubourg et les sceaux de la Minute 3 ne sont PAS touchés :
+  ils étaient lisibles et restent tels quels.
+
+### Le cœur est visible — et ancré
+
+- Premier temps (phase 1) : un **charbon respirant** à peine lumineux au centre de
+  la poitrine, sous la cire dominante — la cible existe, elle se distingue mais ne se livre pas.
+- Deuxième temps (phase 2) : un **cœur géant qui bat** sur le torse — halo radial
+  rouge ouvert / terne fermé, deux lobes, veines, légendes « FRAPPE LE CŒUR » et
+  « IMPACTS n/3 ». Il ne dérive pas : `core.x = e.x`, `core.y = e.y + 26` — fini le
+  jeu de devinettes après chaque impact.
+- Overture toujours cadencée (`.95 s` tous les `2.35 s`), gong grave à l’ouverture.
+- Le kill tient en **trois impacts pendant le flash**. Après chaque impact :
+  couronne de dix braises (comme en v3).
+
+### PRIME devient un moment
+
+- Chaque cible PRIME abattue déclenche une **pluie d’étincelles** (or + crème), un
+  timbre carré montant, et une bannière distincte : « ★ PRIME ABATTUE · … ★ +400 ».
+- L’objectif nomme le paiement par cible : « PRIME : … (+400/cible) », toute la vague.
+- La logique (+400/cible PRIME abattue, compte combo) était déjà correcte — c’était
+  un problème d’écrans, pas de mathématiques.
+
+### Le halo devient un bouclier qui se voit
+
+- Déploiement : **flash doré plein écran** (.3 de fondu), **anneau d’ondes** sur
+  chaque monstre immunisé (or), et timbre grave (196 Hz).
+- Repli : anneau gris décroissant + timbre (392 Hz).
+- Tant que le bouclier tient, l’anneau pointillé est **or et animé** (marching
+  dashes, 2,6 px) — le cercle entoure clairement chaque corps immunisé.
+
+Aucune vie, aucun projectile nouveau, aucune barre de vie. Les mondes 1 et 2 restent
+intouchés.

@@ -32,7 +32,7 @@ const foeKinds=new Set(Object.keys(foeNames));
 const bossKinds=new Set(['veilleuse','sonneur','passeur','cueilleuse','chasseur']);
 /* Une condition de victoire par gardien : aucune n'est « vider la barre ». */
 const VICTORY={
- veilleuse:'Brise les scellés I → II → III, éteins 3 mèches, puis frappe le cœur 3 fois',
+ veilleuse:'Éteins au moins 3 mèches, puis frappe le cœur quand il bat à nu',
  sonneur:'Frappe 3 fois le battant',
  passeur:'Brise 3 fois le sable',
  cueilleuse:'Force 3 cueillettes',
@@ -49,7 +49,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'Brise les scellés I, II et III dans l’ordre, puis éteins 3 mèches. Le cœur crache des cendres après chaque impact : frappe-le ouvert et écarte-toi. Une mèche noire rougeoie avant de recracher une braise.',
+ veilleuse:'Éteins au moins 3 mèches : la cire se fend et le cœur bat à nu sur le torse. Frappe-le pendant le flash (3 impacts). Après chaque impact, il crache une couronne de braises : écarte-toi. Une mèche noire rougeoie avant de recracher une braise.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
@@ -96,9 +96,6 @@ Journey.restore=function(...args){const r=journeyRestore(...args);reset();return
    visible, individuelle, et le socle du contre-jeu de la Veilleuse. */
 const VIAL_ROMAN=['I','II','III'];
 function extinguishWick(w){w.lit=false;w.open=0;w.charge=0;w.relight=11+rng()*2;w.relightMax=w.relight}
-/* Positions des trois scellés, sous le corps du gardien : n=1 → gauche. */
-const vialPos=(e,v)=>({x:e.x+(v.n-2)*58,y:e.y+64});
-const nextVial=e=>(e.vials||[]).find(v=>v.state==='next')||null;
 
 /* Popups d'introduction : quand une mécanique majeure apparaît pour la
    première fois, le vol est mis en pause et le popup l'explique. Une seule
@@ -107,7 +104,7 @@ const nextVial=e=>(e.vials||[]).find(v=>v.state==='next')||null;
 const INTRO_SEEN='minuit-sixth-intros';
 function seenIntros(){try{return new Set(JSON.parse(localStorage.getItem(INTRO_SEEN)||'[]'))}catch{return new Set()}}
 function world3Intro(s,w){
- if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Tant qu’il est allumé, <b>tout le pack est IMMUNISÉ</b> — lui compris : un cercle entoure chaque monstre. Il luit 2 s puis s’éteint 2,6 s. <b>Frappe pendant le creux</b>, ou tue d’abord le porteur — le halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une proie payante : +400.</p>'};
+ if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Tant qu’il est allumé, <b>tout le pack est IMMUNISÉ</b> — lui compris : un cercle entoure chaque monstre. Il luit 2 s puis s’éteint 2,6 s. <b>Frappe pendant le creux</b>, ou tue d’abord le porteur — le halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une famille payante : <b>chaque</b> cible PRIME abattue rapporte +400 et un pas de combo, toute la vague.</p>'};
  if(s===0&&w===2)return{key:'w3-minute1',title:'Minute 1 · Le Garde-mèche',body:'<p>Le Garde-mèche <b>garde la minute</b>. Son halo luit 2 s et s’éteint 2,6 s : au creux, tout le monde redevient vulnérable — lui compris.</p><p><b>Frappe pendant le creux</b>, ou tue-le d’abord. Puis marche sur le cadran pour rendre la minute au monde.</p>'};
  if(s===0&&w===3)return{key:'w3-minute2',title:'Minute 2 · Tenue',body:'<p>Survis <b>22 secondes</b>. La minute se libère ensuite — marche sur le cadran.</p>'};
  if(s===0&&w===4)return{key:'w3-minute3',title:'Minute 3 · Les sceaux',body:'<p>Deux flammes creuses portent le sceau. <b>Tire dessus</b> pour libérer la minute.</p>'};
@@ -146,6 +143,7 @@ function addMark(data){
  marks.push(mark);return mark;
 }
 const isReal=m=>m.real===true;
+let shieldFlash=0;
 
 /* Le halo du Garde-mèche : un bouclier qui s'allume et s'éteint.
    Allumé, il immunise TOUT l'écran — Garde-mèche compris : chaque monstre
@@ -260,13 +258,16 @@ function waveBlocks(){
 function moveEnemy(e,dt){
  if(!active()||!foeKinds.has(e.kind)||e.boss)return false;
  if(e.immunePing)e.immunePing=Math.max(0,e.immunePing-dt);
+ if(e.shieldFx)e.shieldFx=e.shieldFx>0?Math.max(0,e.shieldFx-dt):Math.min(0,e.shieldFx+dt);
  if(e.kind==='wickWarden'){
   e.haloTimer=(e.haloTimer==null?2.1:e.haloTimer)-dt;
   if(e.haloTimer<=0){
    e.haloOn=e.haloOn===false;
    e.haloTimer=e.haloOn?2.0:2.6;
-   particle(e.x,e.y,e.haloOn?'#ffd9a0':'#7c8a99',10);
-   tone(e.haloOn?540:280,.12,'sine',.04,.9);
+   for(const o of enemies){if(o.dead)continue;if(!o.boss)o.shieldFx=e.haloOn?.85:-.6}
+   shieldFlash=e.haloOn?.3:0;
+   particle(e.x,e.y,e.haloOn?'#ffd9a0':'#7c8a99',12);
+   tone(e.haloOn?196:392,e.haloOn?.4:.18,'sine',.08,.9);
   }
  }
  const t=tune();
@@ -545,7 +546,8 @@ reward=function(e){
     ne sont pas écrasés par la chaîne. */
  if(primePay){
   score+=400;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
-  say('PRIME ABATTUE · '+(foeNames[e.kind]||e.kind)+' · +400 points',2);
+  particle(e.x,e.y,'#ffd25e',34);particle(e.x,e.y,'#fff5cc',12);tone(660,.2,'square',.07,1.5);
+  say('★ PRIME ABATTUE · '+(foeNames[e.kind]||e.kind)+' ★ +400',2.2);
  }
  /* Couronnes de l'heure : maîtrise sans vie perdue, vitesse, et pour la
     Veilleuse, une veille sans tache. Persistantes, jamais d'empowerment. */
@@ -589,7 +591,6 @@ spawnBoss=function(){
   boss.windows=makeWicks();
   boss.tour=0;boss.label='MÈCHES';boss.core=null;
   boss.openTimer=1.2;boss.guard=1.2;boss.lastOpen=null;boss.volley=null;boss.flareTimer=6;boss.flare=null;
-  boss.vials=[1,2,3].map(n=>({n,state:n===1?'next':'locked'}));
  }else if(kind==='sonneur'){
   boss.bell={x:400,y:330,r:58};boss.clapper={x:400,y:236,r:24,down:false};
   boss.resonance=0;boss.strikes=0;boss.ring=0;boss.label='RÉSONANCE';
@@ -631,10 +632,10 @@ function moveBoss(e,dt,oldX,oldY){
 function tickVeilleuse(e,dt){
  if(e.phase===2){
   const core=e.core;if(!core)return;
-  core.x=(core.home||400)+Math.sin(e.age*.82)*120;core.y=305+Math.sin(e.age*.57)*34;
+  core.x=e.x;core.y=e.y+26;
   core.open=Math.max(0,core.open-dt);core.flash=Math.max(0,core.flash-dt);
   core.openTimer-=dt;core.attack-=dt;
-  if(core.openTimer<=0){core.open=.95;core.openTimer=2.35;say('LE CŒUR S’OUVRE · aligne tes tirs',1.5)}
+  if(core.openTimer<=0){core.open=.95;core.openTimer=2.35;say('LE CŒUR BATT · frappe pendant le flash',1.4);tone(65,.38,'sine',.09,.8)}
   /* Cendres : une demi-seconde après chaque impact, le cœur souffle une
      couronne de dix braises. Le coup récompense, puis il punit le camping. */
   if(core.ember){
@@ -722,13 +723,12 @@ function tickVeilleuse(e,dt){
   e.volley=null;
  }
  const lit=windows.filter(w=>w.lit).length;
- /* La cire cède seulement si les trois scellés sont brisés ET au moins trois
-    mèches sont éteintes : deux systèmes imbriqués, une seule serrure. */
- const sealsBroken=(e.vials||[]).filter(v=>v.state==='broken').length;
+ /* Tout passe par les bougies : trois mèches éteintes et la cire se fend —
+    le cœur s'expose en plein plat sur le torse, battant. */
  const wicksDown=5-lit;
- e.value=Math.min(.49,(Math.min(3,wicksDown)+sealsBroken)/6*.49);
- e.label='SCELLÉS '+sealsBroken+'/3 · MÈCHES '+Math.min(3,wicksDown)+'/3';
- if(!e.core&&sealsBroken>=3&&wicksDown>=3){e.phase=2;e.core={x:400,y:305,r:29,home:400,open:0,openTimer:1.1,attack:1.5,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LA CIRE CÈDE · le cœur affaibli s’ouvre. Frappe-le pendant ses ouvertures.',4);particle(e.x,e.y,'#ffd9a0',34);tone(180,.5,'sine',.09,.65)}
+ e.value=Math.min(.49,(Math.min(3,wicksDown)/3)*.49);
+ e.label='MÈCHES ÉTEINTES '+Math.min(3,wicksDown)+'/3';
+ if(!e.core&&wicksDown>=3){e.phase=2;e.core={x:e.x,y:e.y+26,r:26,open:0,openTimer:1.1,attack:1.9,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LA CIRE SE FEND · le cœur bat à nu — frappe-le pendant le flash',4);particle(e.x,e.y,'#ffd9a0',34);tone(120,.7,'sine',.1,.7)}
  if(lit===5&&e.age>6){
   mission.veilleComplete=true;
   hurt(25,'la veille complète');
@@ -857,32 +857,9 @@ function hitTargets(){
  for(const shot of shots){
   if(shot.life<=0)continue;
   if(e.kind==='veilleuse'&&e.phase===2&&e.core){
-   const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);const anchors=[225,400,575].filter(a=>Math.abs(a-(core.home||400))>80);core.home=anchors[Math.floor(rng()*anchors.length)];particle(core.x,core.y,'#e8d3ab',26);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3 · il se dérobe',2)}
+   const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);particle(core.x,core.y,'#e8d3ab',26);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3',2)}
   }else if(e.kind==='veilleuse'){
-   /* Les scellés se brisent dans l'ordre I → II → III : un scellé hors séquence
-      encaisse le tir mais tient bon. Frappables même bouche fermée. */
-   let spent=false;
-   for(const vial of e.vials||[]){
-    if(vial.state==='broken')continue;
-    const vp=vialPos(e,vial);
-    if(!near(shot.x,shot.y,vp.x,vp.y,20))continue;
-    consume(shot);spent=true;
-    if(vial.state!=='next'){
-     const nx=nextVial(e);
-     say('FIGÉ · brise le sceau '+VIAL_ROMAN[(nx?nx.n:2)-1]+' d’abord',1.8);
-     particle(vp.x,vp.y,'#b9cfe0',14);tone(170,.14,'square',.05,.6);
-    }else{
-     vial.state='broken';
-     const nxt=(e.vials||[]).find(v=>v.state==='locked');
-     if(nxt)nxt.state='next';
-     for(let i=0;i<6;i++){const a=i*Math.PI/3+rng()*.3;hostile.push({x:e.x,y:e.y,vx:Math.cos(a)*130,vy:Math.sin(a)*130,type:'spirit',r:6,damage:25,life:2.8,grazed:false,age:0,speed:130})}
-     score+=250;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
-     say('SCELLÉ '+VIAL_ROMAN[vial.n-1]+' BRISÉ · +250'+(nxt?' · le sceau '+VIAL_ROMAN[nxt.n-1]+' luit':' · la cire cède'),2.2);
-     particle(vp.x,vp.y,'#ffd9a0',26);tone(760,.25,'triangle',.08,1.3);
-    }
-    break;
-   }
-   if(spent)continue;
+   /* Tirer sur une mèche ouverte : elle s'éteint, avec son propre compte à rebours. */
    for(const w of e.windows)if(w.lit&&w.open>0&&near(shot.x,shot.y,w.x,w.y,26)){
     extinguishWick(w);consume(shot);particle(w.x,w.y,'#ffd9a0',16);tone(560,.2,'sine',.07,1.2);
     say('MÈCHE ÉTEINTE · '+e.windows.filter(v=>!v.lit).length+'/5',1.6);break;
@@ -1038,8 +1015,13 @@ function draw(g){
   }
   if(!e.boss&&enemies.some(haloSource)){
    const covered=haloLit();
-   if(covered){g.save();g.globalAlpha=.85;g.setLineDash([6,5]);g.lineWidth=2;g.strokeStyle='#b9d8ea';g.beginPath();g.arc(e.x,e.y,e.r+7,0,Math.PI*2);g.stroke();g.setLineDash([]);g.restore()}
-   g.save();g.textAlign='center';g.fillStyle=covered?'#b9d8ea':'#ffb08a';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText(covered?'IMMUNISÉ':'OUVERT',e.x,e.y+e.r+16);g.restore()
+   if(covered){g.save();g.globalAlpha=.92;g.setLineDash([10,7]);g.lineDashOffset=-(ambient*46)%17;g.lineWidth=2.6;g.strokeStyle='#ffd25e';g.beginPath();g.arc(e.x,e.y,e.r+7,0,Math.PI*2);g.stroke();g.setLineDash([]);g.restore()}
+   g.save();g.textAlign='center';g.fillStyle=covered?'#ffd25e':'#ffb08a';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText(covered?'IMMUNISÉ':'OUVERT',e.x,e.y+e.r+16);g.restore()
+  }
+  if(e.shieldFx){
+   g.save();g.globalAlpha=Math.min(1,Math.abs(e.shieldFx)*1.5);g.setLineDash(e.shieldFx>0?[12,8]:[5,7]);g.lineWidth=e.shieldFx>0?3.4:2;g.strokeStyle=e.shieldFx>0?'#ffd25e':'#8a99a6';
+   const rr=e.r+9+(e.shieldFx>0?(.85-e.shieldFx)*78:(.6+e.shieldFx)*46);
+   g.beginPath();g.arc(e.x,e.y,Math.max(4,rr),0,Math.PI*2);g.stroke();g.setLineDash([]);g.restore()
   }
   if(e.kind==='waxMimic'){
    g.save();g.textAlign='center';
@@ -1097,45 +1079,32 @@ function draw(g){
  if(!e||e.dead)return;
  if(e.kind==='veilleuse'){
   drawWicks(g,e);
-  if(e.phase===1&&e.vials){
-   for(const vial of e.vials){
-    const vp=vialPos(e,vial);
-    g.save();g.translate(vp.x,vp.y);
-    if(vial.state==='broken'){
-     g.globalAlpha=.4;g.strokeStyle='#6b5a7d';g.lineWidth=2;
-     g.beginPath();g.moveTo(-9,6);g.lineTo(9,6);g.stroke();
-     g.fillStyle='#4a3b46';g.beginPath();g.ellipse(0,7,10,4,0,0,Math.PI*2);g.fill();
-     g.restore();
-    }else{
-     const next=vial.state==='next',pulse=next?1+Math.sin(ambient*6+vial.n*2)*.12:1;
-     if(next){g.globalAlpha=.3;g.fillStyle='#ffd9a0';g.beginPath();g.arc(0,0,26*pulse,0,Math.PI*2);g.fill()}
-     g.globalAlpha=1;g.scale(pulse,pulse);
-     /* Fiole de cire : panse, goulot, sceau de cire rougi pour le prochain, gelé pour les autres. */
-     g.fillStyle=next?'#e8d3ab':'#8f9aa8';g.strokeStyle=next?'#ff9d7a':'#5b6a72';g.lineWidth=2;
-     g.beginPath();g.moveTo(-10,-6);g.quadraticCurveTo(-13,10,0,12);g.quadraticCurveTo(13,10,10,-6);g.closePath();g.fill();g.stroke();
-     g.fillStyle=next?'#c9a86a':'#6e7a86';g.fillRect(-5,-13,10,8);
-     g.fillStyle=next?'#a83a2e':'#46525e';g.beginPath();g.arc(0,1,6,0,Math.PI*2);g.fill();
-     g.fillStyle=next?'#ffd9a0':'#b9c9d5';g.font='bold 8px Georgia';g.textAlign='center';g.textBaseline='middle';
-     g.fillText(VIAL_ROMAN[vial.n-1],0,1.5);
-     if(!next){g.fillStyle='#dfe9ee';g.font='bold 6px Arial';g.fillText('FIGÉ',0,-18)}
-     g.restore();
-     if(next){g.save();g.textAlign='center';g.fillStyle='#ffd9a0';g.font='bold '+(compactView()?'11px':'8px')+' Arial';g.fillText('SCELLÉ '+VIAL_ROMAN[vial.n-1],vp.x,vp.y+34);g.restore()}
-    }
+  /* Le cœur, visible dès le premier battement : un charbon retenu tenu par la
+     cire (phase 1), puis à nu et battant sur le torse (phase 2) — on sait
+     exactement ce qu'il faut atteindre. */
+  {
+   const hx=e.x,hy=e.y+26;
+   if(e.phase===1||!e.core){
+    const breathe=1+Math.sin(ambient*2.1)*.06;
+    g.save();g.globalAlpha=.7;g.fillStyle='#5a2c22';g.beginPath();g.ellipse(hx,hy,15*breathe,13*breathe,0,0,Math.PI*2);g.fill();
+    g.fillStyle='#2c1611';g.beginPath();g.ellipse(hx,hy,9.5*breathe,8.5*breathe,0,0,Math.PI*2);g.fill();g.restore();
+   }else{
+    const c=e.core,open=c.open>0,pulse=open?1.9+Math.sin(ambient*16)*.12:1+Math.sin(ambient*3)*.1;
+    g.save();
+    const halo=g.createRadialGradient(hx,hy,2,hx,hy,46*pulse);
+    halo.addColorStop(0,open?'#ff7d4d':'#a84a2e');halo.addColorStop(1,'#ff7d4d00');
+    g.globalAlpha=open?.85:.35;g.fillStyle=halo;g.beginPath();g.arc(hx,hy,46*pulse,0,Math.PI*2);g.fill();
+    g.globalAlpha=1;
+    g.fillStyle=open?'#ff5c33':'#7a3a2a';g.beginPath();g.ellipse(hx,hy,15*pulse,13*pulse,0,0,Math.PI*2);g.fill();
+    g.fillStyle=open?'#ffd0a1':'#a06a4a';g.beginPath();g.ellipse(hx,hy,8.5*pulse,7*pulse,0,0,Math.PI*2);g.fill();
+    g.strokeStyle=open?'#ffd9a0':'#4a2c33';g.lineWidth=1.6;
+    for(const off of [[-8,4],[0,7],[8,4]]){g.beginPath();g.moveTo(hx+off[0],hy-2);g.lineTo(hx+off[0]*1.6,hy+off[1]+4);g.stroke()}
+    g.textAlign='center';g.font='bold '+(compactView()?'15px':'11px')+' Arial';
+    g.fillStyle=open?'#ffe6bd':'#c8b9d5';
+    g.fillText(open?'FRAPPE LE CŒUR':'CŒUR FERMÉ',hx,hy-34);
+    g.fillText('IMPACTS '+c.hits+'/3',hx,hy+42);
+    g.restore();
    }
-  }
-  if(e.phase===2&&e.core){
-   const c=e.core,pulse=1+Math.sin(ambient*9)*.12;
-   g.save();g.globalAlpha=.35;g.fillStyle='#ffd9a0';g.beginPath();g.arc(c.x,c.y,58*pulse,0,Math.PI*2);g.fill();
-   g.globalAlpha=1;ring(g,c.x,c.y,c.open>0?39:29,c.open>0?'#fff5cc':'#8d7a9c',c.open<=0);
-   const glow=g.createRadialGradient(c.x,c.y,2,c.x,c.y,28);
-   glow.addColorStop(0,c.open>0?'#fff5cc':'#8d7a9c');glow.addColorStop(1,'#e5854e00');
-   g.fillStyle=glow;g.beginPath();g.arc(c.x,c.y,28,0,Math.PI*2);g.fill();
-   g.fillStyle=c.open>0?'#fff5cc':'#8d7a9c';g.beginPath();g.arc(c.x,c.y,10,0,Math.PI*2);g.fill();
-   g.textAlign='center';g.font='bold '+(compactView()?'16px':'12px')+' Arial';
-   g.fillStyle=c.open>0?'#fff5cc':'#c8b9d5';
-   g.fillText(c.open>0?'FRAPPE LE CŒUR':'CŒUR FERMÉ',c.x,c.y-48);
-   g.fillText('IMPACTS '+c.hits+'/3',c.x,c.y+52);
-   g.restore();
   }
  }
  if(e.kind==='sonneur'){
@@ -1175,6 +1144,7 @@ drawBossHealth=function(g,e){
   if(line&&g.measureText(next).width>width){how.push(line);line=word}else line=next;
  }
  if(line)how.push(line);
+ if(shieldFlash>0){g.save();g.globalAlpha=shieldFlash;g.fillStyle='#ffd9a0';g.fillRect(0,0,W,H);g.restore();shieldFlash=Math.max(0,shieldFlash-.022)}
  g.fillStyle='#120f24eb';g.fillRect(left-8,top-26,width+16,63+how.length*13);
  g.textAlign='center';g.fillStyle='#f8d8b6';g.font=compactView()?'bold 16px Georgia':'13px Georgia';
  g.fillText(world.boss,left+width/2,top-8);
@@ -1300,7 +1270,7 @@ function objectiveText(){
  const tally=' · '+kept+'/15 rendues';
  let suffix='';
  if(stage===0){
-  if(mission.prime)suffix+=' · PRIME : '+(foeNames[mission.prime]||mission.prime)+' +400';
+  if(mission.prime)suffix+=' · PRIME : '+(foeNames[mission.prime]||mission.prime)+' (+400/cible)';
   if(mission.plis)suffix+=mission.plis.got>=3?' · PLIS ✓':' · PLIS '+(mission.plis.got||0)+'/3';
   const triage=stageZeroTriage();
   if(triage)suffix+=' — PRIORITÉ : '+triage;
