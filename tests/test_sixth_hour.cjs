@@ -202,15 +202,66 @@ for(let i=0;i<5;i++){
   out.bosses.push({kind:e.kind,hp,max:e.max,unchanged:e.hp===hp,label:e.label,value:e.value,victory:SH.VICTORY[e.kind]});
 }
 
-/* 11a · La Veilleuse : les mèches s'éteignent par la fenêtre de tir, pas par les dégâts */
+/* 11a · La Veilleuse v2 : scellés I → II → III imbriqués, puis trois mèches, puis le cœur */
 let v=bossFor(0);
-v.windows.forEach(w=>w.open=2);
-for(const w of v.windows)shots.push({x:w.x,y:w.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()});
+const vialXY=n=>({x:v.x+(n-2)*58,y:v.y+64});
+out.veilleuse={vialsSpawn:v.vials.map(vial=>vial.state)};
+// un scellé figé absorbe le tir sans céder
+shots=[{x:vialXY(2).x,y:vialXY(2).y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
 SH.tick(1/60);
-out.veilleuse={lit:v.windows.filter(w=>w.lit).length};
+out.veilleuse.frozen={state:v.vials[1].state,consumed:shots[0].life<=0};
+// les mèches seules ne suffisent pas : sans les scellés, le cœur reste fermé
 v.windows.forEach(w=>{w.lit=false});SH.moveBoss(v,1/60);
-out.veilleuse.value=v.value;out.veilleuse.phase=v.phase;
+out.veilleuse.gateWicksOnly=v.phase;
+// briser I -> II -> III via le vrai chemin de tir
+for(const n of [1,2,3]){
+  const pos=vialXY(n);
+  shots=[{x:pos.x,y:pos.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
+  SH.tick(1/60);
+  out.veilleuse['after'+n]=v.vials.map(vial=>vial.state);
+}
+out.veilleuse.label=v.label;
+SH.moveBoss(v,1/60);
+out.veilleuse.phase=v.phase;out.veilleuse.value=v.value;out.veilleuse.lit=0;
 v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;
+// les scellés seuls ne suffisent pas non plus : cinq mèches allumées, aucun cœur
+let w2b=bossFor(0);
+const vialXY2=n=>({x:w2b.x+(n-2)*58,y:w2b.y+64});
+for(const n of [1,2,3]){
+  const pos=vialXY2(n);
+  shots=[{x:pos.x,y:pos.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
+  SH.tick(1/60);
+}
+SH.moveBoss(w2b,1/60);
+out.veilleuse.gateSealsOnly=w2b.phase;
+
+/* 11a bis · Couronnes de l'heure : maîtrise, vitesse, veille calme */
+Camp.progress.crowns={veilleuse:[],sonneur:[],passeur:[],cueilleuse:[],chasseur:[]};
+stage=0;world=worlds[0];wave=5;state='play';
+enemies=[];hostile=[];shots=[];drops=[];SH.marks.length=0;SH.salt.length=0;
+SH.mission.veilleComplete=false;
+spawnBoss();
+const crownBoss=enemies.find(e=>e.boss);crownBoss.y=190;crownBoss.age=30;crownBoss.lossStart=0;
+if(window.Journey?.run?.stats)window.Journey.run.stats.lifeLoss=0;
+reward(crownBoss);
+transition=0;transitionBoss=false;pendingBoss=false;
+out.crowns={veilleuse:Camp.progress.crowns.veilleuse.slice().sort()};
+stage=1;world=worlds[1];wave=5;state='play';
+enemies=[];hostile=[];shots=[];drops=[];SH.marks.length=0;SH.salt.length=0;
+spawnBoss();
+const crownBoss2=enemies.find(e=>e.boss);crownBoss2.y=190;crownBoss2.age=200;crownBoss2.lossStart=0;
+if(window.Journey?.run?.stats)window.Journey.run.stats.lifeLoss=2;
+reward(crownBoss2);
+transition=0;transitionBoss=false;pendingBoss=false;
+out.crowns.sonneurDirtySlow=Camp.progress.crowns.sonneur.slice().sort();
+stage=1;world=worlds[1];wave=5;state='play';
+enemies=[];hostile=[];shots=[];drops=[];SH.marks.length=0;SH.salt.length=0;
+spawnBoss();
+const crownBoss3=enemies.find(e=>e.boss);crownBoss3.y=190;crownBoss3.age=40;crownBoss3.lossStart=2;
+if(window.Journey?.run?.stats)window.Journey.run.stats.lifeLoss=2;
+reward(crownBoss3);
+transition=0;transitionBoss=false;pendingBoss=false;
+out.crowns.sonneurCleanFast=Camp.progress.crowns.sonneur.slice().sort();
 
 /* 11b · Le Sonneur : tirer sur la cloche monte la résonance, le battant se frappe à côté */
 let s=bossFor(1);
@@ -349,6 +400,14 @@ out.code.playing={state,activeWorld:Camp.activeWorld,runId,character:Camp.progre
 out.code.monde2StillWorks=Camp.redeemCreatorCode('Monde2');
 out.code.finale=!!Camp.finale;
 Camp.completeFinale();
+/* Codes créateur par univers : Monde3_1 .. Monde3_5 sautent droit dans l'univers choisi. */
+window.MinuitCloud={isTeamAdmin:false};
+const jumpNonAdmin=Camp.redeemCreatorCode('Monde3_3');
+window.MinuitCloud={isTeamAdmin:true};
+const jumpBad=Camp.redeemCreatorCode('Monde3_9');
+const jumpOk=Camp.redeemCreatorCode('Monde3_3');
+out.code.jump={nonAdmin:jumpNonAdmin,bad:jumpBad,ok:jumpOk,stage,activeWorld:Camp.activeWorld,state,runId};
+transition=0;transitionBoss=false;pendingBoss=false;
 
 /* 15 · Direction artistique et décors PROPRES au monde 3.
    Le monde 3 ne doit plus ni réutiliser les peintures du monde 1, ni dessiner
@@ -868,6 +927,7 @@ out.wicks.cancelledVolley=hostile.length;
 /* Cendres du cœur : chaque impact déclenche une couronne de braises 0,5 s
    plus tard. Frapper puis camper devient une mauvaise idée. */
 const ashV=bossFor(0);
+ashV.vials.forEach(vial=>vial.state='broken');
 ashV.windows.forEach(w=>w.lit=false);
 SH.moveBoss(ashV,1/60);
 ashV.core.open=2;
@@ -880,6 +940,7 @@ out.ashes.crown=hostile.length;
 out.ashes.cinderSpeed=hostile.length?Math.round(Math.hypot(hostile[0].vx,hostile[0].vy)):0;
 /* La veille ne s'éteint jamais : une mèche morte se réchauffe et recrache une braise. */
 const flareV=bossFor(0);
+flareV.vials.forEach(vial=>vial.state='broken');
 flareV.windows.forEach(w=>w.lit=false);
 SH.moveBoss(flareV,1/60);
 flareV.flareTimer=0.01;
@@ -961,6 +1022,24 @@ spawnEnemy({kind:'wickWarden',x:400,y:260,group:1,index:0,pattern:99});
 out.triage.warden=SH.objectiveText().includes('Garde-mèche');
 enemies.forEach(e=>e.dead=true);
 out.triage.clear=!SH.objectiveText().includes('PRIORITÉ');
+
+/* Les plis cachetés : I → II → III dans l'ordre, le désordre casse la chaîne. */
+freshWave(1);
+out.plis={wave:1,drops:drops.filter(d=>d.kind==='pli').map(d=>d.pli)};
+combo=1;chain=0;
+SH.collectPli({pli:2}); // touché trop tôt : chaîne cassée, pli perdu
+out.plis.wrong={combo,chain,got:SH.mission.plis.got,next:SH.mission.plis.next};
+freshWave(2); // la chaîne persiste d'une vague à l'autre
+out.plis.wave2={drops:drops.filter(d=>d.kind==='pli').map(d=>d.pli),got:SH.mission.plis.got,next:SH.mission.plis.next};
+SH.collectPli({pli:1});
+out.plis.after1={got:SH.mission.plis.got,next:SH.mission.plis.next,combo};
+SH.collectPli({pli:2});
+out.plis.after2={got:SH.mission.plis.got,combo};
+freshWave(3);
+out.plis.wave3Drops=drops.filter(d=>d.kind==='pli').map(d=>d.pli);
+SH.collectPli({pli:3});
+out.plis.after3={got:SH.mission.plis.got,combo,objective:SH.objectiveText().includes('PLIS ✓')};
+combo=1;chain=0;
 
 /* Épreuves propres aux cinq univers : une action distinctive par monde. */
 const trialCounts=[];
@@ -1067,9 +1146,16 @@ for (const b of r.bosses) {
 }
 assert.equal(new Set(r.bosses.map(b => b.victory)).size, 5, 'cinq conditions de victoire différentes');
 
+assert.deepEqual(r.veilleuse.vialsSpawn, ['next','locked','locked'], 'au départ, seul le scellé I luit');
+assert.deepEqual(r.veilleuse.frozen, { state:'locked', consumed:true }, 'un scellé figé encaisse le tir sans céder');
+assert.equal(r.veilleuse.gateWicksOnly, 1, 'sans les scellés, les mèches ne révèlent pas le cœur');
+assert.deepEqual(r.veilleuse.after1, ['broken','next','locked'], 'briser le scellé I fait luire le II');
+assert.deepEqual(r.veilleuse.after2, ['broken','broken','next'], 'briser le scellé II fait luire le III');
+assert.deepEqual(r.veilleuse.after3, ['broken','broken','broken'], 'les trois scellés cèdent dans l’ordre');
+assert.equal(r.veilleuse.gateSealsOnly, 1, 'sans trois mèches, les scellés seuls ne révèlent pas le cœur');
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
-assert.equal(r.veilleuse.value, .5, 'éteindre les mèches déclenche la seconde phase sans tuer le boss');
-assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après les cinq mèches');
+assert.equal(r.veilleuse.value, .5, 'scellés et mèches révèlent la seconde phase sans tuer le boss');
+assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après scellés et mèches');
 assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
 assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
@@ -1087,6 +1173,9 @@ assert.equal(r.chasseur.borrow.length, 3, 'trois emprunts');
 assert.ok(r.chasseur.borrow.includes(r.chasseur.least) === false || r.chasseur.least, 'le geste non copié est identifié');
 assert.equal(r.chasseur.after.naming, true, 'après trois emprunts il n’a plus de visage');
 
+assert.deepEqual(r.crowns.veilleuse, ['calme','patience','rapide'], 'les trois couronnes de la Veilleuse sont accordées pour une victoire propre et rapide');
+assert.deepEqual(r.crowns.sonneurDirtySlow, [], 'sans maîtrise, aucune couronne');
+assert.deepEqual(r.crowns.sonneurCleanFast, ['patience','rapide'], 'les couronnes génériques valent pour les autres gardiens');
 assert.equal(r.loop.crashes, 0, 'exception dans la boucle de jeu : ' + r.crashMessage);
 assert.ok(r.loop.maxFoes <= r.budget.foes, 'la boucle réelle dépasse le plafond d’ennemis : ' + r.loop.maxFoes);
 // Garde-fou anti-accumulation, pas une loi de design : le plafond était à 90,
@@ -1121,6 +1210,12 @@ assert.equal(r.code.playing.activeWorld, 3);
 assert.equal(r.code.playing.runId, 'world3-normal');
 assert.equal(r.code.playing.character, 'hunter', 'le Veilleur est jouable au monde 3');
 assert.equal(r.code.monde2StillWorks, true, 'le code Monde2 continue de fonctionner');
+assert.equal(r.code.jump.nonAdmin, false, 'le saut par univers reste réservé au créateur');
+assert.equal(r.code.jump.bad, false, 'Monde3_9 n’existe pas');
+assert.equal(r.code.jump.ok, true, 'le créateur saute directement dans l’univers');
+assert.equal(r.code.jump.stage, 2, 'Monde3_3 lance le troisième univers du monde 3');
+assert.equal(r.code.jump.activeWorld, 3);
+assert.equal(r.code.jump.state, 'play');
 assert.equal(r.code.finale, true, 'Monde2 ouvre toujours sa rencontre');
 
 assert.equal(r.art.kinds, 18, '13 formes + 5 gardiens doivent avoir leur silhouette');
@@ -1250,6 +1345,16 @@ assert.equal(r.prime.elsewhere, true, 'hors du Faubourg, pas de prime');
 assert.equal(r.triage.mimic, true, 'le bandeau désigne le Faux-cierge tant qu’il reste');
 assert.equal(r.triage.warden, true, 'le bandeau désigne le Garde-mèche en priorité');
 assert.equal(r.triage.clear, true, 'sans menace, le bandeau ne désigne rien');
+assert.deepEqual(r.plis.drops, [1], 'la vague 1 laisse tomber le pli I');
+assert.equal(r.plis.wrong.got, 0, 'un pli touché trop tôt ne compte pas');
+assert.equal(r.plis.wrong.next, 1, 'la chaîne reste sur le pli I');
+assert.equal(r.plis.wrong.combo, 1, 'toucher un pli scellé casse la chaîne');
+assert.deepEqual(r.plis.wave2.drops, [2], 'la vague 2 laisse tomber le pli II');
+assert.equal(r.plis.wave2.got, 0, 'la chaîne des plis survit au passage de vague');
+assert.deepEqual(r.plis.after1, { got:1, next:2, combo:2 }, 'le pli I se ramasse');
+assert.equal(r.plis.after2.got, 2, 'le pli II se ramasse ensuite');
+assert.deepEqual(r.plis.after3, { got:3, combo:4, objective:true }, 'les trois plis complètent le sceau');
+assert.deepEqual(r.plis.wave3Drops, [3], 'la vague 3 laisse tomber le pli III');
 
 /* L’ordre des runes paie : score croissant et chaîne de combo. */
 assert.equal(r.labyrinth.runePayoff.aCombo, 2, 'rune A validée : +1 combo');
@@ -1333,7 +1438,7 @@ assert.equal(r.wicks.openLabel, true, 'la fenêtre de tir doit être annoncée')
 assert.equal(r.wicks.gauge.hidden, true, 'la barre DOM ne doit pas réapparaître');
 assert.equal(r.wicks.gauge.hiddenAfterHUD, true, 'updateHUD ne doit pas créer une seconde jauge');
 assert.ok(r.wicks.gauge.texts.some(t => t.includes('Veilleuse')), 'la jauge canvas porte le nom du gardien');
-assert.ok(r.wicks.gauge.texts.some(t => t.includes('Tire sur la flamme')), 'la jauge canvas porte la consigne');
+assert.ok(r.wicks.gauge.texts.some(t => t.includes('scellés')), 'la jauge canvas porte la consigne');
 assert.ok(!r.wicks.gauge.texts.some(t => t.includes('PHASE')), 'les gardiens du monde 3 n’ont pas de phases de vie');
 assert.ok(r.wicks.gauge.widest <= 250, 'la consigne doit tenir dans le panneau de jauge : ' + r.wicks.gauge.widest);
 assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés');

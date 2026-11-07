@@ -2,7 +2,10 @@
 (()=>{
 'use strict';
 const KEY='minuit-campaign-v1';
-const blank=()=>({version:1,world1Completed:false,world2Unlocked:false,world2Completed:false,cardOath:false,lastWorld:1,choice:'',character:'witch',world2Started:false,world3Unlocked:false,world3Started:false,world3Completed:false,cardSixthHour:false,minutesKept:0});
+const CROWN_KINDS=['veilleuse','sonneur','passeur','cueilleuse','chasseur'];
+const CROWN_SLOTS=['patience','calme','rapide'];
+const sanitizeCrowns=value=>{const source=value&&typeof value==='object'&&!Array.isArray(value)?value:{},out={};for(const kind of CROWN_KINDS){const list=Array.isArray(source[kind])?source[kind]:[];out[kind]=[...new Set(list.filter(s=>CROWN_SLOTS.includes(s)))]}return out};
+const blank=()=>({version:1,world1Completed:false,world2Unlocked:false,world2Completed:false,cardOath:false,lastWorld:1,choice:'',character:'witch',world2Started:false,world3Unlocked:false,world3Started:false,world3Completed:false,cardSixthHour:false,minutesKept:0,crowns:sanitizeCrowns()});
 function normalize(value){
  const source=value&&typeof value==='object'?value:{},result={...blank()};
  for(const key of ['world1Completed','world2Unlocked','world2Completed','cardOath','world2Started','world3Unlocked','world3Started','world3Completed','cardSixthHour'])result[key]=source[key]===true;
@@ -11,6 +14,7 @@ function normalize(value){
  if(result.world3Completed)result.world3Unlocked=true;
  if(result.world3Unlocked){result.world2Completed=true;result.cardSixthHour=true}
  result.minutesKept=Math.max(0,Math.min(15,Math.floor(Number(source.minutesKept)||0)));
+ result.crowns=sanitizeCrowns(source.crowns);
  result.lastWorld=result.world3Unlocked?3:result.world2Unlocked?2:1;
  result.choice=['dawn','night'].includes(source.choice)?source.choice:'';
  result.character=['witch','hunter'].includes(source.character)?source.character:'witch';
@@ -18,7 +22,7 @@ function normalize(value){
 }
 let progress=blank();
 try{progress=normalize(JSON.parse(localStorage.getItem(KEY)||'null'))}catch{}
-let activeWorld=1,menuWorld=progress.world2Unlocked?progress.lastWorld:1,finale=null,sequelGradientCache=[];
+let activeWorld=1,menuWorld=progress.world2Unlocked?progress.lastWorld:1,finale=null,sequelGradientCache=[],creatorJumpStage=null;
 const firstWorlds=worlds.map(item=>({...item}));
 const secondWorlds=[
  {name:'La Ville sans ombres',short:'VILLE BLANCHE',colors:['#25384b','#111d30','#476273'],moon:'#ffe4a8',boss:'Le Lanternier blanc',kind:'lanternier',foes:['lampWisp','shadePostman'],hour:'L’heure des refuges'},
@@ -46,6 +50,7 @@ function validateSave(bundle){
  const optionalBooleans=['world3Unlocked','world3Started','world3Completed','cardSixthHour'];
  const minutes=value.minutesKept;
  if(minutes!=null&&(!Number.isInteger(minutes)||minutes<0||minutes>15))throw Error('Minutes rendues invalides.');
+ if(value.crowns!=null){if(typeof value.crowns!=='object'||Array.isArray(value.crowns))throw Error('Couronnes invalides.');for(const kind of CROWN_KINDS){const list=value.crowns[kind];if(list!=null&&(!Array.isArray(list)||list.some(s=>!CROWN_SLOTS.includes(s))))throw Error('Couronnes invalides.')}}
  if(value.version!==1||booleans.some(key=>typeof value[key]!=='boolean')||optionalBooleans.some(key=>value[key]!=null&&typeof value[key]!=='boolean')||![1,2,3].includes(value.lastWorld)||!['','dawn','night'].includes(value.choice)||!['witch','hunter'].includes(value.character))throw Error('Progression des mondes invalide.');
  return bundle;
 }
@@ -241,7 +246,15 @@ function startWorld(id){
   progress.world3Started=true;save();runId='world3-'+prefs.difficulty;recordAtStart=getHighScore();
   if(Journey.run)Journey.run.record=recordAtStart;
   window.SixthHour?.start?.();
-  updateHUD();sequelHUD();refreshBoard();saveCheckpoint();say(world.name+' · '+thirdWorlds[stage].hour,3);
+  let creatorNote='';
+  if(creatorJumpStage!==null){
+   stage=creatorJumpStage;world=worlds[stage];wave=1;
+   enemies=[];hostile=[];shots=[];drops=[];hazards=[];obstacles=[];gates=[];scares=[];schedule=[];
+   transition=0;transitionBoss=false;pendingBoss=false;
+   creatorJumpStage=null;creatorNote=' · test créateur';
+   newWave();
+  }
+  updateHUD();sequelHUD();refreshBoard();saveCheckpoint();say(world.name+' · '+thirdWorlds[stage].hour+creatorNote,3);
  }
  return true;
 }
@@ -402,6 +415,8 @@ function redeemCreatorCode(value){
  if(!window.MinuitCloud?.isTeamAdmin)return false;
  if(code==='monde2'){unlockFirstWorld();beginFinale(null,{preview:true});return true}
  if(code==='monde3'){unlockFirstWorld();unlockSecondWorld();showUnlockedThirdWorld();return true}
+ const jump=/^monde3[_\- ]?([1-5])$/.exec(code);
+ if(jump){unlockFirstWorld();unlockSecondWorld();progress.world3Started=true;save();creatorJumpStage=Number(jump[1])-1;return startWorld(3)}
  return false;
 }
 window.addEventListener('keydown',event=>{if(finale&&event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();completeFinale()}},true);
@@ -418,7 +433,15 @@ style.textContent=`
 @media(prefers-reduced-motion:reduce){.sequel-character{transition:none}}
 `;
 document.head.appendChild(style);
-window.Campaign={validateSave,beginFinale,completeFinale,grimoireCard,redeemCreatorCode,showUnlockedThirdWorld,startWorld:requestWorld,beginWorld:startWorld,briefing,unlockFirstWorld,unlockSecondWorld,completeThirdWorld,keepMinutes,useClassicWorld:()=>applyWorld(1),get progress(){return progress},get activeWorld(){return activeWorld},get menuWorld(){return menuWorld},get finale(){return finale},get hourObjective(){return hourObjective},get worlds(){return activeWorld===3?thirdWorlds:secondWorlds},get secondWorlds(){return secondWorlds},get thirdWorlds(){return thirdWorlds},get key(){return KEY}};
+function awardCrown(kind,slot){
+ if(!CROWN_KINDS.includes(kind)||!CROWN_SLOTS.includes(slot))return false;
+ progress.crowns=sanitizeCrowns(progress.crowns);
+ const list=progress.crowns[kind];
+ if(list.includes(slot))return false;
+ list.push(slot);save();return true;
+}
+function crownsOf(kind){progress.crowns=sanitizeCrowns(progress.crowns);return (progress.crowns[kind]||[]).slice()}
+window.Campaign={validateSave,beginFinale,completeFinale,grimoireCard,redeemCreatorCode,showUnlockedThirdWorld,startWorld:requestWorld,beginWorld:startWorld,briefing,unlockFirstWorld,unlockSecondWorld,completeThirdWorld,keepMinutes,awardCrown,crownsOf,useClassicWorld:()=>applyWorld(1),get progress(){return progress},get crowns(){return sanitizeCrowns(progress.crowns)},get activeWorld(){return activeWorld},get menuWorld(){return menuWorld},get finale(){return finale},get hourObjective(){return hourObjective},get worlds(){return activeWorld===3?thirdWorlds:secondWorlds},get secondWorlds(){return secondWorlds},get thirdWorlds(){return thirdWorlds},get key(){return KEY}};
 applyWorld(progress.world2Unlocked?progress.lastWorld:1);
 if(progress.world2Unlocked&&state==='league-menu')Journey.menu();
 })();

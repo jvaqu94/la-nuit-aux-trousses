@@ -709,3 +709,97 @@ impact), braise de mèche noire armée puis tirée, prime (banner, +400, pas de
 combo, absence en stage 1), ordre de priorité du bandeau, bourse des trois
 runes (790 points) et de la cache. Les suites du monde 1, du monde 2, du
 labyrinthe et du duel restent vertes, inchangées.
+
+## 9sexies. Refonte verticale : la tranche Faubourg + Veilleuse
+
+Deux vérités du retour en jeu : le Faubourg était le premier univers joué, et la Veilleuse
+est le premier gardien rencontré. C’est donc là que la refonte a dû prouver son exigence —
+**plus de stratégie, de l’imbrication, du casse-tête**, et un moteur de rétention qui donne
+envie de revenir. Périmètre : la tranche Faubourg + Veilleuse, avec une architecture
+réutilisable pour les quatre autres univers.
+
+### Le principe : des serrures imbriquées, pas des systèmes parallèles
+
+Chaque action déverrouille la suivante et **bloque une autre** : c’est la grammaire des
+runes A → B → C du labyrinthe, étendue au gardien et à la vague. Rien n’est gratuit, rien
+n’est isolé. Les inspirations revendiquées :
+
+- **Touhou Project** (ZUN) : les *spell cards*, qui se gagnent par une lecture précise d’un
+  motif dans un temps borné — et les **médailles**, petites récompenses de maîtrise qui
+  récompensent la manière de gagner, pas la puissance.
+- **Into the Breach** (Subset Games) : chaque action est **sous condition** — tuer cette
+  pièce débloque celle-là, verrouille celle-là. La victoire est une résolution de plateau,
+  pas un débit de dégâts.
+- **Touhou again** : la dépense comme tension — la flamme de la sortie spéciale est une
+  clé, jamais un bouton « plus de dégâts ».
+
+### La Veilleuse v2 — « Les trois scellés »
+
+- **Trois fioles de cire scellée** (I, II, III) pendent sous le corps du gardien.
+  Seule la fiole du **bon numéro** cède : I brisé d’abord, puis II, puis III.
+- Une fiole **figée** (numéro trop tôt) encaisse le tir mais ne se brise pas :
+  le tir est absorbé, un murmure « FIGÉ · brise le sceau X d’abord » rappelle l’ordre,
+  et aucun effet de rebond n’est accordé. Le coup compte, sans compter.
+- Briser un scellé : +250 points, un pas de combo, et la fiole suivante **s’illumine**.
+  Les scellés sont frappables même bouche fermée, même hors fenêtre de tir.
+- Le cœur n’apparaît qu’une fois les **deux systèmes** résolus ensemble :
+  **les trois scellés brisés ET au moins trois mèches éteintes.** Une demi-victoire
+  ne suffit ni dans un sens ni dans l’autre.
+- Jauge unique redessinée : « SCELLÉS n/3 · MÈCHES n/3 ». La jauge mince progresse sur
+  six crans (3 fioles + 3 mèches) avant d’atteindre le cœur.
+- « VEILLE COMPLÈTE » (les cinq mèches allumées) est maintenant **tracée** et sert la
+  couronne « Veille calme » : le jeu récompense le combat propre, pas la procrastination.
+
+### Les plis cachetés du Faubourg (monde 3 · univers 1, vagues 1 à 3)
+
+Une lettre scellée tombe du ciel à chaque vague. Ramassées **dans l’ordre I → II → III**,
+les trois plis forment le sceau complet :
+
+- bon pli : +250, un pas de combo, compteur « PLIS n/3 » dans le bandeau objectif ;
+- les trois : **+1000 points** et le murmure « SCELLÉ COMPLET » ;
+- mauvais pli : la lettre se brise, +0, la chaîne de combo est cassée (« PLI SCELLÉ POUR
+  PLUS TARD »). Les plis manqués ne bloquent pas durablement : la chaîne survit aux vagues.
+
+L’ordre interdit tout ramassage automatique en collisionnant le premier projectile venu :
+le joueur arbitre encore ce qu’il touche.
+
+### Les Couronnes de l’heure (rétention sans puissance)
+
+Persistantes, sauvegardées dans `progress.crowns`, **sans aucun bonus de puissance** —
+du prestige, pas un écart. Trois maîtrises pour la Veilleuse, deux pour chaque autre
+gardien (la troisième est réservée, « à venir ») : 11 couronnes au total,
+« COURONNES DE L’HEURE · n/11 ».
+
+| Couronne | Condition | Gardiens |
+|---|---|---|
+| **SANS BRISURE** | gagner sans perdre un seul cœur | les cinq |
+| **SOUS 90 SECONDES** | gagner en moins de 90 s | les cinq |
+| **VEILLE CALME** | gagner sans jamais déclencher la Veille complète | La Veilleuse |
+
+Attribuées dans le point unique de victoire du boss (`reward()`), annoncées en jeu
+(« COURONNES DE L’HEURE · … »), affichées sur l’écran de fin et sur le briefing du monde 3.
+Les quatre autres gardiens attribuent déjà « Sans Brisure » et « Sous 90 secondes » :
+l’architecture est en place pour la suite.
+
+### Codes créateur : Monde3_1 à Monde3_5
+
+Les codes créateur acceptent maintenant `Monde3_1` … `Monde3_5` (insensible à la casse,
+`-` et espaces tolérés). Réservés au créateur (team-admin), ils sautent **droit dans
+l’univers choisi** — vague 1, interface de test, note « · test créateur » — sans passer
+par le hub ni le briefing. `Monde3` reste inchangé (déblocage + écran du monde 3).
+
+### Ce que ça ne change pas
+
+Aucune nouvelle vie, aucun nouveau projectile, aucune barre de vie. Les mondes 1 et 2 sont
+intouchés ; le monde 3 reste juste et gagnable — la profondeur vient uniquement des
+conditions, de l’ordre et de la lecture.
+
+### Vérifications
+
+`tests/test_sixth_hour.cjs` épingle : spaw des trois scellés (I luisant, II-III figés),
+rejet du scellé figé (tir absorbé sans brisure), brisure en ordre avec déblocage du suivant,
+gate double (mèches seules → pas de cœur ; scellés seuls → pas de cœur), label de jauge,
+chute et chaîne des plis (vagues 1→2→3, mauvais ordre, complet à trois), attribution des
+couronnes (veilleuse propre+rapide+calme ; sonneur raté sans maîtrise ; sonneur propre et
+rapide), code `Monde3_3` (saut admin, stage 2, monde 3), `Monde3_9` rejeté, saut refusé
+hors admin. Suites des mondes 1, 2 et 3, du duel et du cloud : vertes.

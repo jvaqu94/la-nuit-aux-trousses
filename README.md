@@ -148,11 +148,13 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq mèches, puis frapper trois fois son cœur lorsqu'il s'ouvre. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — briser les trois scellés I → II → III, puis éteindre trois mèches ; le cœur s'ouvre enfin et se frappe trois fois. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
 | Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
+
+**La tranche Faubourg + Veilleuse a été refondue en mode verticale** : des conditions imbriquées plutôt que parallèles. Les **plis cachetés** du Faubourg tombent un par vague (I, II, III) et ne rapportent leur **+1000** que ramassés dans l'ordre ; **Les trois scellés** enferment le cœur de la Veilleuse derrière deux serrures à défaire ensemble. La victoire propre se couronne désormais : les **Couronnes de l'heure** (11 au total, 3 pour la Veilleuse) récompensent la manière de gagner — jamais la puissance. La Veilleuse réclame « Sans Brisure », « Veille calme » et « Sous 90 secondes ». Inspirations revendiquées : les *spell cards* et les médailles de **Touhou Project** (maîtrise de la manière de gagner), et les conditions de **Into the Breach** (chaque action sous condition, la victoire comme échecs). Les autres gardiens attribuent déjà les deux couronnes génériques ; le reste suit le même schéma. Détail dans `docs/monde-3-gameplay.md` §9sexies.
 
 #### Lisibilité : des consignes, plus des énigmes
 
@@ -502,7 +504,8 @@ Le menu **Compte & team** permet, après connexion, de créer une team ou de rej
 - L’espace **Test du créateur**, visible uniquement par l’administrateur de la team, contient un champ **Code** :
   - **`Monde2`** ouvre la rencontre de fin et **Les Cinq Heures Perdues** ;
   - **`Monde3`** débloque toute la chaîne 1 → 2 → 3, la carte **La Sixième Heure**, puis propose **Tester le monde 3** qui mène au briefing et au choix du personnage (sorcière ou Veilleur).
-  La casse et les espaces sont ignorés. Ces parcours n’enregistrent **aucun faux score**, aucun résultat de vol et ne consomment aucun quota ; seuls les drapeaux de progression sont écrits. Un code inconnu, un champ vide ou un compte non administrateur ne change rien.
+  - **`Monde3_1` … `Monde3_5`** sautent directement dans l'univers 1 à 5 du monde 3 (vague 1, note « · test créateur »), sans passer par le briefing.
+  La casse, les tirets et les espaces sont ignorés. Ces parcours n’enregistrent **aucun faux score**, aucun résultat de vol et ne consomment aucun quota ; seuls les drapeaux de progression sont écrits. Un code inconnu, un champ vide ou un compte non administrateur ne change rien.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team. Après une jointure réussie, le jeu revient automatiquement à l’accueil avec une confirmation ; en cas d’échec, l’erreur et l’invitation restent affichées. Le visiteur peut aussi ignorer l’invitation.
 - Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record. Une partie classique transmet uniquement son activité au suivi privé du créateur : elle ne change ni le highscore, ni le total, ni le quota de la team. Un identifiant unique évite le double comptage en cas de renvoi.
 - **Envoi fiable même si le réseau lâche :** si l’envoi échoue à la fin du vol (réseau indisponible, délai dépassé), le score n’est pas perdu — il est conservé sur l’appareil puis **renvoyé automatiquement** dès que possible (au retour du réseau, à la connexion suivante ou via **Renvoyer maintenant** dans la team). Un échec de chargement de la team ne saute plus silencieusement l’envoi. Seuls les refus « règles » (période terminée, quota atteint, règles non configurées) ne sont pas réessayés, car ils ne changeraient pas. Le bilan et la carte de team indiquent clairement les vols en attente.
@@ -565,7 +568,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse durcie (cendres, braise de mèche noire, rallumage individuel visible) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées). |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v2 (trois scellés imbriqués, cendres, braise de mèche noire, rallumage individuel visible) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées, plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
