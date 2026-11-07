@@ -880,3 +880,12 @@ translucide (`.instruction-backdrop`, halo discret légèrement plus sombre au c
 fini la fenêtre pleine écran qui cache la partie. Le jeu est gelé, lisible autour du
 popup, et le bouton « C’est compris » rend la main. Les autres overlays (menus, briefings)
 restent en opacité pleine, volontairement.
+
+### L'objectif persistant devient une puce, le jeu ne bouge plus
+
+Retour de test décisif (merci la capture de l'observateur) : le texte au-dessus du terrain
+passait sur 2 puis 3 lignes selon la place disponible et poussait la fenêtre du jeu.
+L'objectif (`#sixthObjective`) n'entre plus dans le flux du `.heading.game-status` : c'est
+une **puce absolue centrée** (max 2 lignes, ellipsis, `pointer-events:none`) posée sur le
+bord supérieur de l'arène. La hauteur de la zone au-dessus du jeu est maintenant constante —
+quelle que soit la largeur de l'écran, le terrain ne bouge jamais.
