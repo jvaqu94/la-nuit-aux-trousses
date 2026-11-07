@@ -64,6 +64,8 @@ global.document = {
   addEventListener() {}
 };
 global.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
+// Les popups d'introduction ne se déclenchent qu'une fois par appareil : on les marque tous vus pour des tests déterministes.
+store.set('minuit-sixth-intros', JSON.stringify(['w3-faubourg','w3-minute1','w3-minute2','w3-minute3','w3-stage-1','w3-stage-2','w3-stage-3','w3-stage-4','w3-boss-veilleuse','w3-boss-sonneur','w3-boss-passeur','w3-boss-cueilleuse','w3-boss-chasseur']));
 global.Image = class { constructor() { this.complete = true; this.naturalWidth = 96; this.naturalHeight = 96; } addEventListener() {} set src(v) { this._src = v; } get src() { return this._src; } };
 global.devicePixelRatio = 1;
 global.innerWidth = 1366;
@@ -130,16 +132,33 @@ freshWave(1);
 for(let i=0;i<40;i++)spawnEnemy({kind:'wickWarden',x:120+(i%5)*140,group:1,index:i%2,pattern:99});
 out.foeCap={live:SH.liveFoes(),max:SH.tune().foes,budget:SH.BUDGET.foes};
 
-/* 6 · Héritage protecteur : les dégâts sont réduits dans le halo, pas ailleurs */
+/* 6 · Héritage protecteur : le halo immunise quand il est allumé, rien quand il s'éteint */
 freshWave(1);
 spawnEnemy({kind:'wickWarden',x:400,y:300,group:1,index:0,pattern:99});
-const warden=enemies[enemies.length-1];warden.y=300;warden.homeY=300;warden.halo=150;
+const warden=enemies[enemies.length-1];warden.y=300;warden.homeY=300;warden.halo=150;warden.haloOn=true;warden.haloTimer=3;
 spawnEnemy({kind:'bronzeCrow',x:400,y:300,group:2,index:1,pattern:99});
 const inside=enemies[enemies.length-1];inside.y=300;inside.homeY=300;inside.hp=inside.max=100;
 const hpBefore=inside.hp;player.x=400;player.y=300;damageEnemy(inside,10,false);
 out.wardIn=hpBefore-inside.hp;
-player.x=60;player.y=820;inside.x=700;const hp2=inside.hp;damageEnemy(inside,10,false);
-out.wardOut=hp2-inside.hp;
+warden.haloOn=false;warden.haloTimer=2.6;
+const hpOpen=inside.hp;damageEnemy(inside,10,false);
+out.wardOff=hpOpen-inside.hp;
+warden.haloOn=true;warden.haloTimer=2;
+const hpOn=inside.hp;damageEnemy(inside,10,false);
+out.wardOn=hpOn-inside.hp;
+// le Garde-mèche lui-même est immunisé tant que son cercle luit
+const wHp=warden.hp;damageEnemy(warden,10,false);
+out.wardWarden=wHp-warden.hp;
+// le halo allumé protège tout l'écran, même loin du porteur
+player.x=60;player.y=820;inside.x=700;const hp3=inside.hp;damageEnemy(inside,10,false);
+out.wardOut=hp3-inside.hp;
+warden.haloOn=false;warden.haloTimer=2.6;const hp4=inside.hp;damageEnemy(inside,10,false);
+out.wardOutOff=hp4-inside.hp;
+// cycles : le creux rallume la fenêtre, et la flamme se rallume ensuite
+warden.haloOn=false;warden.haloTimer=0.01;SH.moveEnemy(warden,1/30);
+out.haloCycle={on:warden.haloOn===true};
+warden.haloTimer=0.01;SH.moveEnemy(warden,1/30);
+out.haloCycleOff={on:warden.haloOn===true};
 
 /* 7 · Relais annulable : tuer la source annule son télégraphe */
 freshWave(1);
@@ -202,15 +221,51 @@ for(let i=0;i<5;i++){
   out.bosses.push({kind:e.kind,hp,max:e.max,unchanged:e.hp===hp,label:e.label,value:e.value,victory:SH.VICTORY[e.kind]});
 }
 
-/* 11a · La Veilleuse : les mèches s'éteignent par la fenêtre de tir, pas par les dégâts */
+/* 11a · La Veilleuse v4 : tout tient aux bougies — trois mèches fendent la cire ; le cœur bat à nu sur le torse. Plus aucun scellé. */
 let v=bossFor(0);
-v.windows.forEach(w=>w.open=2);
-for(const w of v.windows)shots.push({x:w.x,y:w.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()});
-SH.tick(1/60);
-out.veilleuse={lit:v.windows.filter(w=>w.lit).length};
-v.windows.forEach(w=>{w.lit=false});SH.moveBoss(v,1/60);
-out.veilleuse.value=v.value;out.veilleuse.phase=v.phase;
-v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;
+out.veilleuse={noVials:!('vials' in v)};
+// une mèche éteinte : la cire tient bon, le cœur reste fermé
+v.windows.forEach((w,i)=>{w.lit=i!==0});
+SH.moveBoss(v,1/60);
+out.veilleuse.oneWick=v.phase;
+// trois mèches éteintes : la cire se fend, le cœur s'expose, ancré sur le torse
+v.windows.forEach((w,i)=>{w.lit=i>=3});
+SH.moveBoss(v,1/60);
+out.veilleuse.phase=v.phase;out.veilleuse.value=v.value;out.veilleuse.lit=0;out.veilleuse.label=v.label;
+out.veilleuse.corePinned=Math.abs(v.core.y-(v.y+26))<.001&&v.core.x===v.x;
+// hors flash, le cœur est scellé : le tir encaisse et n'entame rien
+v.core.open=0;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);
+out.veilleuse.blocked=v.core.hits;
+// pendant le flash : un impact, et la couronne de braises
+v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];hostile=[];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;out.veilleuse.corePinned2=Math.abs(v.core.x-v.x)<.001;
+
+/* 11a bis · Couronnes de l'heure : maîtrise, vitesse, veille calme */
+Camp.progress.crowns={veilleuse:[],sonneur:[],passeur:[],cueilleuse:[],chasseur:[]};
+stage=0;world=worlds[0];wave=5;state='play';
+enemies=[];hostile=[];shots=[];drops=[];SH.marks.length=0;SH.salt.length=0;
+SH.mission.veilleComplete=false;
+spawnBoss();
+const crownBoss=enemies.find(e=>e.boss);crownBoss.y=190;crownBoss.age=30;crownBoss.lossStart=0;
+if(window.Journey?.run?.stats)window.Journey.run.stats.lifeLoss=0;
+reward(crownBoss);
+transition=0;transitionBoss=false;pendingBoss=false;
+out.crowns={veilleuse:Camp.progress.crowns.veilleuse.slice().sort()};
+stage=1;world=worlds[1];wave=5;state='play';
+enemies=[];hostile=[];shots=[];drops=[];SH.marks.length=0;SH.salt.length=0;
+spawnBoss();
+const crownBoss2=enemies.find(e=>e.boss);crownBoss2.y=190;crownBoss2.age=200;crownBoss2.lossStart=0;
+if(window.Journey?.run?.stats)window.Journey.run.stats.lifeLoss=2;
+reward(crownBoss2);
+transition=0;transitionBoss=false;pendingBoss=false;
+out.crowns.sonneurDirtySlow=Camp.progress.crowns.sonneur.slice().sort();
+stage=1;world=worlds[1];wave=5;state='play';
+enemies=[];hostile=[];shots=[];drops=[];SH.marks.length=0;SH.salt.length=0;
+spawnBoss();
+const crownBoss3=enemies.find(e=>e.boss);crownBoss3.y=190;crownBoss3.age=40;crownBoss3.lossStart=2;
+if(window.Journey?.run?.stats)window.Journey.run.stats.lifeLoss=2;
+reward(crownBoss3);
+transition=0;transitionBoss=false;pendingBoss=false;
+out.crowns.sonneurCleanFast=Camp.progress.crowns.sonneur.slice().sort();
 
 /* 11b · Le Sonneur : tirer sur la cloche monte la résonance, le battant se frappe à côté */
 let s=bossFor(1);
@@ -349,6 +404,27 @@ out.code.playing={state,activeWorld:Camp.activeWorld,runId,character:Camp.progre
 out.code.monde2StillWorks=Camp.redeemCreatorCode('Monde2');
 out.code.finale=!!Camp.finale;
 Camp.completeFinale();
+/* Codes créateur par univers : Monde3_1 .. Monde3_5 sautent droit dans l'univers choisi. */
+window.MinuitCloud={isTeamAdmin:false};
+const jumpNonAdmin=Camp.redeemCreatorCode('Monde3_3');
+window.MinuitCloud={isTeamAdmin:true};
+const jumpBad=Camp.redeemCreatorCode('Monde3_9');
+const jumpOk=Camp.redeemCreatorCode('Monde3_3');
+out.code.jump={nonAdmin:jumpNonAdmin,bad:jumpBad,ok:jumpOk,stage,activeWorld:Camp.activeWorld,state,runId};
+transition=0;transitionBoss=false;pendingBoss=false;
+
+/* Introduction par popup : une mécanique majeure annonce sa loi en pause une seule fois. */
+localStorage.setItem('minuit-sixth-intros','[]');
+freshWave(1);
+out.intro={shown:state,title:null};
+const overlayHtml=(document.getElementById('overlay')||{}).innerHTML||'';
+out.intro.title=overlayHtml.includes('Le Faubourg des veilles');
+out.intro.paused=state==='instruction';
+localStorage.setItem('minuit-sixth-intros',JSON.stringify(['w3-faubourg']));
+freshWave(1);
+out.intro.seenAgain=state;
+localStorage.setItem('minuit-sixth-intros',JSON.stringify(['w3-faubourg','w3-minute1','w3-minute2','w3-minute3','w3-stage-1','w3-stage-2','w3-stage-3','w3-stage-4','w3-boss-veilleuse','w3-boss-sonneur','w3-boss-passeur','w3-boss-cueilleuse','w3-boss-chasseur']));
+state='play';
 
 /* 15 · Direction artistique et décors PROPRES au monde 3.
    Le monde 3 ne doit plus ni réutiliser les peintures du monde 1, ni dessiner
@@ -707,7 +783,7 @@ out.snuffer={mark:!!snuffMark&&snuffMark.snuff===true,flame0:SH.flame};
 player.x=snuffMark.x;player.y=snuffMark.y;
 SH.tick(1.3);
 out.snuffer.flame1=SH.flame;out.snuffer.stolen=snuffer.stolen;
-// Sa flamme volée protège les autres, comme le halo du Garde-mèche.
+// Sa flamme volée immunise les autres, comme le halo du Garde-mèche.
 player.x=720;player.y=820;
 spawnEnemy({kind:'waxCourier',x:400,y:400,group:2,index:0,pattern:99});
 const shielded=enemies[enemies.length-1];
@@ -853,11 +929,13 @@ SH.moveBoss(gun,0.85);
 out.wicks.fullVolley=hostile.length;
 out.wicks.volleySpeed=hostile.length?Math.max.apply(null,hostile.map(h=>h.speed||Math.hypot(h.vx,h.vy))):0;
 out.wicks.cap=SH.BUDGET.volley;
+/* La phase 2 commence à trois mèches éteintes : le minimum en phase 1 est
+   trois mèches allumées. La salve suit le nombre de mèches allumées. */
 const lone=wickScene();
-lone.windows.forEach((w,i)=>w.lit=i===0);
+lone.windows.forEach((w,i)=>w.lit=i<3);
 lone.guard=0;hostile=[];
 SH.moveBoss(lone,1/60);SH.moveBoss(lone,0.85);
-out.wicks.lastWickVolley=hostile.length;
+out.wicks.threeLitVolley=hostile.length;
 // Éteindre une mèche pendant sa charge annule son tir.
 const spared=wickScene();
 spared.guard=0;hostile=[];
@@ -937,6 +1015,9 @@ gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
 Camp.beginWorld(3);stage=0;world=worlds[0];wave=1;state='play';
 enemies=[];hostile=[];shots=[];drops=[];hazards=[];obstacles=[];gates=[];
 SH.marks.length=0;SH.salt.length=0;newWave();
+out.flow={w1:makeSchedule().length,w4:null};
+wave=2;newWave();out.flow.w2=makeSchedule().length;
+wave=1;newWave();
 out.prime={kind:SH.mission.prime,inPool:world.foes.includes(SH.mission.prime)};
 out.prime.banner=SH.objectiveText().includes('PRIME');
 const primeKind=SH.mission.prime;
@@ -961,6 +1042,24 @@ spawnEnemy({kind:'wickWarden',x:400,y:260,group:1,index:0,pattern:99});
 out.triage.warden=SH.objectiveText().includes('Garde-mèche');
 enemies.forEach(e=>e.dead=true);
 out.triage.clear=!SH.objectiveText().includes('PRIORITÉ');
+
+/* Les plis cachetés : I → II → III dans l'ordre, le désordre casse la chaîne. */
+freshWave(1);
+out.plis={wave:1,drops:drops.filter(d=>d.kind==='pli').map(d=>d.pli)};
+combo=1;chain=0;
+SH.collectPli({pli:2}); // touché trop tôt : chaîne cassée, pli perdu
+out.plis.wrong={combo,chain,got:SH.mission.plis.got,next:SH.mission.plis.next};
+freshWave(2); // la chaîne persiste d'une vague à l'autre
+out.plis.wave2={drops:drops.filter(d=>d.kind==='pli').map(d=>d.pli),got:SH.mission.plis.got,next:SH.mission.plis.next};
+SH.collectPli({pli:1});
+out.plis.after1={got:SH.mission.plis.got,next:SH.mission.plis.next,combo};
+SH.collectPli({pli:2});
+out.plis.after2={got:SH.mission.plis.got,combo};
+freshWave(3);
+out.plis.wave3Drops=drops.filter(d=>d.kind==='pli').map(d=>d.pli);
+SH.collectPli({pli:3});
+out.plis.after3={got:SH.mission.plis.got,combo,objective:SH.objectiveText().includes('PLIS ✓')};
+combo=1;chain=0;
 
 /* Épreuves propres aux cinq univers : une action distinctive par monde. */
 const trialCounts=[];
@@ -994,6 +1093,33 @@ out.trials={counts:trialCounts,names:SH.TRIALS.map(t=>t.short),objective:SH.obje
 /* 16 · Le monde 2 garde son comportement (dispatch non régressé) */
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
+
+/* 17 · Retour 6 — les shmups modernes : la lettre suspendue, le cancel PRIME, le cachet. */
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=3;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;SH.letters.length=0;
+newWave();
+const letter=SH.letters[0];
+out.retour={spawned:!!letter};
+const scoreB=score;
+SH.resolveLetter(SH.letters[0],true);
+out.retour.shattered={score:score-scoreB,legere:!!SH.mission.legere,gone:SH.letters.every(l=>l.dead)};
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=3;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;SH.letters.length=0;
+newWave();
+const scoreC=score;
+SH.resolveLetter(SH.letters[0],false);
+out.retour.sealed={score:score-scoreC,legere:!!SH.mission.legere,gone:SH.letters.every(l=>l.dead)};
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=1;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;newWave();wave=1;newWave();
+spawnEnemy({kind:SH.mission.prime,x:400,y:300,group:1,index:0,pattern:99});
+const primeTok=enemies[enemies.length-1];primeTok.elite=false;primeTok.tier=1;
+hostile=[{x:120,y:120,vx:0,vy:0,type:'spirit',r:7,damage:25,life:1,grazed:false,age:0,speed:100},{x:200,y:160,vx:0,vy:0,type:'spirit',r:7,damage:25,life:1,grazed:false,age:0,speed:140}];
+const scoreD=score,comboD=combo;
+reward(primeTok);
+out.retour.primeCancel={hostileLeft:hostile.length,score:score-scoreD,expected:100*comboD+400+2*50};
 
 globalThis.__RESULT__=out;
 })();
@@ -1043,7 +1169,8 @@ for (const t of r.tuning) {
 }
 assert.deepEqual(r.tuning.map(t => t.axes), [1, 2, 2, 3, 3], 'la difficulté doit monter par les décisions');
 
-assert.ok(r.wardIn < r.wardOut && r.wardIn > 0, 'le halo protecteur doit réduire les dégâts (héritage monde 1)');
+assert.equal(r.wardIn, 0, 'le halo allumé immunise (héritage monde 1, version monde 3)');
+assert.ok(r.wardOff > r.wardIn, 'le halo s’éteint par cycles et la cible redevient vulnérable');
 assert.equal(r.marksBefore, 2, 'le facteur de cire annonce un réel et un leurre');
 assert.equal(r.lureLanguage, true);
 assert.ok(r.relays >= 1, 'tuer la source doit compter comme relais brisé');
@@ -1067,9 +1194,14 @@ for (const b of r.bosses) {
 }
 assert.equal(new Set(r.bosses.map(b => b.victory)).size, 5, 'cinq conditions de victoire différentes');
 
+assert.equal(r.veilleuse.noVials, true, 'plus aucun scellé : la Veilleuse v4 vit et meurt par les bougies');
+assert.equal(r.veilleuse.oneWick, 1, 'une seule mèche éteinte ne fend pas la cire');
+assert.equal(r.veilleuse.blocked, 0, 'hors flash, le cœur n’encaisse aucun tir');
+assert.equal(r.veilleuse.phase, 2, 'trois mèches éteintes suffisent : la cire se fend, le cœur bat');
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
-assert.equal(r.veilleuse.value, .5, 'éteindre les mèches déclenche la seconde phase sans tuer le boss');
-assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après les cinq mèches');
+assert.equal(r.veilleuse.value, .5, 'trois mèches révèlent la seconde phase sans tuer le boss');
+assert.equal(r.veilleuse.corePinned, true, 'le cœur bat ancré sur le torse — aucune dérive aléatoire');
+assert.equal(r.veilleuse.corePinned2, true, 'le cœur reste épinglé au torse après chaque impact');
 assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
 assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
@@ -1087,6 +1219,9 @@ assert.equal(r.chasseur.borrow.length, 3, 'trois emprunts');
 assert.ok(r.chasseur.borrow.includes(r.chasseur.least) === false || r.chasseur.least, 'le geste non copié est identifié');
 assert.equal(r.chasseur.after.naming, true, 'après trois emprunts il n’a plus de visage');
 
+assert.deepEqual(r.crowns.veilleuse, ['calme','patience','rapide'], 'les trois couronnes de la Veilleuse sont accordées pour une victoire propre et rapide');
+assert.deepEqual(r.crowns.sonneurDirtySlow, [], 'sans maîtrise, aucune couronne');
+assert.deepEqual(r.crowns.sonneurCleanFast, ['patience','rapide'], 'les couronnes génériques valent pour les autres gardiens');
 assert.equal(r.loop.crashes, 0, 'exception dans la boucle de jeu : ' + r.crashMessage);
 assert.ok(r.loop.maxFoes <= r.budget.foes, 'la boucle réelle dépasse le plafond d’ennemis : ' + r.loop.maxFoes);
 // Garde-fou anti-accumulation, pas une loi de design : le plafond était à 90,
@@ -1121,6 +1256,15 @@ assert.equal(r.code.playing.activeWorld, 3);
 assert.equal(r.code.playing.runId, 'world3-normal');
 assert.equal(r.code.playing.character, 'hunter', 'le Veilleur est jouable au monde 3');
 assert.equal(r.code.monde2StillWorks, true, 'le code Monde2 continue de fonctionner');
+assert.equal(r.code.jump.nonAdmin, false, 'le saut par univers reste réservé au créateur');
+assert.equal(r.code.jump.bad, false, 'Monde3_9 n’existe pas');
+assert.equal(r.code.jump.ok, true, 'le créateur saute directement dans l’univers');
+assert.equal(r.code.jump.stage, 2, 'Monde3_3 lance le troisième univers du monde 3');
+assert.equal(r.code.jump.activeWorld, 3);
+assert.equal(r.code.jump.state, 'play');
+assert.equal(r.intro.paused, true, 'une instruction majeure met le vol en pause');
+assert.equal(r.intro.title, true, 'le popup annonce le titre de l’instruction');
+assert.equal(r.intro.seenAgain, 'play', 'une fois lue, l’instruction ne revient pas');
 assert.equal(r.code.finale, true, 'Monde2 ouvre toujours sa rencontre');
 
 assert.equal(r.art.kinds, 18, '13 formes + 5 gardiens doivent avoir leur silhouette');
@@ -1247,9 +1391,29 @@ assert.equal(r.prime.banner, true, 'la PRIME est affichée dans le bandeau d’o
 assert.equal(r.prime.paid, true, 'abattre la cible désignée paie +400');
 assert.equal(r.prime.combo, true, 'abattre la cible désignée ajoute un pas de combo');
 assert.equal(r.prime.elsewhere, true, 'hors du Faubourg, pas de prime');
+assert.equal(r.wardIn, 0, 'un allié sous halo allumé est immuNISÉ');
+assert.equal(r.wardOff, 10, 'au creux, le halo s’éteint et la cible redevient vulnérable');
+assert.equal(r.wardOn, 0, 'quand le halo se rallume, la cible est de nouveau immuNISÉE');
+assert.equal(r.wardWarden, 0, 'le Garde-mèche lui-même est immunisé tant que son cercle luit');
+assert.equal(r.haloCycle.on, true, 'le halo finit par se rallumer (cycle allumé)');
+assert.equal(r.wardOut, 0, 'le halo allumé protège tout l’écran, même loin du porteur');
+assert.equal(r.wardOutOff, 10, 'au creux, plus personne n’est protégé, même loin du porteur');
+assert.equal(r.haloCycleOff.on, false, 'la flamme du creux finit par s’éteindre au tour suivant (cycle éteint)');
+assert.equal(r.flow.w1, 35, 'la vague 1 du Faubourg tient la route (35 ennemis)');
+assert.equal(r.flow.w2, 40, 'la vague 2 du Faubourg tient la route (40 ennemis)');
 assert.equal(r.triage.mimic, true, 'le bandeau désigne le Faux-cierge tant qu’il reste');
 assert.equal(r.triage.warden, true, 'le bandeau désigne le Garde-mèche en priorité');
 assert.equal(r.triage.clear, true, 'sans menace, le bandeau ne désigne rien');
+assert.deepEqual(r.plis.drops, [1], 'la vague 1 laisse tomber le pli I');
+assert.equal(r.plis.wrong.got, 0, 'un pli touché trop tôt ne compte pas');
+assert.equal(r.plis.wrong.next, 1, 'la chaîne reste sur le pli I');
+assert.equal(r.plis.wrong.combo, 1, 'toucher un pli scellé casse la chaîne');
+assert.deepEqual(r.plis.wave2.drops, [2], 'la vague 2 laisse tomber le pli II');
+assert.equal(r.plis.wave2.got, 0, 'la chaîne des plis survit au passage de vague');
+assert.deepEqual(r.plis.after1, { got:1, next:2, combo:2 }, 'le pli I se ramasse');
+assert.equal(r.plis.after2.got, 2, 'le pli II se ramasse ensuite');
+assert.deepEqual(r.plis.after3, { got:3, combo:4, objective:true }, 'les trois plis complètent le sceau');
+assert.deepEqual(r.plis.wave3Drops, [3], 'la vague 3 laisse tomber le pli III');
 
 /* L’ordre des runes paie : score croissant et chaîne de combo. */
 assert.equal(r.labyrinth.runePayoff.aCombo, 2, 'rune A validée : +1 combo');
@@ -1265,7 +1429,7 @@ assert.equal(r.snuffer.mark, true, 'le mouchage doit être télégraphié');
 assert.ok(r.snuffer.flame0 > 0, 'le scénario doit partir avec une flamme');
 assert.equal(r.snuffer.flame1, r.snuffer.flame0 - 1, 'le Moucheur souffle une mèche');
 assert.equal(r.snuffer.stolen, 1, 'la mèche volée doit être portée');
-assert.equal(r.snuffer.protected, 5.5, 'la flamme volée protège les autres (dégâts ×0,55)');
+assert.equal(r.snuffer.protected, 0, 'la flamme volée immunise les autres (comme tout halo allumé)');
 assert.equal(r.snuffer.returned, 1, 'tuer le Moucheur rend la mèche');
 
 /* Faux-cierge : le ramasser mord, le tirer perce. */
@@ -1313,8 +1477,8 @@ assert.ok(r.wicks.guardScale.full >= 1.9 && r.wicks.guardScale.last <= 4.6, 'les
 assert.equal(r.wicks.volleySpeed, 168, 'la salve de défense reste sous le plafond de vitesse du monde');
 assert.equal(r.ashes.hit, 1, 'le cœur encaissé compte');
 assert.equal(r.ashes.scheduled, true, 'chaque impact déclenche les cendres');
-assert.equal(r.ashes.crown, 8, 'la couronne de cendres compte huit braises');
-assert.equal(r.ashes.cinderSpeed, 118, 'les braises restent lentes et lisibles');
+assert.equal(r.ashes.crown, 10, 'la couronne de cendres compte dix braises');
+assert.equal(r.ashes.cinderSpeed, 132, 'les braises restent lentes et lisibles');
 assert.equal(r.flare.armed, true, 'une mèche morte peut se réchauffer en phase 2');
 assert.equal(r.flare.fired, true, 'la braise part après son annonce');
 assert.equal(r.flare.speed, 168, 'la braise respecte le plafond de vitesse');
@@ -1322,7 +1486,7 @@ assert.equal(r.wicks.beforeCharge, 0, 'la salve doit être annoncée avant de pa
 assert.equal(r.wicks.charge, r.wicks.cap, 'toutes les mèches proches chargent, dans la limite du budget');
 assert.equal(r.wicks.fullVolley, r.wicks.cap, 'cinq mèches allumées donnent la salve maximale');
 assert.ok(r.wicks.fullVolley <= r.wicks.cap, 'la salve ne dépasse jamais le budget du monde');
-assert.equal(r.wicks.lastWickVolley, 1, 'une seule mèche allumée ne tire qu’un projectile');
+assert.equal(r.wicks.threeLitVolley, 3, 'trois mèches allumées donnent une salve de trois projectiles');
 assert.equal(r.wicks.cancelledVolley, 0, 'éteindre une mèche pendant sa charge annule son tir');
 assert.equal(r.wicks.draw.crash, null, 'le rendu des mèches ne doit pas planter');
 assert.equal(r.wicks.draw.lanterns, 5, 'chaque mèche doit être dessinée comme une lanterne');
@@ -1333,7 +1497,7 @@ assert.equal(r.wicks.openLabel, true, 'la fenêtre de tir doit être annoncée')
 assert.equal(r.wicks.gauge.hidden, true, 'la barre DOM ne doit pas réapparaître');
 assert.equal(r.wicks.gauge.hiddenAfterHUD, true, 'updateHUD ne doit pas créer une seconde jauge');
 assert.ok(r.wicks.gauge.texts.some(t => t.includes('Veilleuse')), 'la jauge canvas porte le nom du gardien');
-assert.ok(r.wicks.gauge.texts.some(t => t.includes('Tire sur la flamme')), 'la jauge canvas porte la consigne');
+assert.ok(r.wicks.gauge.texts.some(t => /m[èe]ches/i.test(t)), 'la jauge canvas porte la consigne');
 assert.ok(!r.wicks.gauge.texts.some(t => t.includes('PHASE')), 'les gardiens du monde 3 n’ont pas de phases de vie');
 assert.ok(r.wicks.gauge.widest <= 250, 'la consigne doit tenir dans le panneau de jauge : ' + r.wicks.gauge.widest);
 assert.equal(r.wicks.labelX.count, 3, 'les trois états de mèche sont libellés');
@@ -1344,6 +1508,16 @@ assert.deepEqual(r.trials.counts,[1,1,1,1,1],'chaque univers doit valider son é
 assert.deepEqual(r.trials.names,['SCEAUX','ÉCHOS','TRACES','MÈCHES','CHIFFRES'],'les cinq épreuves doivent rester distinctes');
 assert.ok(r.trials.objective.includes('ÉPREUVE CHIFFRES 1/3'),'la progression de l’épreuve doit rester visible dans le bandeau');
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
+
+assert.equal(r.retour.spawned,true,'la lettre suspendue traverse l’univers en vague 3');
+assert.equal(r.retour.shattered.score,50,'un tir sur la lettre brise le sceau : +50');
+assert.equal(r.retour.shattered.legere,false,'briser le sceau n’accorde jamais la minute');
+assert.equal(r.retour.shattered.gone,true,'la lettre brisée se retire proprement');
+assert.equal(r.retour.sealed.score,400,'sceller la minute paie +400');
+assert.equal(r.retour.sealed.legere,true,'sceller une minute sans tirer ouvre la couronne MAIN LÉGÈRE');
+assert.equal(r.retour.sealed.gone,true,'la lettre scellée se retire proprement');
+assert.equal(r.retour.primeCancel.hostileLeft,0,'une prime abattue annule tous les esprits à l’écran');
+assert.equal(r.retour.primeCancel.score,r.retour.primeCancel.expected,'prime + cachets : l’écran entier paie (100×combo + 400 + 2×50)');
 
 console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, cinq épreuves de maîtrise spécifiques au monde 3, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, Veilleuse à jauge unique avec mèches dessinées, salve de défense et tirage aléatoire, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 

@@ -709,3 +709,271 @@ impact), braise de mèche noire armée puis tirée, prime (banner, +400, pas de
 combo, absence en stage 1), ordre de priorité du bandeau, bourse des trois
 runes (790 points) et de la cache. Les suites du monde 1, du monde 2, du
 labyrinthe et du duel restent vertes, inchangées.
+
+## 9sexies. Refonte verticale : la tranche Faubourg + Veilleuse
+
+Deux vérités du retour en jeu : le Faubourg était le premier univers joué, et la Veilleuse
+est le premier gardien rencontré. C’est donc là que la refonte a dû prouver son exigence —
+**plus de stratégie, de l’imbrication, du casse-tête**, et un moteur de rétention qui donne
+envie de revenir. Périmètre : la tranche Faubourg + Veilleuse, avec une architecture
+réutilisable pour les quatre autres univers.
+
+### Le principe : des serrures imbriquées, pas des systèmes parallèles
+
+Chaque action déverrouille la suivante et **bloque une autre** : c’est la grammaire des
+runes A → B → C du labyrinthe, étendue au gardien et à la vague. Rien n’est gratuit, rien
+n’est isolé. Les inspirations revendiquées :
+
+- **Touhou Project** (ZUN) : les *spell cards*, qui se gagnent par une lecture précise d’un
+  motif dans un temps borné — et les **médailles**, petites récompenses de maîtrise qui
+  récompensent la manière de gagner, pas la puissance.
+- **Into the Breach** (Subset Games) : chaque action est **sous condition** — tuer cette
+  pièce débloque celle-là, verrouille celle-là. La victoire est une résolution de plateau,
+  pas un débit de dégâts.
+- **Touhou again** : la dépense comme tension — la flamme de la sortie spéciale est une
+  clé, jamais un bouton « plus de dégâts ».
+
+### La Veilleuse v2 — « Les trois scellés »
+
+> **Remplacée (§9novies).** Les scellés ont été retirés en v4 : la Veilleuse ne parle plus que bougies.
+
+- **Trois fioles de cire scellée** (I, II, III) pendent sous le corps du gardien.
+  Seule la fiole du **bon numéro** cède : I brisé d’abord, puis II, puis III.
+- Une fiole **figée** (numéro trop tôt) encaisse le tir mais ne se brise pas :
+  le tir est absorbé, un murmure « FIGÉ · brise le sceau X d’abord » rappelle l’ordre,
+  et aucun effet de rebond n’est accordé. Le coup compte, sans compter.
+- Briser un scellé : +250 points, un pas de combo, et la fiole suivante **s’illumine**.
+  Les scellés sont frappables même bouche fermée, même hors fenêtre de tir.
+- Le cœur n’apparaît qu’une fois les **deux systèmes** résolus ensemble :
+  **les trois scellés brisés ET au moins trois mèches éteintes.** Une demi-victoire
+  ne suffit ni dans un sens ni dans l’autre.
+- Jauge unique redessinée : « SCELLÉS n/3 · MÈCHES n/3 ». La jauge mince progresse sur
+  six crans (3 fioles + 3 mèches) avant d’atteindre le cœur.
+- « VEILLE COMPLÈTE » (les cinq mèches allumées) est maintenant **tracée** et sert la
+  couronne « Veille calme » : le jeu récompense le combat propre, pas la procrastination.
+
+### Les plis cachetés du Faubourg (monde 3 · univers 1, vagues 1 à 3)
+
+Une lettre scellée tombe du ciel à chaque vague. Ramassées **dans l’ordre I → II → III**,
+les trois plis forment le sceau complet :
+
+- bon pli : +250, un pas de combo, compteur « PLIS n/3 » dans le bandeau objectif ;
+- les trois : **+1000 points** et le murmure « SCELLÉ COMPLET » ;
+- mauvais pli : la lettre se brise, +0, la chaîne de combo est cassée (« PLI SCELLÉ POUR
+  PLUS TARD »). Les plis manqués ne bloquent pas durablement : la chaîne survit aux vagues.
+
+L’ordre interdit tout ramassage automatique en collisionnant le premier projectile venu :
+le joueur arbitre encore ce qu’il touche.
+
+### Les Couronnes de l’heure (rétention sans puissance)
+
+Persistantes, sauvegardées dans `progress.crowns`, **sans aucun bonus de puissance** —
+du prestige, pas un écart. Trois maîtrises pour la Veilleuse, deux pour chaque autre
+gardien, plus une couronne solitaire hors gardiens : « MAIN LÉGÈRE »
+(jury Les Minutes — scelle une minute sans tirer) : 12 couronnes au total,
+« COURONNES DE L’HEURE · n/12 ».
+
+| Couronne | Condition | Gardiens |
+|---|---|---|
+| **SANS BRISURE** | gagner sans perdre un seul cœur | les cinq |
+| **SOUS 90 SECONDES** | gagner en moins de 90 s | les cinq |
+| **VEILLE CALME** | gagner sans jamais déclencher la Veille complète | La Veilleuse |
+| **MAIN LÉGÈRE** | sceller au moins une minute sans tirer (n’importe quel univers) | Les Minutes (une unique couronne) |
+
+MAIN LÉGÈRE est attribuée au premier gardien tombé après avoir scellé une minute
+(mécanique « La Minute Suspendue », §9decies). Les autres sont attribuées dans le
+point unique de victoire du boss (`reward()`), annoncées en jeu
+(« COURONNES DE L’HEURE · … »), affichées sur l’écran de fin et sur le briefing du monde 3.
+Les quatre autres gardiens attribuent déjà « Sans Brisure » et « Sous 90 secondes » :
+l’architecture est en place pour la suite.
+
+### Codes créateur : Monde3_1 à Monde3_5
+
+Les codes créateur acceptent maintenant `Monde3_1` … `Monde3_5` (insensible à la casse,
+`-` et espaces tolérés). Réservés au créateur (team-admin), ils sautent **droit dans
+l’univers choisi** — vague 1, interface de test, note « · test créateur » — sans passer
+par le hub ni le briefing. `Monde3` reste inchangé (déblocage + écran du monde 3).
+
+### Ce que ça ne change pas
+
+Aucune nouvelle vie, aucun nouveau projectile, aucune barre de vie. Les mondes 1 et 2 sont
+intouchés ; le monde 3 reste juste et gagnable — la profondeur vient uniquement des
+conditions, de l’ordre et de la lecture.
+
+### Vérifications
+
+`tests/test_sixth_hour.cjs` épingle : plus aucun scellé (spawn v4), gate à trois mèches,
+labels de jauge (« MÈCHES ÉTEINTES n/3 »), cœur ancré au torse (avant et après impact),
+tir hors flash encaouté sans effet, impact pendant le flash, rallumage individuel des
+mèches, plis (vagues 1→2→3, mauvais ordre, complet à trois), attribution des couronnes,
+code `Monde3_3` (saut admin, stage 2, monde 3), `Monde3_9` rejeté, saut refusé hors admin.
+Suites des mondes 1, 2 et 3, du duel et du cloud : vertes.
+
+## 9septies. Deuxième retour en jeu : lisibilité, rythme et intensité
+
+Le retour après la première livraison : la tranche était jouable mais les vagues 1 et 2
+étaient trop courtes, les consignes doublées (bandeau HTML hors du jeu + texte dans la
+zone de jeu), le halo du Garde-mèche expliqué nulle part, et la Veilleuse trop simple
+à tuer. Quatre corrections, aucune nouvelle ressource.
+
+### Des vagues 1 et 2 qui tiennent la route
+
+Le Faubourg passe de 16 + 3 × vague formes à **30 + 5 × vague** (vague 1 : 35 ennemis,
+vague 2 : 40), toujours à une apparition par seconde maximum — l'anti-frustration monde 3
+est conservée : plus d'ennemis, pas de trous dans le rythme.
+
+### Une seule voix pour les consignes
+
+Le bandeau HTML (`#sixthObjective`) reste la source persistante des objectifs. Le toast (`#toast`) ne porte plus rien de redondant. Pendant un gardien, le bandeau se masque
+même : la jauge canvas du gardien est la seule consigne présente.
+
+Les mécaniques majeures ne réapparaissent pas en bavardage : à la première apparition sur un
+appareil, **le vol se met en pause et un popup introduit la nouveauté** (« NOUVELLE
+INSTRUCTION »), avec un bouton « C’est compris ». Le flag par appareil (`minuit-sixth-intros`
+dans `localStorage`) évite tout popup répété. Popup pour : Faubourg, Minute 1, Minute 2
+(tenue), Minute 3 (sceaux), chaque univers au premier passage, chaque gardien la première
+fois. Le popup suspend le jeu (`state='instruction'`) : la boucle n'avance plus, le décor
+reste gelé, aucun projectile ne joue.
+
+### Le halo du Garde-mèche : un bouclier qui s'allume et s'éteint
+
+Plus de « dégâts réduits ½ » invisible. Le halo s'allume et s'éteint **par cycles**
+(3,0 s allumé / 2,2 s éteint), visible : halo plein et lumineux quand il est actif,
+**cercle pointillé gris « HALO ÉTEINT »** quand il est éteint. Alliés sous halo actif :
+**IMMUNISÉS** (aucun dégât, même par les empoisonnements). Au creux du cycle (ou une fois
+le Garde-mèche vaincu) : vulnérables, et étiquetés **OUVERT**. Le Garde-mèche lui-même
+reste vulnérable en permanence — la priorité du jeu est limpide : tue-le en premier.
+Le Moucheur volant une mèche immunise de la même façon.
+
+### La Veilleuse densifiée (v3)
+
+> **Supersédé (§9novies).** Le « cœur qui se dérobe » est aboli : le cœur est ancré sur le torse ; les six braises par scellé disparaissent avec les scellés.
+
+- chaque scellé brisé souffle une **couronne de six braises** radiales ;
+- le cœur **se dérobe** après chaque impact (225 / 400 / 575), fini le camping sur une cible fixe ;
+- la couronne de cendres passe de 8 à **10 braises** (vitesse 118 → 132) ;
+- la fenêtre d'ouverture (1,05 s → **0,95 s**), la cadence d'ouverture (2,6 s → **2,35 s**)
+  et la cadence des salves (2,1 s → **1,9 s**) sont resserrées.
+
+Aucune vie, aucun projectile nouveau, aucune barre de vie : plus dense, jamais gratuit.
+
+## 9octies. Troisième retour en jeu : l'écran respire, le halo protège vraiment
+
+Retour de test sur PC, trois remarques, trois corrections ciblées — toujours aucune
+ressource nouvelle, toujours la doctrine (pas de vie, pas de dégât pour le dégât, un
+verre à moitié plein).
+
+### Plus de « zooms » sur PC
+
+Le terrain ne se redimensionne plus silencieusement en boucle : le canevas n'est recréé
+que si sa taille réellement changée (fini la boucle de destruction/reconstruction du
+buffer à chaque `ResizeObserver`), et `fit()` n'écrit plus les variables `--field-*` que
+lorsqu'elles changent. Le jeu tient la même échelle du début à la fin du vol.
+
+### Le halo est devenu un vrai bouclier on/off
+
+Le halo du Garde-mèche (et la flamme volée du Moucheur) protège désormais **tout
+l'écran tant qu'il est allumé — porteur compris** : chaque monstre porte un cercle
+en pointillé et aucun PV ne tombe. Il s'allume **2 s** et s'éteint **2,6 s** : le creux
+durait toujours moins longtemps que la flamme. Les consignes (« OUVERT » / « IMMUNISÉ »)
+n'apparaissent que lorsqu'un halo est réellement en jeu, et la légende du Garde-mèche,
+les règles et les popups ont été réécrits pour dire exactement ça. Tant que le cercle
+luit, on ne blesse personne ; quand il s'éteint, tout le monde redevient abîmable.
+
+### Les consignes en popup, le jeu visible derrière
+
+Le popup « Nouvelle instruction » affiche désormais le jeu en pause **derrière** un voile
+translucide (`.instruction-backdrop`, halo discret légèrement plus sombre au centre) —
+fini la fenêtre pleine écran qui cache la partie. Le jeu est gelé, lisible autour du
+popup, et le bouton « C’est compris » rend la main. Les autres overlays (menus, briefings)
+restent en opacité pleine, volontairement.
+
+### L'objectif persistant devient une puce, le jeu ne bouge plus
+
+Retour de test décisif (merci la capture de l'observateur) : le texte au-dessus du terrain
+passait sur 2 puis 3 lignes selon la place disponible et poussait la fenêtre du jeu.
+L'objectif (`#sixthObjective`) n'entre plus dans le flux du `.heading.game-status` : c'est
+une **puce absolue centrée** (max 2 lignes, ellipsis, `pointer-events:none`) posée sur le
+bord supérieur de l'arène. La hauteur de la zone au-dessus du jeu est maintenant constante —
+quelle que soit la largeur de l'écran, le terrain ne bouge jamais.
+
+## 9novies. Quatrième retour en jeu : la Veilleuse v4 — le cœur à nu
+
+Le test unanime : les briques à casser (scellés I → II → III) n’étaient pas claires.
+Le v4 retire le système entier plutôt que de l’expliquer encore — la seule serrure
+qui compte est l’arcade des bougies.
+
+### Les scellés disparaissent
+
+- `boss.vials`, `vialPos`, `nextVial`, l’enchaînement I → II → III, le bouchon
+  « SCELLÉ FIGÉ », le +250 par scellé : tout est retiré du code.
+- Le cœur n’apparaît qu’après **au moins trois mèches éteintes** — rien d’autre.
+  Gate unique, lisible, nocturne : `wicksDown >= 3`.
+- Les plis cachetés du Faubourg et les sceaux de la Minute 3 ne sont PAS touchés :
+  ils étaient lisibles et restent tels quels.
+
+### Le cœur est visible — et ancré
+
+- Premier temps (phase 1) : un **charbon respirant** à peine lumineux au centre de
+  la poitrine, sous la cire dominante — la cible existe, elle se distingue mais ne se livre pas.
+- Deuxième temps (phase 2) : un **cœur géant qui bat** sur le torse — halo radial
+  rouge ouvert / terne fermé, deux lobes, veines, légendes « FRAPPE LE CŒUR » et
+  « IMPACTS n/3 ». Il ne dérive pas : `core.x = e.x`, `core.y = e.y + 26` — fini le
+  jeu de devinettes après chaque impact.
+- Overture toujours cadencée (`.95 s` tous les `2.35 s`), gong grave à l’ouverture.
+- Le kill tient en **trois impacts pendant le flash**. Après chaque impact :
+  couronne de dix braises (comme en v3).
+
+### PRIME devient un moment
+
+- Chaque cible PRIME abattue déclenche une **pluie d’étincelles** (or + crème), un
+  timbre carré montant, et une bannière distincte : « ★ PRIME ABATTUE · … ★ +400 ».
+- L’objectif nomme le paiement par cible : « PRIME : … (+400/cible) », toute la vague.
+- La logique (+400/cible PRIME abattue, compte combo) était déjà correcte — c’était
+  un problème d’écrans, pas de mathématiques.
+
+### Le halo devient un bouclier qui se voit
+
+- Déploiement : **flash doré plein écran** (.3 de fondu), **anneau d’ondes** sur
+  chaque monstre immunisé (or), et timbre grave (196 Hz).
+- Repli : anneau gris décroissant + timbre (392 Hz).
+- Tant que le bouclier tient, l’anneau pointillé est **or et animé** (marching
+  dashes, 2,6 px) — le cercle entoure clairement chaque corps immunisé.
+
+Aucune vie, aucun projectile nouveau, aucune barre de vie. Les mondes 1 et 2 restent
+intouchés.
+
+## 9decies. Sixième retour en jeu : les shmups modernes, adaptés
+
+Sources : SHMUP Creator ([docs — Gameplay, scoring tab](https://www.shmupcreator.com/doc/?docs=shmupcreator%2Feditors%2Fgameplay) — chaînes avec
+intervalle max, medals en chaîne, reset en bombe, gauge/super weapon et ses points par hit ;
+[Scoring systems](https://www.shmupcreator.com/doc/?docs=shmupcreator%2Fmaking-a-game%2Fscoring-systems)) ;
+Shmups Wiki ([Glossary](https://shmups.wiki/library/Help:Glossary),
+[Kaikan](https://shmups.wiki/library/Kaikan) — Count en fin de gardien et médailles
+auto-collectées par annulation,
+[Radirgy](https://shmups.wiki/library/Radirgy) — jauge de multiplicateur qui se vide,
+[Radiant Silvergun](https://shmups.wiki/library/Radiant_Silvergun) — chaînes de familles).
+Quatre adaptations — aucune nouvelle ressource, aucune barre de vie, aucun chrono. La clarté
+qui a noyé les scellés guide toujours ton jeu ; les médailles et le « Count » de Kaikan sont
+écartés volontairement pour éviter le même bruit.
+
+### La chaîne visible
+Le combo existait sans être lu. En bas à droite de l’écran : un arc or qui se vide selon le
+temps de chaîne restant (`comboTime`), texte «×N » au centre, « COMBO » au-dessus, l’arc
+brûle rouge sous 30 %. Même information qu'une jauge de chaîne SHMUP Creator, aucun nouvel HUD.
+
+### Le Maillon PRIME
+Tuer une cible PRIME annule tous les esprits hostiles présents à l’écran : chacun devient un
+cachet d’or (+50). La prime ne paie plus seulement +400 visibles : c’est le moment bombe du
+pack — pluie d’éclats + timbre grave, comme la super weapon de la doc.
+
+### Le cachet du cadran
+Chaque gardien du monde 3 tombé verse **+1000**, sans condition (pas de combo requis, pas de
+purisme). La minute est rendue — un point c’est tout.
+
+### La Minute Suspendue — MAIN LÉGÈRE
+Une lettre scellée traverse l’écran en vague 3 de chaque univers. Elle ne tire pas.
+Si elle traverse sans qu’un tir ne la touche — ou si le joueur la reçoit en vol (rayon 26) —
+la minute est rendue sans un coup : **+400** et, au premier gardien tombé ensuite, la
+couronne **MAIN LÉGÈRE** (famille « Les Minutes », 12 couronnes au total).
+Un tir la brise : +50, aucun crédit. Toujours une seule lettre par univers.

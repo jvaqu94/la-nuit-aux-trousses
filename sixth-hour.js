@@ -32,7 +32,7 @@ const foeKinds=new Set(Object.keys(foeNames));
 const bossKinds=new Set(['veilleuse','sonneur','passeur','cueilleuse','chasseur']);
 /* Une condition de victoire par gardien : aucune n'est « vider la barre ». */
 const VICTORY={
- veilleuse:'Éteins les 5 mèches, puis frappe le cœur 3 fois',
+ veilleuse:'Éteins au moins 3 mèches, puis frappe le cœur quand il bat à nu',
  sonneur:'Frappe 3 fois le battant',
  passeur:'Brise 3 fois le sable',
  cueilleuse:'Force 3 cueillettes',
@@ -41,7 +41,7 @@ const VICTORY={
 /* Une phrase par univers, écrite comme une consigne de jeu, pas comme une
    énigme : ce qu'il faut faire, et ce qui arrive si on ne le fait pas. */
 const RULES=[
- 'TUE le Garde-mèche : son halo protège les autres monstres. Au labyrinthe, tire sur les trois runes dans l’ordre A → B → C pour ouvrir les portes ; une cache latérale reste facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge.',
+ 'TUE le Garde-mèche : tant que son halo luit, TOUT le pack est IMMUNISÉ — lui compris, et chaque monstre porte son cercle. Il luit 2 s puis s’éteint 2,6 s : frappe pendant le creux. Au labyrinthe, tire sur les trois runes dans l’ordre A → B → C pour ouvrir les portes ; une cache latérale reste facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge. RAMASSE les plis cachetés dans l’ordre I → II → III.',
  'CHOISIS une cloche du labyrinthe : aligne-toi dessous et tire pour ouvrir uniquement son passage. En combat, briser une cloche suspend les tirs de sa jumelle pendant 1,5 seconde.',
  'ÉVITE le sel blanc : il te ralentit. Il tombe là où tu étais, pas là où tu es.',
  'ALLUME les lanternes en les touchant. TUE le Moucheur : il souffle une mèche et s’en sert pour protéger les autres — le tuer te la rend.',
@@ -49,7 +49,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'Tire sur la flamme quand son anneau s’ouvre. Une mèche noire qui rougeoie recrache une braise. Le cœur crache des cendres après chaque impact : frappe-le ouvert, puis écarte-toi. 3 impacts sont nécessaires.',
+ veilleuse:'Éteins au moins 3 mèches : la cire se fend et le cœur bat à nu sur le torse. Frappe-le pendant le flash (3 impacts). Après chaque impact, il crache une couronne de braises : écarte-toi. Une mèche noire rougeoie avant de recracher une braise.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
@@ -79,13 +79,13 @@ function countTrial(kind){
 }
 
 let marks=[],salt=[],trail=[],mission={},habits=freshHabits(),boss=null,minute=null,meche=null;
-let slams=[];
+let slams=[],letters=[];
 let flame=3,frozen=[],spawnSerial=0,haloTime=0,gesture=null;
 
 function freshHabits(){return{relays:0,halos:0,salt:0,flames:0}}
 function reset(){
  marks=[];salt=[];trail=[];mission={};habits=freshHabits();boss=null;minute=null;meche=null;
- slams=[];
+ slams=[];letters=[];
  flame=3;frozen=[];spawnSerial=0;haloTime=0;gesture=null;
 }
 const journeyBegin=Journey.begin,journeyRestore=Journey.restore;
@@ -94,7 +94,34 @@ Journey.restore=function(...args){const r=journeyRestore(...args);reset();return
 
 /* Une mèche éteinte porte toujours son propre compte à rebours de rallumage :
    visible, individuelle, et le socle du contre-jeu de la Veilleuse. */
+const VIAL_ROMAN=['I','II','III'];
 function extinguishWick(w){w.lit=false;w.open=0;w.charge=0;w.relight=11+rng()*2;w.relightMax=w.relight}
+
+/* Popups d'introduction : quand une mécanique majeure apparaît pour la
+   première fois, le vol est mis en pause et le popup l'explique. Une seule
+   fois par appareil (flag dans localStorage) ; ensuite le bandeau reste la
+   source unique des consignes. */
+const INTRO_SEEN='minuit-sixth-intros';
+function seenIntros(){try{return new Set(JSON.parse(localStorage.getItem(INTRO_SEEN)||'[]'))}catch{return new Set()}}
+function world3Intro(s,w){
+ if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Tant qu’il est allumé, <b>tout le pack est IMMUNISÉ</b> — lui compris : un cercle entoure chaque monstre. Il luit 2 s puis s’éteint 2,6 s. <b>Frappe pendant le creux</b>, ou tue d’abord le porteur — le halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une famille payante : <b>chaque</b> cible PRIME abattue rapporte +400 et un pas de combo, toute la vague.</p>'};
+ if(s===0&&w===2)return{key:'w3-minute1',title:'Minute 1 · Le Garde-mèche',body:'<p>Le Garde-mèche <b>garde la minute</b>. Son halo luit 2 s et s’éteint 2,6 s : au creux, tout le monde redevient vulnérable — lui compris.</p><p><b>Frappe pendant le creux</b>, ou tue-le d’abord. Puis marche sur le cadran pour rendre la minute au monde.</p>'};
+ if(s===0&&w===3)return{key:'w3-minute2',title:'Minute 2 · Tenue',body:'<p>Survis <b>22 secondes</b>. La minute se libère ensuite — marche sur le cadran.</p>'};
+ if(s===0&&w===4)return{key:'w3-minute3',title:'Minute 3 · Les sceaux',body:'<p>Deux flammes creuses portent le sceau. <b>Tire dessus</b> pour libérer la minute.</p>'};
+ if(w>=1&&w<=4&&s>=1)return{key:'w3-stage-'+s,title:'Nouvelle loi',body:'<p>'+RULES[s]+'</p>'};
+ return null;
+}
+function instructionPopup(key,title,body){
+ if(seenIntros().has(key))return false;
+ try{const s=seenIntros();s.add(key);localStorage.setItem(INTRO_SEEN,JSON.stringify([...s]))}catch{}
+ state='instruction';
+ overlay('<section class="instruction-popup" role="dialog" aria-modal="true"><div class="eyebrow">Nouvelle instruction</div><h2 class="local-title">'+title+'</h2><div class="instruction-body">'+body+'</div><button class="primary instruction-ok" id="instructionOk">C’est compris →</button></section>');
+ const ov=(typeof document!=='undefined')&&document.getElementById('overlay');
+ if(ov&&ov.classList)ov.classList.add('instruction-backdrop');
+ const btn=(typeof document!=='undefined')&&document.getElementById('instructionOk');
+ if(btn)btn.onclick=()=>{const o=(typeof document!=='undefined')&&document.getElementById('overlay');if(o&&o.classList)o.classList.remove('instruction-backdrop');if(typeof hideOverlay==='function')hideOverlay();state='play'};
+ return true;
+}
 
 /* --- Mémoire du joueur (héritée du Cerf des heures et de la Larve) --------- */
 function remember(dt){
@@ -116,13 +143,18 @@ function addMark(data){
  marks.push(mark);return mark;
 }
 const isReal=m=>m.real===true;
+let shieldFlash=0;
 
-/* Le halo du Garde-mèche : protection du monde 1, lumière du monde 2. */
-function wardenAt(x,y){
- return enemies.find(e=>!e.dead&&near(x,y,e.x,e.y,e.halo||150)
-  &&(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0)))||null;
-}
-function playerInHalo(){return !!wardenAt(player.x,player.y)}
+/* Le halo du Garde-mèche : un bouclier qui s'allume et s'éteint.
+   Allumé, il immunise TOUT l'écran — Garde-mèche compris : chaque monstre
+   porte son cercle. Éteint, plus personne n'est protégé : la fenêtre de tir. */
+function haloActive(warden){return !!warden&&!warden.dead&&warden.haloOn!==false}
+const haloSource=e=>!e.dead&&(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0));
+function haloLit(){return enemies.some(e=>haloSource(e)&&haloActive(e))}
+/* Conservé pour le dessin : trouver un porteur proche (anneau pointillé). */
+function wardenNear(x,y){return enemies.find(e=>haloSource(e)&&near(x,y,e.x,e.y,e.halo||150))||null}
+function wardenAt(x,y){return haloLit()||null}
+function playerInHalo(){return haloLit()}
 
 function liveFoes(){return enemies.filter(e=>!e.dead&&!e.boss).length}
 
@@ -162,19 +194,26 @@ makeSchedule=function(){
  if(!active())return baseSchedule();
  const forms=world.foes,list=[];
  if(wave===5){for(let i=0;i<8;i++)list.push({time:.8+i*.8,x:90+(i*173)%620,kind:forms[i%forms.length],pattern:99,group:1+Math.floor(i/2),index:i%2});return list}
- const count=16+wave*3;
+ const count=30+wave*5;
  // Entrée plus régulière : les groupes se chevauchent davantage et réduisent
  // les creux de pression entre deux apparitions.
- for(let i=0;i<count;i++)list.push({time:.25+i*1.0,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
+ for(let i=0;i<count;i++)list.push({time:.35+i*1.0,x:120+(i*173)%560,kind:forms[i%forms.length],pattern:99,group:1+(i%3),index:i%2});
  return list;
 };
 
 const baseNewWave=newWave;
 newWave=function(...args){
+ const plisKeep=(stage===0&&wave>1&&wave<=4&&typeof mission!=='undefined'&&mission&&mission.plis)?mission.plis:null;
  const result=baseNewWave(...args);
  if(!active())return result;
  marks=[];salt=[];minute=null;meche=null;frozen=[];boss=null;gesture=null;haloTime=0;
- mission={key:stage+':'+wave,minuteTaken:false,seals:0,digit:1,digitTimer:5,tenure:0,trial:0,trialDone:false,prime:null};
+ mission={key:stage+':'+wave,minuteTaken:false,seals:0,digit:1,digitTimer:5,tenure:0,trial:0,trialDone:false,prime:null,veilleComplete:false,plis:null};
+ /* Les plis cachetés du Faubourg : un par vague (I, II, III), à ramasser dans
+    l'ordre. L'ensemble est conservé d'une vague à l'autre. */
+ if(stage===0&&wave<=4){
+  mission.plis=plisKeep||{next:1,got:0};
+  if(wave<=3)drops.push({x:120+rng()*560,y:-40,kind:'pli',pli:wave,age:0});
+ }
  /* PRIME du Faubourg : une famille de créatures désignée chaque vague, +400
     points et un pas de combo à abattre. Le joueur arbitre ses cibles au lieu
     de tirer dans le tas. Jamais sur la vague du gardien. */
@@ -182,11 +221,12 @@ newWave=function(...args){
   const pool=(world&&world.foes||[]).filter(k=>foeNames[k]);
   mission.prime=pool.length?pool[Math.floor(rng()*pool.length)]:null;
  }
- if(wave===1)say(RULES[clamp(stage,0,4)],3.4);
- if(wave===2){minute=makeMinute();say('PRENDS LA MINUTE · tue d’abord le Garde-mèche qui la protège, puis marche sur le cadran',3.4)}
- if(wave===3)say('TIENS 22 SECONDES · la minute se libère ensuite, marche dessus',2.8);
+ /* La Minute Suspendue : une lettre scellée traverse l'univers en vague 3.
+    Elle ne tire pas, ne se laisse ni viser ni toucher par hasard — la saisir en vol (ou laisser traverser) scelle la minute. Un tir la brise : +50. */
+ if(wave===3&&letters.length===0)letters.push({x:W+70,y:120+rng()*260,vx:-34,age:0,seed:rng()*Math.PI*2});
+ if(wave<=4){const intro=world3Intro(stage,wave);if(intro)instructionPopup(intro.key,intro.title,intro.body)}
+ if(wave===2)minute=makeMinute();
  if(wave===4){
-  say('ÉTEINS LES 2 SCEAUX · les deux flammes creuses marquées SCEAU libèrent la minute',3.4);
   spawnFoe('hollowFlame',240,300,0);spawnFoe('hollowFlame',560,300,1);
   for(const e of enemies)if(e.kind==='hollowFlame'&&!e.dead){e.seal=true;e.lit=true}
  }
@@ -220,6 +260,19 @@ function waveBlocks(){
 /* --- Comportements : un héritage monde 1 × monde 2 par forme -------------- */
 function moveEnemy(e,dt){
  if(!active()||!foeKinds.has(e.kind)||e.boss)return false;
+ if(e.immunePing)e.immunePing=Math.max(0,e.immunePing-dt);
+ if(e.shieldFx)e.shieldFx=e.shieldFx>0?Math.max(0,e.shieldFx-dt):Math.min(0,e.shieldFx+dt);
+ if(e.kind==='wickWarden'){
+  e.haloTimer=(e.haloTimer==null?2.1:e.haloTimer)-dt;
+  if(e.haloTimer<=0){
+   e.haloOn=e.haloOn===false;
+   e.haloTimer=e.haloOn?2.0:2.6;
+   for(const o of enemies){if(o.dead)continue;if(!o.boss)o.shieldFx=e.haloOn?.85:-.6}
+   shieldFlash=e.haloOn?.3:0;
+   particle(e.x,e.y,e.haloOn?'#ffd9a0':'#7c8a99',12);
+   tone(e.haloOn?196:392,e.haloOn?.4:.18,'sine',.08,.9);
+  }
+ }
  const t=tune();
  if(e.y<e.homeY)e.y=Math.min(e.homeY,e.y+58*dt);
  else e.y=e.homeY+Math.sin(e.age*.7+e.seed)*16;
@@ -356,6 +409,30 @@ function tickMimics(dt){
 }
 
 /* --- Tick commun -------------------------------------------------------- */
+/* La minute suspendue : la lettre traverse l'écran sans rien tirer. La ramasser
+   (ou la laisser traverser intacte) scelle la minute : +400 et une couronne.
+   Un tir sur elle brise le sceau : +50, aucun crédit. */
+function resolveLetter(L,byShot){
+ if(L.dead)return;
+ L.dead=true;
+ if(byShot){
+  score+=50;
+  for(let i=0;i<16;i++)particle(L.x,L.y,'#e8d3ab',2);
+  say('LE SCEAU SE BRISE · +50 points',1.8);tone(214,.25,'sawtooth',.06,.7);
+ }else{
+  mission.legere=true;score+=400;
+  particle(L.x,L.y,'#ffd9a0',40);say('SCEAU SCELLÉ · +400 points · une minute rendue sans un coup',3);
+  tone(392,.4,'sine',.1,1.3);tone(523,.5,'sine',.09,1.2);tone(659,.6,'sine',.08,1.1);
+ }
+}
+function tickLetters(dt){
+ for(const L of letters){
+  L.age+=dt;L.x+=L.vx*dt;
+  if(Math.hypot(L.x-player.x,L.y-player.y)<26)resolveLetter(L,false);
+  else if(L.x<-70)resolveLetter(L,false);
+ }
+ letters=letters.filter(L=>!L.dead);
+}
 function tick(dt){
  if(!active()||state!=='play')return;
  remember(dt);
@@ -410,6 +487,7 @@ function tick(dt){
  tickMimics(dt);
  tickMinute(dt);
  tickFlame(dt);
+ tickLetters(dt);
  hitTargets();
  if(gesture)gesture.tick(dt);
 }
@@ -441,11 +519,29 @@ damageEnemy=function(e,n,...rest){
  if(e.kind==='waxMimic'&&e.disguise){e.cleanSealShot=true;e.disguise=false;e.revealed=true;value*=2}
  if(e.kind==='unnamedDigit'&&e.digit===mission.digit)e.weakHit=true;
  if(e.kind==='unnamedDigit'&&e.digit===mission.digit)value*=2;
- if(wardenAt(e.x,e.y))value*=.55;
- if(playerInHalo())value*=.55;
+ /* Halo allumé : plus personne ne perd de PV — pas même le porteur du cercle. */
+ if(haloLit()){e.hit=0;if((e.immunePing||0)<=0)particle(e.x,e.y,'#b9d8ea',8);e.immunePing=.9;return}
  if(e.kind==='hollowFlame'&&e.lit&&stage===2)value*=.55;
  return baseDamageEnemy(e,value,...rest);
 };
+
+/* Ramasser un pli cacheté : seulement dans l'ordre I → II → III.
+   Un pli touché trop tôt se brise et coûte la chaîne. */
+function collectPli(d){
+ if(!mission.plis)return true;
+ if(d&&d.pli===mission.plis.next){
+  mission.plis.next++;mission.plis.got++;
+  score+=250;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
+  particle(player.x,player.y,'#ffd9a0',16);tone(700,.2,'triangle',.08,1.3);
+  if(mission.plis.got>=3){score+=1000;say('SCELLÉ COMPLET · les trois plis cachetés · +1000 points',3)}
+  else say('PLI '+VIAL_ROMAN[d.pli-1]+' CACHETÉ · +250 · l’ordre paie',2.2);
+  return true;
+ }
+ combo=1;chain=0;comboTime=0;
+ tone(170,.18,'square',.06,.6);
+ say('PLI SCELLÉ POUR PLUS TARD · brise le pli '+VIAL_ROMAN[(mission.plis.next||1)-1]+' d’abord',2.2);
+ return false;
+}
 
 const baseReward=reward;
 reward=function(e){
@@ -478,7 +574,28 @@ reward=function(e){
     ne sont pas écrasés par la chaîne. */
  if(primePay){
   score+=400;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
-  say('PRIME ABATTUE · '+(foeNames[e.kind]||e.kind)+' · +400 points',2);
+  /* LE MAILLON PRIME : la prime abattue dépouille l'écran — chaque esprit ennemi devient un cachet. */
+  let canceled=0;
+  for(const h of hostile){canceled++;score+=50;particle(h.x,h.y,'#ffd25e',6)}
+  hostile.length=0;
+  particle(e.x,e.y,'#ffd25e',34);particle(e.x,e.y,'#fff5cc',12);tone(660,.2,'square',.07,1.5);
+  say('★ PRIME ABATTUE · '+(foeNames[e.kind]||e.kind)+' ★ +'+(400+canceled*50)+(canceled?(' · '+canceled+' esprit'+(canceled>1?'s':'')+' payé'+(canceled>1?'s':'')):''),2.4);
+ }
+ /* Couronnes de l'heure : maîtrise sans vie perdue, vitesse, et pour la
+    Veilleuse, une veille sans tache. Persistantes, jamais d'empowerment. */
+ if(active()&&e.boss){
+  const guardianKinds=['veilleuse','sonneur','passeur','cueilleuse','chasseur'];
+  if(guardianKinds.includes(e.kind)){
+   /* Le cachet du cadran : chaque gardien tombé scelle la minute — +1000, sans condition. */
+   score+=1000;say('CACHET DU CADRAN · +1000 points',2.6);particle(e.x,e.y,'#ffd9a0',40);tone(659,.5,'sine',.08,1.25);
+   const lost=((window.Journey?.run?.stats?.lifeLoss)||0)-(e.lossStart||0);
+   const earned=[];
+   if(lost<=0&&window.Campaign?.awardCrown?.(e.kind,'patience'))earned.push('SANS BRISURE');
+   if((e.age||0)<=90&&window.Campaign?.awardCrown?.(e.kind,'rapide'))earned.push('SOUS 90 SECONDES');
+   if(e.kind==='veilleuse'&&!mission.veilleComplete&&window.Campaign?.awardCrown?.('veilleuse','calme'))earned.push('VEILLE CALME');
+   if(mission.legere&&window.Campaign?.awardCrown?.('minutes','legere'))earned.push('MAIN LÉGÈRE');
+   if(earned.length){say('COURONNE'+(earned.length>1?'S':'')+' DE L’HEURE · '+earned.join(' · '),3);particle(e.x,e.y,'#ffd25e',44)}
+  }
  }
  return result;
 };
@@ -524,7 +641,8 @@ spawnBoss=function(){
   boss.borrowed=0;boss.window=8;boss.grace=1.6;boss.naming=false;boss.halo=null;boss.label='EMPRUNTS';
  }
  enemies.push(boss);schedule=[];
- say(world.boss+' · '+VICTORY[kind],3.6);
+ const bossShown=instructionPopup('w3-boss-'+kind,world.boss,'<p><b>Pour gagner :</b> '+VICTORY[kind]+'.</p><p>'+HOWTO[kind]+'</p>');
+ if(!bossShown)say(world.boss+' · '+VICTORY[kind],3.2);
  mp3Music?.bossArrival(activeMusicThemes()[stage%activeMusicThemes().length].id);
  if(kind==='veilleuse'){spawnFoe('wickWarden',220,250,0);spawnFoe('wickWarden',580,250,1)}
 };
@@ -549,19 +667,19 @@ function moveBoss(e,dt,oldX,oldY){
 function tickVeilleuse(e,dt){
  if(e.phase===2){
   const core=e.core;if(!core)return;
-  core.x=400+Math.sin(e.age*.82)*155;core.y=305+Math.sin(e.age*.57)*34;
+  core.x=e.x;core.y=e.y+26;
   core.open=Math.max(0,core.open-dt);core.flash=Math.max(0,core.flash-dt);
   core.openTimer-=dt;core.attack-=dt;
-  if(core.openTimer<=0){core.open=1.05;core.openTimer=2.6;say('LE CŒUR S’OUVRE · aligne tes tirs',1.5)}
+  if(core.openTimer<=0){core.open=.95;core.openTimer=2.35;say('LE CŒUR BATT · frappe pendant le flash',1.4);tone(65,.38,'sine',.09,.8)}
   /* Cendres : une demi-seconde après chaque impact, le cœur souffle une
-     couronne de huit braises. Le coup récompense, puis il punit le camping. */
+     couronne de dix braises. Le coup récompense, puis il punit le camping. */
   if(core.ember){
    core.ember-=dt;
    if(core.ember<=0){
     core.ember=null;
-    for(let i=0;i<8;i++){
-     const a=i*Math.PI/4;
-     hostile.push({x:core.x,y:core.y,vx:Math.cos(a)*118,vy:Math.sin(a)*118,type:'spirit',r:7,damage:25,life:3.4,grazed:false,age:0,speed:118});
+    for(let i=0;i<10;i++){
+     const a=i*Math.PI/5;
+     hostile.push({x:core.x,y:core.y,vx:Math.cos(a)*132,vy:Math.sin(a)*132,type:'spirit',r:7,damage:25,life:3.4,grazed:false,age:0,speed:132});
     }
     say('LE CŒUR CRACHE DES CENDRES · écarte-toi',2);
     particle(core.x,core.y,'#ffb37a',22);tone(150,.3,'sine',.09,.7);
@@ -583,7 +701,7 @@ function tickVeilleuse(e,dt){
     particle(f.wick.x,f.wick.y,'#ff9d7a',8);f.wick.charge=0;e.flare=null;tone(260,.16,'triangle',.05,.8);
    }
   }
-  if(core.attack<=0){core.attack=2.1;const aim=Math.atan2(player.y-core.y,player.x-core.x);shootHostile({x:core.x,y:core.y,boss:true,phase:2},'spirit',[-.18,0,.18],145,aim)}
+  if(core.attack<=0){core.attack=1.9;const aim=Math.atan2(player.y-core.y,player.x-core.x);shootHostile({x:core.x,y:core.y,boss:true,phase:2},'spirit',[-.18,0,.18],145,aim)}
   e.value=.5+core.hits/6;e.label='CŒUR · '+core.hits+'/3 IMPACTS';return;
  }
  const windows=e.windows;
@@ -640,9 +758,14 @@ function tickVeilleuse(e,dt){
   e.volley=null;
  }
  const lit=windows.filter(w=>w.lit).length;
- e.value=Math.min(.49,(5-lit)/5*.49);e.label=lit+' / 5 MÈCHES RESTANTES';
- if(lit===0&&!e.core){e.phase=2;e.core={x:400,y:305,r:29,open:0,openTimer:1.1,attack:1.5,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LES MÈCHES SONT ÉTEINTES · le cœur apparaît. Frappe-le pendant ses ouvertures.',4);particle(e.x,e.y,'#ffd9a0',34);tone(180,.5,'sine',.09,.65)}
+ /* Tout passe par les bougies : trois mèches éteintes et la cire se fend —
+    le cœur s'expose en plein plat sur le torse, battant. */
+ const wicksDown=5-lit;
+ e.value=Math.min(.49,(Math.min(3,wicksDown)/3)*.49);
+ e.label='MÈCHES ÉTEINTES '+Math.min(3,wicksDown)+'/3';
+ if(!e.core&&wicksDown>=3){e.phase=2;e.core={x:e.x,y:e.y+26,r:26,open:0,openTimer:1.1,attack:1.9,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LA CIRE SE FEND · le cœur bat à nu — frappe-le pendant le flash',4);particle(e.x,e.y,'#ffd9a0',34);tone(120,.7,'sine',.1,.7)}
  if(lit===5&&e.age>6){
+  mission.veilleComplete=true;
   hurt(25,'la veille complète');
   say('VEILLE COMPLÈTE · une seule mèche s’éteint',2.4);
   extinguishWick(windows[Math.floor(rng()*windows.length)]);
@@ -768,9 +891,12 @@ function hitTargets(){
  if(!e||e.dead||!active())return;
  for(const shot of shots){
   if(shot.life<=0)continue;
+  /* La minute suspendue : tout tir sur la lettre brise le sceau. */
+  for(const L of letters)if(!L.dead&&near(shot.x,shot.y,L.x,L.y,24)){resolveLetter(L,true);consume(shot)}
   if(e.kind==='veilleuse'&&e.phase===2&&e.core){
-   const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);particle(core.x,core.y,'#fff0bd',24);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3',2)}
+   const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);particle(core.x,core.y,'#e8d3ab',26);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3',2)}
   }else if(e.kind==='veilleuse'){
+   /* Tirer sur une mèche ouverte : elle s'éteint, avec son propre compte à rebours. */
    for(const w of e.windows)if(w.lit&&w.open>0&&near(shot.x,shot.y,w.x,w.y,26)){
     extinguishWick(w);consume(shot);particle(w.x,w.y,'#ffd9a0',16);tone(560,.2,'sine',.07,1.2);
     say('MÈCHE ÉTEINTE · '+e.windows.filter(v=>!v.lit).length+'/5',1.6);break;
@@ -824,6 +950,21 @@ function drawItem(g,key,x,y,size,label,color){
  g.restore();
 }
 
+/* La minute suspendue : enveloppe crème, sceau de cire rouge, halo doré. */
+function drawLetter(g,L){
+ const sway=Math.sin(L.age*1.7+L.seed)*.07,pulse=1+Math.sin(L.age*3.2)*.06;
+ g.save();g.translate(L.x,L.y);g.rotate(sway);
+ const halo=g.createRadialGradient(0,0,2,0,0,64*pulse);
+ halo.addColorStop(0,'#ffd9a060');halo.addColorStop(1,'#ffd9a000');
+ g.fillStyle=halo;g.beginPath();g.arc(0,0,64*pulse,0,Math.PI*2);g.fill();
+ g.fillStyle='#f2e4c2';g.fillRect(-34,-22,68,44);
+ g.strokeStyle='#7a5a3a';g.lineWidth=2;g.strokeRect(-34,-22,68,44);
+ g.beginPath();g.moveTo(-32,-20);g.lineTo(0,11);g.lineTo(32,-20);g.stroke();
+ g.fillStyle='#a33a2a';g.beginPath();g.arc(0,5,13,0,Math.PI*2);g.fill();
+ g.strokeStyle='#6b2317';g.lineWidth=2;g.beginPath();g.arc(0,5,9,0,Math.PI*2);g.stroke();
+ g.restore();
+ g.save();g.textAlign='center';g.font='700 '+(compactView()?'12px':'10px')+' Arial';g.fillStyle='#ffe6bd';g.strokeStyle='#000a';g.lineWidth=2.4;g.strokeText('NE TIRE PAS',L.x,L.y-36);g.fillText('NE TIRE PAS',L.x,L.y-36);g.restore();
+}
 /* Les mèches du gardien : lanterne de fer, flamme qui vacille, fumée quand
    elle est éteinte, et anneau de charge quand elle s'apprête à tirer. */
 function drawWicks(g,e){
@@ -910,7 +1051,11 @@ function draw(g){
  if(!active()||!['play','pause'].includes(state))return;
  for(const e of enemies){
   if(e.dead)continue;
-  if(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0)){g.save();g.globalAlpha=.16;g.fillStyle=world.moon;g.beginPath();g.arc(e.x,e.y,e.halo||150,0,Math.PI*2);g.fill();g.restore();ring(g,e.x,e.y,e.halo||150,world.moon+'88')}
+  if(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0)){
+   const haloOn=haloActive(e);
+   if(haloOn){g.save();g.globalAlpha=.16;g.fillStyle=world.moon;g.beginPath();g.arc(e.x,e.y,e.halo||150,0,Math.PI*2);g.fill();g.restore();ring(g,e.x,e.y,e.halo||150,world.moon+'88')}
+   else{g.save();g.globalAlpha=.5;g.setLineDash([7,9]);g.strokeStyle='#7c8a99';g.lineWidth=2;g.beginPath();g.arc(e.x,e.y,e.halo||150,0,Math.PI*2);g.stroke();g.restore();g.save();g.textAlign='center';g.fillStyle='#aab9c6';g.font='bold '+(compactView()?'11px':'8px')+' Arial';g.fillText('HALO ÉTEINT',e.x,e.y-10);g.restore()}
+  }
   if(e.kind==='hollowFlame')ring(g,e.x,e.y,e.r+9,e.lit?world.moon:'#6b5a7d',!e.lit);
   if(e.kind==='crackedBell'&&e.twin&&!e.twin.dead){g.save();g.strokeStyle='#cfe6d877';g.lineWidth=1.5;g.beginPath();g.moveTo(e.x,e.y);g.lineTo(e.twin.x,e.twin.y);g.stroke();g.restore()}
   if(e.kind==='unnamedDigit'){
@@ -920,7 +1065,16 @@ function draw(g){
    if(weak){g.fillStyle='#ffe6bd';g.font='bold '+(compactView()?'14px':'10px')+' Arial';g.fillText('FAIBLE ×2',e.x,e.y-44)}
    g.restore();
   }
-  if(!e.boss&&e.kind!=='wickWarden'&&wardenAt(e.x,e.y)){g.save();g.textAlign='center';g.fillStyle='#ffd9a0';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText('PROTÉGÉ ½ dégâts',e.x,e.y+e.r+16);g.restore()}
+  if(!e.boss&&enemies.some(haloSource)){
+   const covered=haloLit();
+   if(covered){g.save();g.globalAlpha=.92;g.setLineDash([10,7]);g.lineDashOffset=-(ambient*46)%17;g.lineWidth=2.6;g.strokeStyle='#ffd25e';g.beginPath();g.arc(e.x,e.y,e.r+7,0,Math.PI*2);g.stroke();g.setLineDash([]);g.restore()}
+   g.save();g.textAlign='center';g.fillStyle=covered?'#ffd25e':'#ffb08a';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText(covered?'IMMUNISÉ':'OUVERT',e.x,e.y+e.r+16);g.restore()
+  }
+  if(e.shieldFx){
+   g.save();g.globalAlpha=Math.min(1,Math.abs(e.shieldFx)*1.5);g.setLineDash(e.shieldFx>0?[12,8]:[5,7]);g.lineWidth=e.shieldFx>0?3.4:2;g.strokeStyle=e.shieldFx>0?'#ffd25e':'#8a99a6';
+   const rr=e.r+9+(e.shieldFx>0?(.85-e.shieldFx)*78:(.6+e.shieldFx)*46);
+   g.beginPath();g.arc(e.x,e.y,Math.max(4,rr),0,Math.PI*2);g.stroke();g.setLineDash([]);g.restore()
+  }
   if(e.kind==='waxMimic'){
    g.save();g.textAlign='center';
    g.fillStyle=e.disguise?'#e8b9a0':'#ff9d7a';g.font='bold '+(compactView()?'14px':'10px')+' Arial';
@@ -977,19 +1131,32 @@ function draw(g){
  if(!e||e.dead)return;
  if(e.kind==='veilleuse'){
   drawWicks(g,e);
-  if(e.phase===2&&e.core){
-   const c=e.core,pulse=1+Math.sin(ambient*9)*.12;
-   g.save();g.globalAlpha=.35;g.fillStyle='#ffd9a0';g.beginPath();g.arc(c.x,c.y,58*pulse,0,Math.PI*2);g.fill();
-   g.globalAlpha=1;ring(g,c.x,c.y,c.open>0?39:29,c.open>0?'#fff5cc':'#8d7a9c',c.open<=0);
-   const glow=g.createRadialGradient(c.x,c.y,2,c.x,c.y,28);
-   glow.addColorStop(0,c.open>0?'#fff5cc':'#8d7a9c');glow.addColorStop(1,'#e5854e00');
-   g.fillStyle=glow;g.beginPath();g.arc(c.x,c.y,28,0,Math.PI*2);g.fill();
-   g.fillStyle=c.open>0?'#fff5cc':'#8d7a9c';g.beginPath();g.arc(c.x,c.y,10,0,Math.PI*2);g.fill();
-   g.textAlign='center';g.font='bold '+(compactView()?'16px':'12px')+' Arial';
-   g.fillStyle=c.open>0?'#fff5cc':'#c8b9d5';
-   g.fillText(c.open>0?'FRAPPE LE CŒUR':'CŒUR FERMÉ',c.x,c.y-48);
-   g.fillText('IMPACTS '+c.hits+'/3',c.x,c.y+52);
-   g.restore();
+  /* Le cœur, visible dès le premier battement : un charbon retenu tenu par la
+     cire (phase 1), puis à nu et battant sur le torse (phase 2) — on sait
+     exactement ce qu'il faut atteindre. */
+  {
+   const hx=e.x,hy=e.y+26;
+   if(e.phase===1||!e.core){
+    const breathe=1+Math.sin(ambient*2.1)*.06;
+    g.save();g.globalAlpha=.7;g.fillStyle='#5a2c22';g.beginPath();g.ellipse(hx,hy,15*breathe,13*breathe,0,0,Math.PI*2);g.fill();
+    g.fillStyle='#2c1611';g.beginPath();g.ellipse(hx,hy,9.5*breathe,8.5*breathe,0,0,Math.PI*2);g.fill();g.restore();
+   }else{
+    const c=e.core,open=c.open>0,pulse=open?1.9+Math.sin(ambient*16)*.12:1+Math.sin(ambient*3)*.1;
+    g.save();
+    const halo=g.createRadialGradient(hx,hy,2,hx,hy,46*pulse);
+    halo.addColorStop(0,open?'#ff7d4d':'#a84a2e');halo.addColorStop(1,'#ff7d4d00');
+    g.globalAlpha=open?.85:.35;g.fillStyle=halo;g.beginPath();g.arc(hx,hy,46*pulse,0,Math.PI*2);g.fill();
+    g.globalAlpha=1;
+    g.fillStyle=open?'#ff5c33':'#7a3a2a';g.beginPath();g.ellipse(hx,hy,15*pulse,13*pulse,0,0,Math.PI*2);g.fill();
+    g.fillStyle=open?'#ffd0a1':'#a06a4a';g.beginPath();g.ellipse(hx,hy,8.5*pulse,7*pulse,0,0,Math.PI*2);g.fill();
+    g.strokeStyle=open?'#ffd9a0':'#4a2c33';g.lineWidth=1.6;
+    for(const off of [[-8,4],[0,7],[8,4]]){g.beginPath();g.moveTo(hx+off[0],hy-2);g.lineTo(hx+off[0]*1.6,hy+off[1]+4);g.stroke()}
+    g.textAlign='center';g.font='bold '+(compactView()?'15px':'11px')+' Arial';
+    g.fillStyle=open?'#ffe6bd':'#c8b9d5';
+    g.fillText(open?'FRAPPE LE CŒUR':'CŒUR FERMÉ',hx,hy-34);
+    g.fillText('IMPACTS '+c.hits+'/3',hx,hy+42);
+    g.restore();
+   }
   }
  }
  if(e.kind==='sonneur'){
@@ -1029,6 +1196,16 @@ drawBossHealth=function(g,e){
   if(line&&g.measureText(next).width>width){how.push(line);line=word}else line=next;
  }
  if(line)how.push(line);
+ if(shieldFlash>0){g.save();g.globalAlpha=shieldFlash;g.fillStyle='#ffd9a0';g.fillRect(0,0,W,H);g.restore();shieldFlash=Math.max(0,shieldFlash-.022)}
+ if(letters.length)for(const L of letters)drawLetter(g,L);
+ if(combo>1&&comboTime>0){
+  const frac=Math.max(0,Math.min(1,comboTime/2)),cx=W-56,cy=H-46,r=22;
+  g.save();
+  g.strokeStyle='#3a3344';g.lineWidth=4;g.beginPath();g.arc(cx,cy,r,0,Math.PI*2);g.stroke();
+  g.strokeStyle=frac>.3?'#ffd25e':'#ff7d4d';g.beginPath();g.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*frac);g.stroke();
+  g.fillStyle='#ffe6bd';g.font='700 '+(compactView()?'13px':'11px')+' Arial';g.textAlign='center';g.textBaseline='middle';g.fillText('×'+combo,cx,cy);g.fillText('COMBO',cx,cy-32);
+  g.restore();
+ }
  g.fillStyle='#120f24eb';g.fillRect(left-8,top-26,width+16,63+how.length*13);
  g.textAlign='center';g.fillStyle='#f8d8b6';g.font=compactView()?'bold 16px Georgia':'13px Georgia';
  g.fillText(world.boss,left+width/2,top-8);
@@ -1054,12 +1231,37 @@ updateHUD=function(...args){
 function briefing(){
  if(!window.Campaign?.progress?.world3Unlocked)return;
  state='sixth-briefing';
- overlay(`<section class="sequel-briefing"><div class="eyebrow">TROISIÈME CAMPAGNE · LA SIXIÈME HEURE</div><h2 class="local-title">L’Heure<br>aux Trousses</h2><p>Le cycle est réparé, et pourtant la nuit compte une heure de trop. Elle n’a pas de chiffre, pas de cloche, et tout le monde y a couru au moins une fois. C’est l’heure des poursuites. Elle se referme, et ce qu’elle tient encore doit être rendu — à commencer par la flamme du Veilleur.</p><blockquote>« Ma lanterne brûle avec une heure qui n’est pas à moi. Le jour où elle la reprend, il ne restera personne pour veiller. »</blockquote><div class="local-rule">Ici, la difficulté ne monte pas avec le nombre d’ennemis : elle monte avec ce qu’il faut comprendre. Chaque gardien a sa jauge et sa condition de victoire — aucune barre de vie. Trois minutes rendues par univers, quinze au total, décident de la fin du voyage.</div><div class="sequel-character-grid"><button class="sequel-character" id="sixthWitch"><span class="sequel-character-art"><img src="${window.MinuitArt.witch.src}" alt=""></span><b>La sorcière</b><small>« Tu m’as chassée toute une nuit. Laisse-moi courir pour toi, cette fois. »</small></button><button class="sequel-character" id="sixthHunter"><span class="sequel-character-art"><img src="${window.MinuitArt.hunter.src}" alt=""></span><b>Le Veilleur</b><small>« C’est ma flamme. C’est ma dette. Reste derrière moi. »</small></button></div><div class="local-actions"><button class="secondary" id="sixthBack">Retour au menu</button></div></section>`);
+ let crownsBlurb='';try{crownsBlurb=crownsHTML()}catch(err){console.warn('crowns',err)}
+ overlay('<section class="sequel-briefing"><div class="eyebrow">TROISIÈME CAMPAGNE · LA SIXIÈME HEURE</div><h2 class="local-title">L’Heure<br>aux Trousses</h2><p>Le cycle est réparé, et pourtant la nuit compte une heure de trop. Elle n’a pas de chiffre, pas de cloche, et tout le monde y a couru au moins une fois. C’est l’heure des poursuites. Elle se referme, et ce qu’elle tient encore doit être rendu — à commencer par la flamme du Veilleur.</p><blockquote>« Ma lanterne brûle avec une heure qui n’est pas à moi. Le jour où elle la reprend, il ne restera personne pour veiller. »</blockquote><div class="local-rule">Ici, la difficulté ne monte pas avec le nombre d’ennemis : elle monte avec ce qu’il faut comprendre. Chaque gardien a sa jauge et sa condition de victoire — aucune barre de vie. Trois minutes rendues par univers, quinze au total, décident de la fin du voyage.</div>'+crownsBlurb+`<div class="sequel-character-grid"><button class="sequel-character" id="sixthWitch"><span class="sequel-character-art"><img src="${window.MinuitArt.witch.src}" alt=""></span><b>La sorcière</b><small>« Tu m’as chassée toute une nuit. Laisse-moi courir pour toi, cette fois. »</small></button><button class="sequel-character" id="sixthHunter"><span class="sequel-character-art"><img src="${window.MinuitArt.hunter.src}" alt=""></span><b>Le Veilleur</b><small>« C’est ma flamme. C’est ma dette. Reste derrière moi. »</small></button></div><div class="local-actions"><button class="secondary" id="sixthBack">Retour au menu</button></div></section>`);
  /* beginWorld contourne le briefing : sans lui, l'écran se rappellerait en boucle. */
  $('sixthWitch').onclick=()=>{window.Campaign.progress.character='witch';window.Campaign.beginWorld(3)};
  $('sixthHunter').onclick=()=>{window.Campaign.progress.character='hunter';window.Campaign.beginWorld(3)};
  $('sixthBack').onclick=()=>LocalLeague.menu();
  return true;
+}
+
+/* Couronnes de l'heure : trois maîtrises pour la Veilleuse, deux pour
+   chaque autre gardien. Persistantes, sans bonus — le prestige, pas la puissance. */
+const CROWN_DEFS=[
+ {kind:'veilleuse',name:'La Veilleuse',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['calme','VEILLE CALME','jamais de Veille complète'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
+ {kind:'sonneur',name:'Le Sonneur sans battant',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
+ {kind:'passeur',name:'Le Passeur sans ombre',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
+ {kind:'cueilleuse',name:'La Cueilleuse de flammes',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
+ {kind:'chasseur',name:'Le Chasseur sans visage',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
+ {kind:'minutes',name:'Les Minutes',slots:[['legere','MAIN LÉGÈRE','scelle une minute sans tirer']]}
+];
+const crownTotal=()=>CROWN_DEFS.reduce((n,d)=>n+d.slots.length,0);
+const crownsEarned=()=>CROWN_DEFS.reduce((n,d)=>n+((window.Campaign?.crownsOf?.(d.kind))||[]).length,0);
+function crownsHTML(){
+ const rows=CROWN_DEFS.map(d=>{
+  const got=(window.Campaign?.crownsOf?.(d.kind))||[];
+  const cells=d.slots.map(([id,label,hint])=>{
+   const ok=got.includes(id);
+   return '<span class="crown-slot'+(ok?' earned':'')+'" title="'+hint+'">'+(ok?'✦':'◇')+' '+label+'</span>';
+  }).join('');
+  return '<span class="crown-row"><b>'+d.name+'</b>'+cells+'</span>';
+ }).join('');
+ return '<div class="crowns-panel"><div class="crowns-head"><b>COURONNES DE L’HEURE</b><span>'+crownsEarned()+' / '+crownTotal()+'</span></div>'+rows+'</div>';
 }
 
 const baseFinish=Journey.finish;
@@ -1069,6 +1271,13 @@ Journey.finish=function(win){
  if(!win||window.SandboxMode)return result;
  const screen=document.querySelector('#overlay .journey-result-screen');
  if(!screen)return result;
+ if(world_===3&&!screen.querySelector('#sixthCrowns')){
+  try{
+   const box=document.createElement('section');box.className='victory-milestones crowns-victory';box.id='sixthCrowns';
+   box.innerHTML=crownsHTML();
+   screen.querySelector('.local-actions')?.before(box);
+  }catch(err){console.warn('crowns',err)}
+ }
  if(world_===2&&window.Campaign.progress.world3Unlocked&&!screen.querySelector('#sixthEpilogue')){
   const box=document.createElement('section');box.className='victory-milestones';box.id='sixthEpilogue';
   box.innerHTML='<b>LA NUIT A REPRIS SA COURSE</b><p>Les cinq heures sont rentrées dans le cadran. L’aube a le droit de venir.<br>L’Horloger, à genoux, ne se défend pas : « Je n’en ai pris que cinq. Il en reste une. Je ne l’ai jamais trouvée. »<br>Ce soir-là, la lanterne du Veilleur baisse pour la première fois.</p><div class="local-actions"><button class="primary" id="enterSixthHour">Entrer dans la sixième heure →</button></div>';
@@ -1110,7 +1319,7 @@ function withTrial(text){
 function stageZeroTriage(){
  if(stage!==0)return '';
  if(enemies.some(e=>!e.dead&&e.kind==='shutterImp'&&slams.some(s=>s.source===e)))return 'Volet claqueur : claquement imminent — tue-le ou casse le panneau';
- if(enemies.some(e=>!e.dead&&e.kind==='wickWarden'))return 'Garde-mèche : son halo divise vos dégâts — tue-le en premier';
+ if(enemies.some(e=>!e.dead&&e.kind==='wickWarden'))return 'Garde-mèche : son halo luit 2 s et s’éteint 2,6 s — frappe pendant le creux, plus personne n’y a de cercle';
  if(enemies.some(e=>!e.dead&&e.kind==='waxCourier')&&marks.some(m=>m.real&&!m.struck))return 'Facteur de cire : le cercle PLEIN est le vrai, le pointillé est un leurre';
  if(enemies.some(e=>!e.dead&&e.kind==='waxMimic'))return 'Faux-cierge : tire dessus de loin, ne le ramasse pas';
  return '';
@@ -1123,7 +1332,8 @@ function objectiveText(){
  const tally=' · '+kept+'/15 rendues';
  let suffix='';
  if(stage===0){
-  if(mission.prime)suffix+=' · PRIME : '+(foeNames[mission.prime]||mission.prime)+' +400';
+  if(mission.prime)suffix+=' · PRIME : '+(foeNames[mission.prime]||mission.prime)+' (+400/cible)';
+  if(mission.plis)suffix+=mission.plis.got>=3?' · PLIS ✓':' · PLIS '+(mission.plis.got||0)+'/3';
   const triage=stageZeroTriage();
   if(triage)suffix+=' — PRIORITÉ : '+triage;
  }
@@ -1133,19 +1343,21 @@ function objectiveText(){
  return withTrial(RULES[clamp(stage,0,4)])+suffix;
 }
 function refreshObjective(){
- const text=objectiveText();
+ const bossAlive=enemies.some(e=>e.boss&&!e.dead);
+ const text=bossAlive?'':objectiveText();
  objectiveBar.textContent=text;
- objectiveBar.classList.toggle('hidden',!text);
+ objectiveBar.classList.toggle('hidden',bossAlive||!text);
 }
 
 const style=document.createElement('style');
-style.textContent='body.sixth-hour-theme{background:radial-gradient(ellipse at 22% 0,#2a2440,#12101f 68%)}body.sixth-hour-theme .home-hero{border-color:#d9a05f77}body.sixth-hour-theme .home-world-route{color:#ffd9a0}.sixth-hour-home .menu-kicker{color:#ffd9a0}.sixth-objective{margin:8px 0 0;padding:9px 12px;border:1px solid #d9a05f66;border-left:3px solid #ffd9a0;border-radius:8px;background:#1d1830cc;color:#ffe6bd;font-size:13px;line-height:1.35;letter-spacing:.2px}.sixth-objective.hidden{display:none}@media(max-width:720px){.sixth-objective{font-size:12px}}';
+style.textContent='#overlay.instruction-backdrop{background:radial-gradient(ellipse at center,rgba(15,12,27,.36),rgba(15,12,27,.62))!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}.instruction-popup{width:min(560px,94vw);background:#221d36ee;border:1px solid #ffd9a066;border-left:4px solid #ffd9a0;border-radius:14px;padding:18px 22px;text-align:left;color:#efe4f7;box-shadow:0 20px 60px #000a}.instruction-popup .eyebrow{color:#ffd9a0;letter-spacing:2px;font-size:10px;margin-bottom:6px}.instruction-popup h2.local-title{margin:4px 0 10px;font-size:clamp(22px,4vw,30px)}.instruction-popup .instruction-body p{margin:0 0 10px;font-size:13px;line-height:1.6;color:#d9cbdf}.instruction-popup .instruction-body b{color:#ffd9a0}.instruction-ok{margin-top:4px}.crowns-panel{margin:10px 0;padding:9px 12px;border:1px solid #d9a05f55;border-left:3px solid #ffd25e;border-radius:9px;background:#241f36cc;display:flex;flex-direction:column;gap:6px}.crowns-head{display:flex;justify-content:space-between;color:#ffd9a0;font:700 11px Georgia;letter-spacing:1px}.crowns-head span{color:#ffe6bd}.crown-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:#bda9c8;font:10px Arial}.crown-row b{color:#e8dcc0;min-width:150px;font-weight:600}.crown-slot{padding:2px 7px;border:1px solid #4a3b46;border-radius:20px;color:#8d7a9c;font:600 9px Arial;letter-spacing:.6px}.crown-slot.earned{border-color:#ffd25e88;color:#ffd25e;background:#ffd25e14}body.sixth-hour-theme{background:radial-gradient(ellipse at 22% 0,#2a2440,#12101f 68%)}body.sixth-hour-theme .home-hero{border-color:#d9a05f77}body.sixth-hour-theme .home-world-route{color:#ffd9a0}.sixth-hour-home .menu-kicker{color:#ffd9a0}.heading.game-status{position:relative}.sixth-objective{position:absolute;top:calc(100% + 4px);left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:min(560px,94%);z-index:6;margin:0;padding:5px 14px;border:1px solid #d9a05f55;border-left:3px solid #ffd9a0;border-radius:9px;background:rgba(20,16,32,.82);color:#ffe6bd;font-size:12px;line-height:1.35;letter-spacing:.2px;text-align:center;box-shadow:0 8px 24px #0006;pointer-events:none;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.sixth-objective.hidden{display:none}@media(max-width:720px){.sixth-objective{font-size:12px}}';
 document.head.appendChild(style);
 
 window.SixthHour={
  BUDGET,TUNING,foeNames,VICTORY,RULES,HOWTO,HABITS,TRIALS,fireDelay,objectiveText,
  bossDelay:()=>active()?7.5:16,
- moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,
+ moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,collectPli,resolveLetter,
+ get letters(){return letters},
  isFoeKind:k=>foeKinds.has(k),isBossKind:k=>bossKinds.has(k),
  get boss(){return boss},get mission(){return mission},get habits(){return habits},
  get flame(){return flame},get marks(){return marks},get salt(){return salt},
