@@ -5346,8 +5346,8 @@ window.Replayability={enhance,get pending(){return pending}};
 (()=>{
 'use strict';
 const KEY='minuit-campaign-v1';
-const CROWN_KINDS=['veilleuse','sonneur','passeur','cueilleuse','chasseur'];
-const CROWN_SLOTS=['patience','calme','rapide'];
+const CROWN_KINDS=['veilleuse','sonneur','passeur','cueilleuse','chasseur','minutes'];
+const CROWN_SLOTS=['patience','calme','rapide','legere'];
 const sanitizeCrowns=value=>{const source=value&&typeof value==='object'&&!Array.isArray(value)?value:{},out={};for(const kind of CROWN_KINDS){const list=Array.isArray(source[kind])?source[kind]:[];out[kind]=[...new Set(list.filter(s=>CROWN_SLOTS.includes(s)))]}return out};
 const blank=()=>({version:1,world1Completed:false,world2Unlocked:false,world2Completed:false,cardOath:false,lastWorld:1,choice:'',character:'witch',world2Started:false,world3Unlocked:false,world3Started:false,world3Completed:false,cardSixthHour:false,minutesKept:0,crowns:sanitizeCrowns()});
 function normalize(value){
@@ -6696,13 +6696,13 @@ function countTrial(kind){
 }
 
 let marks=[],salt=[],trail=[],mission={},habits=freshHabits(),boss=null,minute=null,meche=null;
-let slams=[];
+let slams=[],letters=[];
 let flame=3,frozen=[],spawnSerial=0,haloTime=0,gesture=null;
 
 function freshHabits(){return{relays:0,halos:0,salt:0,flames:0}}
 function reset(){
  marks=[];salt=[];trail=[];mission={};habits=freshHabits();boss=null;minute=null;meche=null;
- slams=[];
+ slams=[];letters=[];
  flame=3;frozen=[];spawnSerial=0;haloTime=0;gesture=null;
 }
 const journeyBegin=Journey.begin,journeyRestore=Journey.restore;
@@ -6838,6 +6838,9 @@ newWave=function(...args){
   const pool=(world&&world.foes||[]).filter(k=>foeNames[k]);
   mission.prime=pool.length?pool[Math.floor(rng()*pool.length)]:null;
  }
+ /* La Minute Suspendue : une lettre scellée traverse l'univers en vague 3.
+    Elle ne tire pas, ne se laisse ni viser ni toucher par hasard — la saisir en vol (ou laisser traverser) scelle la minute. Un tir la brise : +50. */
+ if(wave===3&&letters.length===0)letters.push({x:W+70,y:120+rng()*260,vx:-34,age:0,seed:rng()*Math.PI*2});
  if(wave<=4){const intro=world3Intro(stage,wave);if(intro)instructionPopup(intro.key,intro.title,intro.body)}
  if(wave===2)minute=makeMinute();
  if(wave===4){
@@ -7023,6 +7026,30 @@ function tickMimics(dt){
 }
 
 /* --- Tick commun -------------------------------------------------------- */
+/* La minute suspendue : la lettre traverse l'écran sans rien tirer. La ramasser
+   (ou la laisser traverser intacte) scelle la minute : +400 et une couronne.
+   Un tir sur elle brise le sceau : +50, aucun crédit. */
+function resolveLetter(L,byShot){
+ if(L.dead)return;
+ L.dead=true;
+ if(byShot){
+  score+=50;
+  for(let i=0;i<16;i++)particle(L.x,L.y,'#e8d3ab',2);
+  say('LE SCEAU SE BRISE · +50 points',1.8);tone(214,.25,'sawtooth',.06,.7);
+ }else{
+  mission.legere=true;score+=400;
+  particle(L.x,L.y,'#ffd9a0',40);say('SCEAU SCELLÉ · +400 points · une minute rendue sans un coup',3);
+  tone(392,.4,'sine',.1,1.3);tone(523,.5,'sine',.09,1.2);tone(659,.6,'sine',.08,1.1);
+ }
+}
+function tickLetters(dt){
+ for(const L of letters){
+  L.age+=dt;L.x+=L.vx*dt;
+  if(Math.hypot(L.x-player.x,L.y-player.y)<26)resolveLetter(L,false);
+  else if(L.x<-70)resolveLetter(L,false);
+ }
+ letters=letters.filter(L=>!L.dead);
+}
 function tick(dt){
  if(!active()||state!=='play')return;
  remember(dt);
@@ -7077,6 +7104,7 @@ function tick(dt){
  tickMimics(dt);
  tickMinute(dt);
  tickFlame(dt);
+ tickLetters(dt);
  hitTargets();
  if(gesture)gesture.tick(dt);
 }
@@ -7163,19 +7191,26 @@ reward=function(e){
     ne sont pas écrasés par la chaîne. */
  if(primePay){
   score+=400;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
+  /* LE MAILLON PRIME : la prime abattue dépouille l'écran — chaque esprit ennemi devient un cachet. */
+  let canceled=0;
+  for(const h of hostile){canceled++;score+=50;particle(h.x,h.y,'#ffd25e',6)}
+  hostile.length=0;
   particle(e.x,e.y,'#ffd25e',34);particle(e.x,e.y,'#fff5cc',12);tone(660,.2,'square',.07,1.5);
-  say('★ PRIME ABATTUE · '+(foeNames[e.kind]||e.kind)+' ★ +400',2.2);
+  say('★ PRIME ABATTUE · '+(foeNames[e.kind]||e.kind)+' ★ +'+(400+canceled*50)+(canceled?(' · '+canceled+' esprit'+(canceled>1?'s':'')+' payé'+(canceled>1?'s':'')):''),2.4);
  }
  /* Couronnes de l'heure : maîtrise sans vie perdue, vitesse, et pour la
     Veilleuse, une veille sans tache. Persistantes, jamais d'empowerment. */
  if(active()&&e.boss){
   const guardianKinds=['veilleuse','sonneur','passeur','cueilleuse','chasseur'];
   if(guardianKinds.includes(e.kind)){
+   /* Le cachet du cadran : chaque gardien tombé scelle la minute — +1000, sans condition. */
+   score+=1000;say('CACHET DU CADRAN · +1000 points',2.6);particle(e.x,e.y,'#ffd9a0',40);tone(659,.5,'sine',.08,1.25);
    const lost=((window.Journey?.run?.stats?.lifeLoss)||0)-(e.lossStart||0);
    const earned=[];
    if(lost<=0&&window.Campaign?.awardCrown?.(e.kind,'patience'))earned.push('SANS BRISURE');
    if((e.age||0)<=90&&window.Campaign?.awardCrown?.(e.kind,'rapide'))earned.push('SOUS 90 SECONDES');
    if(e.kind==='veilleuse'&&!mission.veilleComplete&&window.Campaign?.awardCrown?.('veilleuse','calme'))earned.push('VEILLE CALME');
+   if(mission.legere&&window.Campaign?.awardCrown?.('minutes','legere'))earned.push('MAIN LÉGÈRE');
    if(earned.length){say('COURONNE'+(earned.length>1?'S':'')+' DE L’HEURE · '+earned.join(' · '),3);particle(e.x,e.y,'#ffd25e',44)}
   }
  }
@@ -7473,6 +7508,8 @@ function hitTargets(){
  if(!e||e.dead||!active())return;
  for(const shot of shots){
   if(shot.life<=0)continue;
+  /* La minute suspendue : tout tir sur la lettre brise le sceau. */
+  for(const L of letters)if(!L.dead&&near(shot.x,shot.y,L.x,L.y,24)){resolveLetter(L,true);consume(shot)}
   if(e.kind==='veilleuse'&&e.phase===2&&e.core){
    const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);particle(core.x,core.y,'#e8d3ab',26);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3',2)}
   }else if(e.kind==='veilleuse'){
@@ -7530,6 +7567,21 @@ function drawItem(g,key,x,y,size,label,color){
  g.restore();
 }
 
+/* La minute suspendue : enveloppe crème, sceau de cire rouge, halo doré. */
+function drawLetter(g,L){
+ const sway=Math.sin(L.age*1.7+L.seed)*.07,pulse=1+Math.sin(L.age*3.2)*.06;
+ g.save();g.translate(L.x,L.y);g.rotate(sway);
+ const halo=g.createRadialGradient(0,0,2,0,0,64*pulse);
+ halo.addColorStop(0,'#ffd9a060');halo.addColorStop(1,'#ffd9a000');
+ g.fillStyle=halo;g.beginPath();g.arc(0,0,64*pulse,0,Math.PI*2);g.fill();
+ g.fillStyle='#f2e4c2';g.fillRect(-34,-22,68,44);
+ g.strokeStyle='#7a5a3a';g.lineWidth=2;g.strokeRect(-34,-22,68,44);
+ g.beginPath();g.moveTo(-32,-20);g.lineTo(0,11);g.lineTo(32,-20);g.stroke();
+ g.fillStyle='#a33a2a';g.beginPath();g.arc(0,5,13,0,Math.PI*2);g.fill();
+ g.strokeStyle='#6b2317';g.lineWidth=2;g.beginPath();g.arc(0,5,9,0,Math.PI*2);g.stroke();
+ g.restore();
+ g.save();g.textAlign='center';g.font='700 '+(compactView()?'12px':'10px')+' Arial';g.fillStyle='#ffe6bd';g.strokeStyle='#000a';g.lineWidth=2.4;g.strokeText('NE TIRE PAS',L.x,L.y-36);g.fillText('NE TIRE PAS',L.x,L.y-36);g.restore();
+}
 /* Les mèches du gardien : lanterne de fer, flamme qui vacille, fumée quand
    elle est éteinte, et anneau de charge quand elle s'apprête à tirer. */
 function drawWicks(g,e){
@@ -7762,6 +7814,15 @@ drawBossHealth=function(g,e){
  }
  if(line)how.push(line);
  if(shieldFlash>0){g.save();g.globalAlpha=shieldFlash;g.fillStyle='#ffd9a0';g.fillRect(0,0,W,H);g.restore();shieldFlash=Math.max(0,shieldFlash-.022)}
+ if(letters.length)for(const L of letters)drawLetter(g,L);
+ if(combo>1&&comboTime>0){
+  const frac=Math.max(0,Math.min(1,comboTime/2)),cx=W-56,cy=H-46,r=22;
+  g.save();
+  g.strokeStyle='#3a3344';g.lineWidth=4;g.beginPath();g.arc(cx,cy,r,0,Math.PI*2);g.stroke();
+  g.strokeStyle=frac>.3?'#ffd25e':'#ff7d4d';g.beginPath();g.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*frac);g.stroke();
+  g.fillStyle='#ffe6bd';g.font='700 '+(compactView()?'13px':'11px')+' Arial';g.textAlign='center';g.textBaseline='middle';g.fillText('×'+combo,cx,cy);g.fillText('COMBO',cx,cy-32);
+  g.restore();
+ }
  g.fillStyle='#120f24eb';g.fillRect(left-8,top-26,width+16,63+how.length*13);
  g.textAlign='center';g.fillStyle='#f8d8b6';g.font=compactView()?'bold 16px Georgia':'13px Georgia';
  g.fillText(world.boss,left+width/2,top-8);
@@ -7803,7 +7864,8 @@ const CROWN_DEFS=[
  {kind:'sonneur',name:'Le Sonneur sans battant',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
  {kind:'passeur',name:'Le Passeur sans ombre',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
  {kind:'cueilleuse',name:'La Cueilleuse de flammes',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
- {kind:'chasseur',name:'Le Chasseur sans visage',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]}
+ {kind:'chasseur',name:'Le Chasseur sans visage',slots:[['patience','SANS BRISURE','gagne sans perdre de cœur'],['rapide','SOUS 90 SECONDES','gagne en moins de 90 s']]},
+ {kind:'minutes',name:'Les Minutes',slots:[['legere','MAIN LÉGÈRE','scelle une minute sans tirer']]}
 ];
 const crownTotal=()=>CROWN_DEFS.reduce((n,d)=>n+d.slots.length,0);
 const crownsEarned=()=>CROWN_DEFS.reduce((n,d)=>n+((window.Campaign?.crownsOf?.(d.kind))||[]).length,0);
@@ -7911,7 +7973,8 @@ document.head.appendChild(style);
 window.SixthHour={
  BUDGET,TUNING,foeNames,VICTORY,RULES,HOWTO,HABITS,TRIALS,fireDelay,objectiveText,
  bossDelay:()=>active()?7.5:16,
- moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,collectPli,
+ moveEnemy,moveBoss,tick,draw,waveBlocks,briefing,start,checkpoint,restore,keepMinute,collectPli,resolveLetter,
+ get letters(){return letters},
  isFoeKind:k=>foeKinds.has(k),isBossKind:k=>bossKinds.has(k),
  get boss(){return boss},get mission(){return mission},get habits(){return habits},
  get flame(){return flame},get marks(){return marks},get salt(){return salt},

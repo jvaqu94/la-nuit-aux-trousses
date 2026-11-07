@@ -154,7 +154,7 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
 | Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
 
-**La tranche Faubourg + Veilleuse a été refondue en mode verticale** : des conditions imbriquées plutôt que parallèles. Les **plis cachetés** du Faubourg tombent un par vague (I, II, III) et ne rapportent leur **+1000** que ramassés dans l'ordre ; **les trois mèches** sont toute la serrure du cœur de la Veilleuse (scellés retirés depuis — §9novies). La victoire propre se couronne désormais : les **Couronnes de l'heure** (11 au total, 3 pour la Veilleuse) récompensent la manière de gagner — jamais la puissance. La Veilleuse réclame « Sans Brisure », « Veille calme » et « Sous 90 secondes ». Deuxième passe (retour en jeu) : vagues 1 et 2 plus longues, indications majeures annoncées en **popup qui met le vol en pause** (une fois par appareil), **le halo du Garde-mèche immunise tout l’écran, porteur compris, par cycles** (allumé 2 s / éteint 2,6 s — cercle sur chaque monstre, frappe pendant le creux), **un popup translucide laisse le jeu en pause et visible en arrière-plan au lieu de le cacher**, **l’objectif persistant est une puce absolue** qui ne fait plus bouger la fenêtre (fini les sauts quand le texte passe à 3 lignes), et **le terrain PC ne pulse plus en zoom/dézoom** ; Quatrième passe (retour en jeu) : **PRIME réellement visible** (+400 par cible PRIME abattue, pluie d’étincelles, bannière distincte et rappel « +400/cible » dans l’objectif), le **halo du Garde-mèche devient un vrai télégraphe** (flash doré plein écran + anneau d’ondes sur chaque monstre + anneau pointillé or animé tant que le bouclier tient) ; **la Veilleuse densifiée** (couronne de braises à chaque impact, cœur ancré sur le torse). Inspirations revendiquées : les *spell cards* et les médailles de **Touhou Project** (maîtrise de la manière de gagner), et les conditions de **Into the Breach** (chaque action sous condition, la victoire comme échecs). Les autres gardiens attribuent déjà les deux couronnes génériques ; le reste suit le même schéma. Détail dans `docs/monde-3-gameplay.md` §9novies.
+**La tranche Faubourg + Veilleuse a été refondue en mode verticale** : des conditions imbriquées plutôt que parallèles. Les **plis cachetés** du Faubourg tombent un par vague (I, II, III) et ne rapportent leur **+1000** que ramassés dans l'ordre ; **les trois mèches** sont toute la serrure du cœur de la Veilleuse (scellés retirés depuis — §9novies). La victoire propre se couronne désormais : les **Couronnes de l'heure** (12 au total, 3 pour la Veilleuse + MAIN LÉGÈRE pour les Minutes) récompensent la manière de gagner — jamais la puissance. La Veilleuse réclame « Sans Brisure », « Veille calme » et « Sous 90 secondes ». Deuxième passe (retour en jeu) : vagues 1 et 2 plus longues, indications majeures annoncées en **popup qui met le vol en pause** (une fois par appareil), **le halo du Garde-mèche immunise tout l’écran, porteur compris, par cycles** (allumé 2 s / éteint 2,6 s — cercle sur chaque monstre, frappe pendant le creux), **un popup translucide laisse le jeu en pause et visible en arrière-plan au lieu de le cacher**, **l’objectif persistant est une puce absolue** qui ne fait plus bouger la fenêtre (fini les sauts quand le texte passe à 3 lignes), et **le terrain PC ne pulse plus en zoom/dézoom** ; Quatrième passe (retour en jeu) : **PRIME réellement visible** (+400 par cible PRIME abattue, pluie d’étincelles, bannière distincte et rappel « +400/cible » dans l’objectif), le **halo du Garde-mèche devient un vrai télégraphe** (flash doré plein écran + anneau d’ondes sur chaque monstre + anneau pointillé or animé tant que le bouclier tient) ; **la Veilleuse densifiée** (couronne de braises à chaque impact, cœur ancré sur le torse). Inspirations revendiquées : les *spell cards* et les médailles de **Touhou Project** (maîtrise de la manière de gagner), et les conditions de **Into the Breach** (chaque action sous condition, la victoire comme échecs). Les autres gardiens attribuent déjà les deux couronnes génériques ; le reste suit le même schéma. Détail dans `docs/monde-3-gameplay.md` §9novies.
 
 #### Lisibilité : des consignes, plus des énigmes
 
@@ -326,6 +326,25 @@ projectile de plus :
   peine visible sous la cire. Phase 2 : un **cœur géant qui bat** (rouge quand
   il frappe, terne fermé), avec « FRAPPE LE CŒUR » / « CŒUR FERMÉ » et
   « IMPACTS n/3 » à l’écran. Trois impacts pendant le flash tuent le gardien.
+
+#### Septième passe : les shmups modernes adaptés
+
+*(septième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9decies)*
+
+Inspiré du **Shmups Wiki** et de la doc **SHMUP Creator**, adapté à la doctrine du monde 3 :
+
+- **La chaîne visible** — un arc or qui se vide en bas à droite avec « ×N » au centre :
+  le combo ne dort plus entre deux kills.
+- **Le Maillon PRIME** — abattre une cible PRIME annule d’un coup tous les esprits
+  ennemis à l’écran : chacun devient un cachet (+50). La prime paie enfin +400 + cachets —
+  le moment bombe du pack.
+- **Le cachet du cadran** — +1000 à chaque gardien tombé, sans condition.
+- **La Minute Suspendue** — une lettre scellée traverse la vague 3 : si ton écran reste
+  sans tirer (ou si tu la ramasses en vol), **+400** et la 12e couronne, **MAIN LÉGÈRE**
+  (Les Minutes). Si un tir la touche : +50 et cendres.
+
+Écartés volontairement : la guirlande de médailles et le « Count » de Kaikan en doublon de la
+prime et des plis — même bruit visuel que les scellés, qui ont été retirés pour cette raison.
 
 #### Le Faubourg remis dans son thème
 

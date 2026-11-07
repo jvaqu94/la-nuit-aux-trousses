@@ -769,16 +769,20 @@ le joueur arbitre encore ce qu’il touche.
 
 Persistantes, sauvegardées dans `progress.crowns`, **sans aucun bonus de puissance** —
 du prestige, pas un écart. Trois maîtrises pour la Veilleuse, deux pour chaque autre
-gardien (la troisième est réservée, « à venir ») : 11 couronnes au total,
-« COURONNES DE L’HEURE · n/11 ».
+gardien, plus une couronne solitaire hors gardiens : « MAIN LÉGÈRE »
+(jury Les Minutes — scelle une minute sans tirer) : 12 couronnes au total,
+« COURONNES DE L’HEURE · n/12 ».
 
 | Couronne | Condition | Gardiens |
 |---|---|---|
 | **SANS BRISURE** | gagner sans perdre un seul cœur | les cinq |
 | **SOUS 90 SECONDES** | gagner en moins de 90 s | les cinq |
 | **VEILLE CALME** | gagner sans jamais déclencher la Veille complète | La Veilleuse |
+| **MAIN LÉGÈRE** | sceller au moins une minute sans tirer (n’importe quel univers) | Les Minutes (une unique couronne) |
 
-Attribuées dans le point unique de victoire du boss (`reward()`), annoncées en jeu
+MAIN LÉGÈRE est attribuée au premier gardien tombé après avoir scellé une minute
+(mécanique « La Minute Suspendue », §9decies). Les autres sont attribuées dans le
+point unique de victoire du boss (`reward()`), annoncées en jeu
 (« COURONNES DE L’HEURE · … »), affichées sur l’écran de fin et sur le briefing du monde 3.
 Les quatre autres gardiens attribuent déjà « Sans Brisure » et « Sous 90 secondes » :
 l’architecture est en place pour la suite.
@@ -938,3 +942,38 @@ qui compte est l’arcade des bougies.
 
 Aucune vie, aucun projectile nouveau, aucune barre de vie. Les mondes 1 et 2 restent
 intouchés.
+
+## 9decies. Sixième retour en jeu : les shmups modernes, adaptés
+
+Sources : SHMUP Creator ([docs — Gameplay, scoring tab](https://www.shmupcreator.com/doc/?docs=shmupcreator%2Feditors%2Fgameplay) — chaînes avec
+intervalle max, medals en chaîne, reset en bombe, gauge/super weapon et ses points par hit ;
+[Scoring systems](https://www.shmupcreator.com/doc/?docs=shmupcreator%2Fmaking-a-game%2Fscoring-systems)) ;
+Shmups Wiki ([Glossary](https://shmups.wiki/library/Help:Glossary),
+[Kaikan](https://shmups.wiki/library/Kaikan) — Count en fin de gardien et médailles
+auto-collectées par annulation,
+[Radirgy](https://shmups.wiki/library/Radirgy) — jauge de multiplicateur qui se vide,
+[Radiant Silvergun](https://shmups.wiki/library/Radiant_Silvergun) — chaînes de familles).
+Quatre adaptations — aucune nouvelle ressource, aucune barre de vie, aucun chrono. La clarté
+qui a noyé les scellés guide toujours ton jeu ; les médailles et le « Count » de Kaikan sont
+écartés volontairement pour éviter le même bruit.
+
+### La chaîne visible
+Le combo existait sans être lu. En bas à droite de l’écran : un arc or qui se vide selon le
+temps de chaîne restant (`comboTime`), texte «×N » au centre, « COMBO » au-dessus, l’arc
+brûle rouge sous 30 %. Même information qu'une jauge de chaîne SHMUP Creator, aucun nouvel HUD.
+
+### Le Maillon PRIME
+Tuer une cible PRIME annule tous les esprits hostiles présents à l’écran : chacun devient un
+cachet d’or (+50). La prime ne paie plus seulement +400 visibles : c’est le moment bombe du
+pack — pluie d’éclats + timbre grave, comme la super weapon de la doc.
+
+### Le cachet du cadran
+Chaque gardien du monde 3 tombé verse **+1000**, sans condition (pas de combo requis, pas de
+purisme). La minute est rendue — un point c’est tout.
+
+### La Minute Suspendue — MAIN LÉGÈRE
+Une lettre scellée traverse l’écran en vague 3 de chaque univers. Elle ne tire pas.
+Si elle traverse sans qu’un tir ne la touche — ou si le joueur la reçoit en vol (rayon 26) —
+la minute est rendue sans un coup : **+400** et, au premier gardien tombé ensuite, la
+couronne **MAIN LÉGÈRE** (famille « Les Minutes », 12 couronnes au total).
+Un tir la brise : +50, aucun crédit. Toujours une seule lettre par univers.

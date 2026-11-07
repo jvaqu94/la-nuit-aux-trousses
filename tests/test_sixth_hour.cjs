@@ -1094,6 +1094,33 @@ out.trials={counts:trialCounts,names:SH.TRIALS.map(t=>t.short),objective:SH.obje
 Camp.useClassicWorld();
 out.classicAfter=Camp.activeWorld;
 
+/* 17 · Retour 6 — les shmups modernes : la lettre suspendue, le cancel PRIME, le cachet. */
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=3;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;SH.letters.length=0;
+newWave();
+const letter=SH.letters[0];
+out.retour={spawned:!!letter};
+const scoreB=score;
+SH.resolveLetter(SH.letters[0],true);
+out.retour.shattered={score:score-scoreB,legere:!!SH.mission.legere,gone:SH.letters.every(l=>l.dead)};
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=3;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;SH.letters.length=0;
+newWave();
+const scoreC=score;
+SH.resolveLetter(SH.letters[0],false);
+out.retour.sealed={score:score-scoreC,legere:!!SH.mission.legere,gone:SH.letters.every(l=>l.dead)};
+Camp.beginWorld(3);stage=0;world=worlds[0];wave=1;state='play';
+enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
+SH.marks.length=0;SH.salt.length=0;newWave();wave=1;newWave();
+spawnEnemy({kind:SH.mission.prime,x:400,y:300,group:1,index:0,pattern:99});
+const primeTok=enemies[enemies.length-1];primeTok.elite=false;primeTok.tier=1;
+hostile=[{x:120,y:120,vx:0,vy:0,type:'spirit',r:7,damage:25,life:1,grazed:false,age:0,speed:100},{x:200,y:160,vx:0,vy:0,type:'spirit',r:7,damage:25,life:1,grazed:false,age:0,speed:140}];
+const scoreD=score,comboD=combo;
+reward(primeTok);
+out.retour.primeCancel={hostileLeft:hostile.length,score:score-scoreD,expected:100*comboD+400+2*50};
+
 globalThis.__RESULT__=out;
 })();
 `;
@@ -1481,6 +1508,16 @@ assert.deepEqual(r.trials.counts,[1,1,1,1,1],'chaque univers doit valider son é
 assert.deepEqual(r.trials.names,['SCEAUX','ÉCHOS','TRACES','MÈCHES','CHIFFRES'],'les cinq épreuves doivent rester distinctes');
 assert.ok(r.trials.objective.includes('ÉPREUVE CHIFFRES 1/3'),'la progression de l’épreuve doit rester visible dans le bandeau');
 assert.equal(r.classicAfter, 1, 'retour au monde classique intact');
+
+assert.equal(r.retour.spawned,true,'la lettre suspendue traverse l’univers en vague 3');
+assert.equal(r.retour.shattered.score,50,'un tir sur la lettre brise le sceau : +50');
+assert.equal(r.retour.shattered.legere,false,'briser le sceau n’accorde jamais la minute');
+assert.equal(r.retour.shattered.gone,true,'la lettre brisée se retire proprement');
+assert.equal(r.retour.sealed.score,400,'sceller la minute paie +400');
+assert.equal(r.retour.sealed.legere,true,'sceller une minute sans tirer ouvre la couronne MAIN LÉGÈRE');
+assert.equal(r.retour.sealed.gone,true,'la lettre scellée se retire proprement');
+assert.equal(r.retour.primeCancel.hostileLeft,0,'une prime abattue annule tous les esprits à l’écran');
+assert.equal(r.retour.primeCancel.score,r.retour.primeCancel.expected,'prime + cachets : l’écran entier paie (100×combo + 400 + 2×50)');
 
 console.log('Monde 3 · La Sixième Heure — boucle réelle sans exception ('+r.loop.maxFoes+' ennemis max, '+r.loop.maxHostile+' projectiles max), budgets relevés (≤12 ennemis, ≤4 tirs, cadence ≥1,9 s), toutes les formes tirent, héritages halo/relais/leurre/lien/mémoire, 5 gardiens sans barre de vie aux victoires distinctes, 15 minutes rendues, codes créateur Monde2/Monde3 sans score, tir jamais coupé même flamme épuisée, consignes en clair, 18 silhouettes et 5 décors vus de dessus, cinq épreuves de maîtrise spécifiques au monde 3, labyrinthe destructible à butin scellé (défilement ×1,5, brèches, coincement meurtrier, mondes 1 et 2 intacts), 3 pièges vicieux (volet claqueur, moucheur de mèches, faux-cierge), 15 minutes ramassables et dessinées, Faubourg remis dans son thème, aucun sprite en esquisse, Veilleuse à jauge unique avec mèches dessinées, salve de défense et tirage aléatoire, déblocage 1→2→3 et sauvegardes rétro-compatibles : OK');
 

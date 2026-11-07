@@ -2,8 +2,8 @@
 (()=>{
 'use strict';
 const KEY='minuit-campaign-v1';
-const CROWN_KINDS=['veilleuse','sonneur','passeur','cueilleuse','chasseur'];
-const CROWN_SLOTS=['patience','calme','rapide'];
+const CROWN_KINDS=['veilleuse','sonneur','passeur','cueilleuse','chasseur','minutes'];
+const CROWN_SLOTS=['patience','calme','rapide','legere'];
 const sanitizeCrowns=value=>{const source=value&&typeof value==='object'&&!Array.isArray(value)?value:{},out={};for(const kind of CROWN_KINDS){const list=Array.isArray(source[kind])?source[kind]:[];out[kind]=[...new Set(list.filter(s=>CROWN_SLOTS.includes(s)))]}return out};
 const blank=()=>({version:1,world1Completed:false,world2Unlocked:false,world2Completed:false,cardOath:false,lastWorld:1,choice:'',character:'witch',world2Started:false,world3Unlocked:false,world3Started:false,world3Completed:false,cardSixthHour:false,minutesKept:0,crowns:sanitizeCrowns()});
 function normalize(value){
