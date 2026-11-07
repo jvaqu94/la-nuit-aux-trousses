@@ -64,6 +64,8 @@ global.document = {
   addEventListener() {}
 };
 global.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) };
+// Les popups d'introduction ne se déclenchent qu'une fois par appareil : on les marque tous vus pour des tests déterministes.
+store.set('minuit-sixth-intros', JSON.stringify(['w3-faubourg','w3-minute1','w3-minute2','w3-minute3','w3-stage-1','w3-stage-2','w3-stage-3','w3-stage-4','w3-boss-veilleuse','w3-boss-sonneur','w3-boss-passeur','w3-boss-cueilleuse','w3-boss-chasseur']));
 global.Image = class { constructor() { this.complete = true; this.naturalWidth = 96; this.naturalHeight = 96; } addEventListener() {} set src(v) { this._src = v; } get src() { return this._src; } };
 global.devicePixelRatio = 1;
 global.innerWidth = 1366;
@@ -130,14 +132,26 @@ freshWave(1);
 for(let i=0;i<40;i++)spawnEnemy({kind:'wickWarden',x:120+(i%5)*140,group:1,index:i%2,pattern:99});
 out.foeCap={live:SH.liveFoes(),max:SH.tune().foes,budget:SH.BUDGET.foes};
 
-/* 6 · Héritage protecteur : les dégâts sont réduits dans le halo, pas ailleurs */
+/* 6 · Héritage protecteur : le halo immunise quand il est allumé, rien quand il s'éteint */
 freshWave(1);
 spawnEnemy({kind:'wickWarden',x:400,y:300,group:1,index:0,pattern:99});
-const warden=enemies[enemies.length-1];warden.y=300;warden.homeY=300;warden.halo=150;
+const warden=enemies[enemies.length-1];warden.y=300;warden.homeY=300;warden.halo=150;warden.haloOn=true;warden.haloTimer=3;
 spawnEnemy({kind:'bronzeCrow',x:400,y:300,group:2,index:1,pattern:99});
 const inside=enemies[enemies.length-1];inside.y=300;inside.homeY=300;inside.hp=inside.max=100;
 const hpBefore=inside.hp;player.x=400;player.y=300;damageEnemy(inside,10,false);
 out.wardIn=hpBefore-inside.hp;
+warden.haloOn=false;warden.haloTimer=2.2;
+const hpOpen=inside.hp;damageEnemy(inside,10,false);
+out.wardOff=hpOpen-inside.hp;
+warden.haloOn=true;warden.haloTimer=3;
+const hpOn=inside.hp;damageEnemy(inside,10,false);
+out.wardOn=hpOn-inside.hp;
+// le Garde-mèche lui-même reste vulnérable
+const wHp=warden.hp;damageEnemy(warden,10,false);
+out.wardWarden=wHp-warden.hp;
+// et le creux du halo finit par rendre le halo à nouveau actif
+SH.moveEnemy(warden,2.3);
+out.haloCycle={on:warden.haloOn===true};
 player.x=60;player.y=820;inside.x=700;const hp2=inside.hp;damageEnemy(inside,10,false);
 out.wardOut=hp2-inside.hp;
 
@@ -220,10 +234,11 @@ for(const n of [1,2,3]){
   SH.tick(1/60);
   out.veilleuse['after'+n]=v.vials.map(vial=>vial.state);
 }
+out.veilleuse.vialBurst=hostile.length;
 out.veilleuse.label=v.label;
 SH.moveBoss(v,1/60);
 out.veilleuse.phase=v.phase;out.veilleuse.value=v.value;out.veilleuse.lit=0;
-v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;
+v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;out.veilleuse.coreHome=v.core.home;
 // les scellés seuls ne suffisent pas non plus : cinq mèches allumées, aucun cœur
 let w2b=bossFor(0);
 const vialXY2=n=>({x:w2b.x+(n-2)*58,y:w2b.y+64});
@@ -408,6 +423,19 @@ const jumpBad=Camp.redeemCreatorCode('Monde3_9');
 const jumpOk=Camp.redeemCreatorCode('Monde3_3');
 out.code.jump={nonAdmin:jumpNonAdmin,bad:jumpBad,ok:jumpOk,stage,activeWorld:Camp.activeWorld,state,runId};
 transition=0;transitionBoss=false;pendingBoss=false;
+
+/* Introduction par popup : une mécanique majeure annonce sa loi en pause une seule fois. */
+localStorage.setItem('minuit-sixth-intros','[]');
+freshWave(1);
+out.intro={shown:state,title:null};
+const overlayHtml=(document.getElementById('overlay')||{}).innerHTML||'';
+out.intro.title=overlayHtml.includes('Le Faubourg des veilles');
+out.intro.paused=state==='instruction';
+localStorage.setItem('minuit-sixth-intros',JSON.stringify(['w3-faubourg']));
+freshWave(1);
+out.intro.seenAgain=state;
+localStorage.setItem('minuit-sixth-intros',JSON.stringify(['w3-faubourg','w3-minute1','w3-minute2','w3-minute3','w3-stage-1','w3-stage-2','w3-stage-3','w3-stage-4','w3-boss-veilleuse','w3-boss-sonneur','w3-boss-passeur','w3-boss-cueilleuse','w3-boss-chasseur']));
+state='play';
 
 /* 15 · Direction artistique et décors PROPRES au monde 3.
    Le monde 3 ne doit plus ni réutiliser les peintures du monde 1, ni dessiner
@@ -766,7 +794,7 @@ out.snuffer={mark:!!snuffMark&&snuffMark.snuff===true,flame0:SH.flame};
 player.x=snuffMark.x;player.y=snuffMark.y;
 SH.tick(1.3);
 out.snuffer.flame1=SH.flame;out.snuffer.stolen=snuffer.stolen;
-// Sa flamme volée protège les autres, comme le halo du Garde-mèche.
+// Sa flamme volée immunise les autres, comme le halo du Garde-mèche.
 player.x=720;player.y=820;
 spawnEnemy({kind:'waxCourier',x:400,y:400,group:2,index:0,pattern:99});
 const shielded=enemies[enemies.length-1];
@@ -998,6 +1026,9 @@ gfx.drawImage=realDrawImage||(()=>{});gfx.fillText=realText;
 Camp.beginWorld(3);stage=0;world=worlds[0];wave=1;state='play';
 enemies=[];hostile=[];shots=[];drops=[];hazards=[];obstacles=[];gates=[];
 SH.marks.length=0;SH.salt.length=0;newWave();
+out.flow={w1:makeSchedule().length,w4:null};
+wave=2;newWave();out.flow.w2=makeSchedule().length;
+wave=1;newWave();
 out.prime={kind:SH.mission.prime,inPool:world.foes.includes(SH.mission.prime)};
 out.prime.banner=SH.objectiveText().includes('PRIME');
 const primeKind=SH.mission.prime;
@@ -1122,7 +1153,8 @@ for (const t of r.tuning) {
 }
 assert.deepEqual(r.tuning.map(t => t.axes), [1, 2, 2, 3, 3], 'la difficulté doit monter par les décisions');
 
-assert.ok(r.wardIn < r.wardOut && r.wardIn > 0, 'le halo protecteur doit réduire les dégâts (héritage monde 1)');
+assert.equal(r.wardIn, 0, 'le halo allumé immunise (héritage monde 1, version monde 3)');
+assert.ok(r.wardOff > r.wardIn, 'le halo s’éteint par cycles et la cible redevient vulnérable');
 assert.equal(r.marksBefore, 2, 'le facteur de cire annonce un réel et un leurre');
 assert.equal(r.lureLanguage, true);
 assert.ok(r.relays >= 1, 'tuer la source doit compter comme relais brisé');
@@ -1156,6 +1188,8 @@ assert.equal(r.veilleuse.gateSealsOnly, 1, 'sans trois mèches, les scellés seu
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
 assert.equal(r.veilleuse.value, .5, 'scellés et mèches révèlent la seconde phase sans tuer le boss');
 assert.equal(r.veilleuse.phase, 2, 'la Veilleuse révèle son cœur après scellés et mèches');
+assert.equal(r.veilleuse.vialBurst, 18, 'chaque scellé brisé souffle six braises (3 × 6)');
+assert.notEqual(r.veilleuse.coreHome, 400, 'le cœur se dérobe après chaque impact');
 assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
 assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
@@ -1216,6 +1250,9 @@ assert.equal(r.code.jump.ok, true, 'le créateur saute directement dans l’univ
 assert.equal(r.code.jump.stage, 2, 'Monde3_3 lance le troisième univers du monde 3');
 assert.equal(r.code.jump.activeWorld, 3);
 assert.equal(r.code.jump.state, 'play');
+assert.equal(r.intro.paused, true, 'une instruction majeure met le vol en pause');
+assert.equal(r.intro.title, true, 'le popup annonce le titre de l’instruction');
+assert.equal(r.intro.seenAgain, 'play', 'une fois lue, l’instruction ne revient pas');
 assert.equal(r.code.finale, true, 'Monde2 ouvre toujours sa rencontre');
 
 assert.equal(r.art.kinds, 18, '13 formes + 5 gardiens doivent avoir leur silhouette');
@@ -1342,6 +1379,14 @@ assert.equal(r.prime.banner, true, 'la PRIME est affichée dans le bandeau d’o
 assert.equal(r.prime.paid, true, 'abattre la cible désignée paie +400');
 assert.equal(r.prime.combo, true, 'abattre la cible désignée ajoute un pas de combo');
 assert.equal(r.prime.elsewhere, true, 'hors du Faubourg, pas de prime');
+assert.equal(r.wardIn, 0, 'un allié sous halo allumé est immuNISÉ');
+assert.equal(r.wardOff, 10, 'au creux, le halo s’éteint et la cible redevient vulnérable');
+assert.equal(r.wardOn, 0, 'quand le halo se rallume, la cible est de nouveau immuNISÉE');
+assert.equal(r.wardWarden, 10, 'le Garde-mèche lui-même reste vulnérable');
+assert.equal(r.haloCycle.on, true, 'le halo finit par se rallumer (cycle allumé)');
+assert.equal(r.wardOut, 10, 'loin du halo, les dégâts sont normaux');
+assert.equal(r.flow.w1, 35, 'la vague 1 du Faubourg tient la route (35 ennemis)');
+assert.equal(r.flow.w2, 40, 'la vague 2 du Faubourg tient la route (40 ennemis)');
 assert.equal(r.triage.mimic, true, 'le bandeau désigne le Faux-cierge tant qu’il reste');
 assert.equal(r.triage.warden, true, 'le bandeau désigne le Garde-mèche en priorité');
 assert.equal(r.triage.clear, true, 'sans menace, le bandeau ne désigne rien');
@@ -1370,7 +1415,7 @@ assert.equal(r.snuffer.mark, true, 'le mouchage doit être télégraphié');
 assert.ok(r.snuffer.flame0 > 0, 'le scénario doit partir avec une flamme');
 assert.equal(r.snuffer.flame1, r.snuffer.flame0 - 1, 'le Moucheur souffle une mèche');
 assert.equal(r.snuffer.stolen, 1, 'la mèche volée doit être portée');
-assert.equal(r.snuffer.protected, 5.5, 'la flamme volée protège les autres (dégâts ×0,55)');
+assert.equal(r.snuffer.protected, 0, 'la flamme volée immunise les autres (comme tout halo allumé)');
 assert.equal(r.snuffer.returned, 1, 'tuer le Moucheur rend la mèche');
 
 /* Faux-cierge : le ramasser mord, le tirer perce. */
@@ -1418,8 +1463,8 @@ assert.ok(r.wicks.guardScale.full >= 1.9 && r.wicks.guardScale.last <= 4.6, 'les
 assert.equal(r.wicks.volleySpeed, 168, 'la salve de défense reste sous le plafond de vitesse du monde');
 assert.equal(r.ashes.hit, 1, 'le cœur encaissé compte');
 assert.equal(r.ashes.scheduled, true, 'chaque impact déclenche les cendres');
-assert.equal(r.ashes.crown, 8, 'la couronne de cendres compte huit braises');
-assert.equal(r.ashes.cinderSpeed, 118, 'les braises restent lentes et lisibles');
+assert.equal(r.ashes.crown, 10, 'la couronne de cendres compte dix braises');
+assert.equal(r.ashes.cinderSpeed, 132, 'les braises restent lentes et lisibles');
 assert.equal(r.flare.armed, true, 'une mèche morte peut se réchauffer en phase 2');
 assert.equal(r.flare.fired, true, 'la braise part après son annonce');
 assert.equal(r.flare.speed, 168, 'la braise respecte le plafond de vitesse');

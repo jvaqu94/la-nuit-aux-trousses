@@ -803,3 +803,49 @@ chute et chaîne des plis (vagues 1→2→3, mauvais ordre, complet à trois), a
 couronnes (veilleuse propre+rapide+calme ; sonneur raté sans maîtrise ; sonneur propre et
 rapide), code `Monde3_3` (saut admin, stage 2, monde 3), `Monde3_9` rejeté, saut refusé
 hors admin. Suites des mondes 1, 2 et 3, du duel et du cloud : vertes.
+
+## 9septies. Deuxième retour en jeu : lisibilité, rythme et intensité
+
+Le retour après la première livraison : la tranche était jouable mais les vagues 1 et 2
+étaient trop courtes, les consignes doublées (bandeau HTML hors du jeu + texte dans la
+zone de jeu), le halo du Garde-mèche expliqué nulle part, et la Veilleuse trop simple
+à tuer. Quatre corrections, aucune nouvelle ressource.
+
+### Des vagues 1 et 2 qui tiennent la route
+
+Le Faubourg passe de 16 + 3 × vague formes à **30 + 5 × vague** (vague 1 : 35 ennemis,
+vague 2 : 40), toujours à une apparition par seconde maximum — l'anti-frustration monde 3
+est conservée : plus d'ennemis, pas de trous dans le rythme.
+
+### Une seule voix pour les consignes
+
+Le bandeau HTML (`#sixthObjective`) reste la source persistante des objectifs. Le toast (`#toast`) ne porte plus rien de redondant. Pendant un gardien, le bandeau se masque
+même : la jauge canvas du gardien est la seule consigne présente.
+
+Les mécaniques majeures ne réapparaissent pas en bavardage : à la première apparition sur un
+appareil, **le vol se met en pause et un popup introduit la nouveauté** (« NOUVELLE
+INSTRUCTION »), avec un bouton « C’est compris ». Le flag par appareil (`minuit-sixth-intros`
+dans `localStorage`) évite tout popup répété. Popup pour : Faubourg, Minute 1, Minute 2
+(tenue), Minute 3 (sceaux), chaque univers au premier passage, chaque gardien la première
+fois. Le popup suspend le jeu (`state='instruction'`) : la boucle n'avance plus, le décor
+reste gelé, aucun projectile ne joue.
+
+### Le halo du Garde-mèche : un bouclier qui s'allume et s'éteint
+
+Plus de « dégâts réduits ½ » invisible. Le halo s'allume et s'éteint **par cycles**
+(3,0 s allumé / 2,2 s éteint), visible : halo plein et lumineux quand il est actif,
+**cercle pointillé gris « HALO ÉTEINT »** quand il est éteint. Alliés sous halo actif :
+**IMMUNISÉS** (aucun dégât, même par les empoisonnements). Au creux du cycle (ou une fois
+le Garde-mèche vaincu) : vulnérables, et étiquetés **OUVERT**. Le Garde-mèche lui-même
+reste vulnérable en permanence — la priorité du jeu est limpide : tue-le en premier.
+Le Moucheur volant une mèche immunise de la même façon.
+
+### La Veilleuse densifiée (v3)
+
+- chaque scellé brisé souffle une **couronne de six braises** radiales ;
+- le cœur **se dérobe** après chaque impact (225 / 400 / 575), fini le camping sur une cible fixe ;
+- la couronne de cendres passe de 8 à **10 braises** (vitesse 118 → 132) ;
+- la fenêtre d'ouverture (1,05 s → **0,95 s**), la cadence d'ouverture (2,6 s → **2,35 s**)
+  et la cadence des salves (2,1 s → **1,9 s**) sont resserrées.
+
+Aucune vie, aucun projectile nouveau, aucune barre de vie : plus dense, jamais gratuit.
