@@ -140,20 +140,25 @@ spawnEnemy({kind:'bronzeCrow',x:400,y:300,group:2,index:1,pattern:99});
 const inside=enemies[enemies.length-1];inside.y=300;inside.homeY=300;inside.hp=inside.max=100;
 const hpBefore=inside.hp;player.x=400;player.y=300;damageEnemy(inside,10,false);
 out.wardIn=hpBefore-inside.hp;
-warden.haloOn=false;warden.haloTimer=2.2;
+warden.haloOn=false;warden.haloTimer=2.6;
 const hpOpen=inside.hp;damageEnemy(inside,10,false);
 out.wardOff=hpOpen-inside.hp;
-warden.haloOn=true;warden.haloTimer=3;
+warden.haloOn=true;warden.haloTimer=2;
 const hpOn=inside.hp;damageEnemy(inside,10,false);
 out.wardOn=hpOn-inside.hp;
-// le Garde-mèche lui-même reste vulnérable
+// le Garde-mèche lui-même est immunisé tant que son cercle luit
 const wHp=warden.hp;damageEnemy(warden,10,false);
 out.wardWarden=wHp-warden.hp;
-// et le creux du halo finit par rendre le halo à nouveau actif
-SH.moveEnemy(warden,2.3);
+// le halo allumé protège tout l'écran, même loin du porteur
+player.x=60;player.y=820;inside.x=700;const hp3=inside.hp;damageEnemy(inside,10,false);
+out.wardOut=hp3-inside.hp;
+warden.haloOn=false;warden.haloTimer=2.6;const hp4=inside.hp;damageEnemy(inside,10,false);
+out.wardOutOff=hp4-inside.hp;
+// cycles : le creux rallume la fenêtre, et la flamme se rallume ensuite
+warden.haloOn=false;warden.haloTimer=0.01;SH.moveEnemy(warden,1/30);
 out.haloCycle={on:warden.haloOn===true};
-player.x=60;player.y=820;inside.x=700;const hp2=inside.hp;damageEnemy(inside,10,false);
-out.wardOut=hp2-inside.hp;
+warden.haloTimer=0.01;SH.moveEnemy(warden,1/30);
+out.haloCycleOff={on:warden.haloOn===true};
 
 /* 7 · Relais annulable : tuer la source annule son télégraphe */
 freshWave(1);
@@ -1382,9 +1387,11 @@ assert.equal(r.prime.elsewhere, true, 'hors du Faubourg, pas de prime');
 assert.equal(r.wardIn, 0, 'un allié sous halo allumé est immuNISÉ');
 assert.equal(r.wardOff, 10, 'au creux, le halo s’éteint et la cible redevient vulnérable');
 assert.equal(r.wardOn, 0, 'quand le halo se rallume, la cible est de nouveau immuNISÉE');
-assert.equal(r.wardWarden, 10, 'le Garde-mèche lui-même reste vulnérable');
+assert.equal(r.wardWarden, 0, 'le Garde-mèche lui-même est immunisé tant que son cercle luit');
 assert.equal(r.haloCycle.on, true, 'le halo finit par se rallumer (cycle allumé)');
-assert.equal(r.wardOut, 10, 'loin du halo, les dégâts sont normaux');
+assert.equal(r.wardOut, 0, 'le halo allumé protège tout l’écran, même loin du porteur');
+assert.equal(r.wardOutOff, 10, 'au creux, plus personne n’est protégé, même loin du porteur');
+assert.equal(r.haloCycleOff.on, false, 'la flamme du creux finit par s’éteindre au tour suivant (cycle éteint)');
 assert.equal(r.flow.w1, 35, 'la vague 1 du Faubourg tient la route (35 ennemis)');
 assert.equal(r.flow.w2, 40, 'la vague 2 du Faubourg tient la route (40 ennemis)');
 assert.equal(r.triage.mimic, true, 'le bandeau désigne le Faux-cierge tant qu’il reste');

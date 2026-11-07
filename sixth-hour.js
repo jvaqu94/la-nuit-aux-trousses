@@ -41,7 +41,7 @@ const VICTORY={
 /* Une phrase par univers, écrite comme une consigne de jeu, pas comme une
    énigme : ce qu'il faut faire, et ce qui arrive si on ne le fait pas. */
 const RULES=[
- 'TUE le Garde-mèche : son halo IMMUNISE les autres monstres quand il est allumé, mais s’éteint par cycles — frappe pendant le creux. Au labyrinthe, tire sur les trois runes dans l’ordre A → B → C pour ouvrir les portes ; une cache latérale reste facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge. RAMASSE les plis cachetés dans l’ordre I → II → III.',
+ 'TUE le Garde-mèche : tant que son halo luit, TOUT le pack est IMMUNISÉ — lui compris, et chaque monstre porte son cercle. Il luit 2 s puis s’éteint 2,6 s : frappe pendant le creux. Au labyrinthe, tire sur les trois runes dans l’ordre A → B → C pour ouvrir les portes ; une cache latérale reste facultative. CASSE les volets qui claquent. TIRE sur un cierge à sceau rouge avant de le ramasser : c’est un Faux-cierge. RAMASSE les plis cachetés dans l’ordre I → II → III.',
  'CHOISIS une cloche du labyrinthe : aligne-toi dessous et tire pour ouvrir uniquement son passage. En combat, briser une cloche suspend les tirs de sa jumelle pendant 1,5 seconde.',
  'ÉVITE le sel blanc : il te ralentit. Il tombe là où tu étais, pas là où tu es.',
  'ALLUME les lanternes en les touchant. TUE le Moucheur : il souffle une mèche et s’en sert pour protéger les autres — le tuer te la rend.',
@@ -107,8 +107,8 @@ const nextVial=e=>(e.vials||[]).find(v=>v.state==='next')||null;
 const INTRO_SEEN='minuit-sixth-intros';
 function seenIntros(){try{return new Set(JSON.parse(localStorage.getItem(INTRO_SEEN)||'[]'))}catch{return new Set()}}
 function world3Intro(s,w){
- if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Ses alliés sont <b>IMMUNISÉS</b> tant que le halo est allumé. Il s’éteint par cycles — c’est là qu’il faut frapper. Ou tue d’abord le Garde-mèche, et son halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une proie payante : +400.</p>'};
- if(s===0&&w===2)return{key:'w3-minute1',title:'Minute 1 · Le Garde-mèche',body:'<p>Le Garde-mèche <b>garde la minute</b>. Son halo s’allume et s’éteint par cycles : au creux, ses alliés redeviennent vulnérables.</p><p><b>Tue-le d’abord</b>, puis marche sur le cadran pour rendre la minute au monde.</p>'};
+ if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Tant qu’il est allumé, <b>tout le pack est IMMUNISÉ</b> — lui compris : un cercle entoure chaque monstre. Il luit 2 s puis s’éteint 2,6 s. <b>Frappe pendant le creux</b>, ou tue d’abord le porteur — le halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une proie payante : +400.</p>'};
+ if(s===0&&w===2)return{key:'w3-minute1',title:'Minute 1 · Le Garde-mèche',body:'<p>Le Garde-mèche <b>garde la minute</b>. Son halo luit 2 s et s’éteint 2,6 s : au creux, tout le monde redevient vulnérable — lui compris.</p><p><b>Frappe pendant le creux</b>, ou tue-le d’abord. Puis marche sur le cadran pour rendre la minute au monde.</p>'};
  if(s===0&&w===3)return{key:'w3-minute2',title:'Minute 2 · Tenue',body:'<p>Survis <b>22 secondes</b>. La minute se libère ensuite — marche sur le cadran.</p>'};
  if(s===0&&w===4)return{key:'w3-minute3',title:'Minute 3 · Les sceaux',body:'<p>Deux flammes creuses portent le sceau. <b>Tire dessus</b> pour libérer la minute.</p>'};
  if(w>=1&&w<=4&&s>=1)return{key:'w3-stage-'+s,title:'Nouvelle loi',body:'<p>'+RULES[s]+'</p>'};
@@ -119,8 +119,10 @@ function instructionPopup(key,title,body){
  try{const s=seenIntros();s.add(key);localStorage.setItem(INTRO_SEEN,JSON.stringify([...s]))}catch{}
  state='instruction';
  overlay('<section class="instruction-popup" role="dialog" aria-modal="true"><div class="eyebrow">Nouvelle instruction</div><h2 class="local-title">'+title+'</h2><div class="instruction-body">'+body+'</div><button class="primary instruction-ok" id="instructionOk">C’est compris →</button></section>');
+ const ov=(typeof document!=='undefined')&&document.getElementById('overlay');
+ if(ov&&ov.classList)ov.classList.add('instruction-backdrop');
  const btn=(typeof document!=='undefined')&&document.getElementById('instructionOk');
- if(btn)btn.onclick=()=>{if(typeof hideOverlay==='function')hideOverlay();state='play'};
+ if(btn)btn.onclick=()=>{const o=(typeof document!=='undefined')&&document.getElementById('overlay');if(o&&o.classList)o.classList.remove('instruction-backdrop');if(typeof hideOverlay==='function')hideOverlay();state='play'};
  return true;
 }
 
@@ -146,11 +148,15 @@ function addMark(data){
 const isReal=m=>m.real===true;
 
 /* Le halo du Garde-mèche : un bouclier qui s'allume et s'éteint.
-   Alliés immunisés dedans tant qu'il est actif, vulnérables au creux. */
+   Allumé, il immunise TOUT l'écran — Garde-mèche compris : chaque monstre
+   porte son cercle. Éteint, plus personne n'est protégé : la fenêtre de tir. */
 function haloActive(warden){return !!warden&&!warden.dead&&warden.haloOn!==false}
-function wardenNear(x,y){return enemies.find(e=>!e.dead&&near(x,y,e.x,e.y,e.halo||150)&&(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0)))||null}
-function wardenAt(x,y){const w=wardenNear(x,y);return haloActive(w)?w:null}
-function playerInHalo(){return !!wardenAt(player.x,player.y)}
+const haloSource=e=>!e.dead&&(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0));
+function haloLit(){return enemies.some(e=>haloSource(e)&&haloActive(e))}
+/* Conservé pour le dessin : trouver un porteur proche (anneau pointillé). */
+function wardenNear(x,y){return enemies.find(e=>haloSource(e)&&near(x,y,e.x,e.y,e.halo||150))||null}
+function wardenAt(x,y){return haloLit()||null}
+function playerInHalo(){return haloLit()}
 
 function liveFoes(){return enemies.filter(e=>!e.dead&&!e.boss).length}
 
@@ -255,10 +261,10 @@ function moveEnemy(e,dt){
  if(!active()||!foeKinds.has(e.kind)||e.boss)return false;
  if(e.immunePing)e.immunePing=Math.max(0,e.immunePing-dt);
  if(e.kind==='wickWarden'){
-  e.haloTimer=(e.haloTimer==null?3.1:e.haloTimer)-dt;
+  e.haloTimer=(e.haloTimer==null?2.1:e.haloTimer)-dt;
   if(e.haloTimer<=0){
    e.haloOn=e.haloOn===false;
-   e.haloTimer=e.haloOn?3.0:2.2;
+   e.haloTimer=e.haloOn?2.0:2.6;
    particle(e.x,e.y,e.haloOn?'#ffd9a0':'#7c8a99',10);
    tone(e.haloOn?540:280,.12,'sine',.04,.9);
   }
@@ -484,8 +490,8 @@ damageEnemy=function(e,n,...rest){
  if(e.kind==='waxMimic'&&e.disguise){e.cleanSealShot=true;e.disguise=false;e.revealed=true;value*=2}
  if(e.kind==='unnamedDigit'&&e.digit===mission.digit)e.weakHit=true;
  if(e.kind==='unnamedDigit'&&e.digit===mission.digit)value*=2;
- /* Alliés sous halo actif : le coup est encaissé, aucun dégât. */
- if(e.kind!=='wickWarden'&&wardenAt(e.x,e.y)){e.hit=0;if((e.immunePing||0)<=0)particle(e.x,e.y,'#b9d8ea',8);e.immunePing=.9;return}
+ /* Halo allumé : plus personne ne perd de PV — pas même le porteur du cercle. */
+ if(haloLit()){e.hit=0;if((e.immunePing||0)<=0)particle(e.x,e.y,'#b9d8ea',8);e.immunePing=.9;return}
  if(e.kind==='hollowFlame'&&e.lit&&stage===2)value*=.55;
  return baseDamageEnemy(e,value,...rest);
 };
@@ -1030,9 +1036,10 @@ function draw(g){
    if(weak){g.fillStyle='#ffe6bd';g.font='bold '+(compactView()?'14px':'10px')+' Arial';g.fillText('FAIBLE ×2',e.x,e.y-44)}
    g.restore();
   }
-  if(!e.boss&&e.kind!=='wickWarden'){
-   const covered=wardenAt(e.x,e.y)!=null,nearby=wardenNear(e.x,e.y)!=null;
-   if(covered||nearby){g.save();g.textAlign='center';g.fillStyle=covered?'#b9d8ea':'#ffb08a';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText(covered?'IMMUNISÉ':'OUVERT',e.x,e.y+e.r+16);g.restore()}
+  if(!e.boss&&enemies.some(haloSource)){
+   const covered=haloLit();
+   if(covered){g.save();g.globalAlpha=.85;g.setLineDash([6,5]);g.lineWidth=2;g.strokeStyle='#b9d8ea';g.beginPath();g.arc(e.x,e.y,e.r+7,0,Math.PI*2);g.stroke();g.setLineDash([]);g.restore()}
+   g.save();g.textAlign='center';g.fillStyle=covered?'#b9d8ea':'#ffb08a';g.font=(compactView()?'13px':'9px')+' Arial';g.fillText(covered?'IMMUNISÉ':'OUVERT',e.x,e.y+e.r+16);g.restore()
   }
   if(e.kind==='waxMimic'){
    g.save();g.textAlign='center';
@@ -1280,7 +1287,7 @@ function withTrial(text){
 function stageZeroTriage(){
  if(stage!==0)return '';
  if(enemies.some(e=>!e.dead&&e.kind==='shutterImp'&&slams.some(s=>s.source===e)))return 'Volet claqueur : claquement imminent — tue-le ou casse le panneau';
- if(enemies.some(e=>!e.dead&&e.kind==='wickWarden'))return 'Garde-mèche : son halo immunise tes cibles — tue-le d’abord, ou frappe quand le halo s’éteint';
+ if(enemies.some(e=>!e.dead&&e.kind==='wickWarden'))return 'Garde-mèche : son halo luit 2 s et s’éteint 2,6 s — frappe pendant le creux, plus personne n’y a de cercle';
  if(enemies.some(e=>!e.dead&&e.kind==='waxCourier')&&marks.some(m=>m.real&&!m.struck))return 'Facteur de cire : le cercle PLEIN est le vrai, le pointillé est un leurre';
  if(enemies.some(e=>!e.dead&&e.kind==='waxMimic'))return 'Faux-cierge : tire dessus de loin, ne le ramasse pas';
  return '';
@@ -1311,7 +1318,7 @@ function refreshObjective(){
 }
 
 const style=document.createElement('style');
-style.textContent='.instruction-popup{width:100%;max-width:540px;background:#201a33f5;border:1px solid #ffd9a055;border-left:4px solid #ffd9a0;border-radius:14px;padding:18px 22px;text-align:left;color:#efe4f7;box-shadow:0 20px 60px #000a}.instruction-popup .eyebrow{color:#ffd9a0;letter-spacing:2px;font-size:10px;margin-bottom:6px}.instruction-popup h2.local-title{margin:4px 0 10px;font-size:clamp(22px,4vw,30px)}.instruction-popup .instruction-body p{margin:0 0 10px;font-size:13px;line-height:1.6;color:#d9cbdf}.instruction-popup .instruction-body b{color:#ffd9a0}.instruction-ok{margin-top:4px}.crowns-panel{margin:10px 0;padding:9px 12px;border:1px solid #d9a05f55;border-left:3px solid #ffd25e;border-radius:9px;background:#241f36cc;display:flex;flex-direction:column;gap:6px}.crowns-head{display:flex;justify-content:space-between;color:#ffd9a0;font:700 11px Georgia;letter-spacing:1px}.crowns-head span{color:#ffe6bd}.crown-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:#bda9c8;font:10px Arial}.crown-row b{color:#e8dcc0;min-width:150px;font-weight:600}.crown-slot{padding:2px 7px;border:1px solid #4a3b46;border-radius:20px;color:#8d7a9c;font:600 9px Arial;letter-spacing:.6px}.crown-slot.earned{border-color:#ffd25e88;color:#ffd25e;background:#ffd25e14}body.sixth-hour-theme{background:radial-gradient(ellipse at 22% 0,#2a2440,#12101f 68%)}body.sixth-hour-theme .home-hero{border-color:#d9a05f77}body.sixth-hour-theme .home-world-route{color:#ffd9a0}.sixth-hour-home .menu-kicker{color:#ffd9a0}.sixth-objective{margin:8px 0 0;padding:9px 12px;border:1px solid #d9a05f66;border-left:3px solid #ffd9a0;border-radius:8px;background:#1d1830cc;color:#ffe6bd;font-size:13px;line-height:1.35;letter-spacing:.2px}.sixth-objective.hidden{display:none}@media(max-width:720px){.sixth-objective{font-size:12px}}';
+style.textContent='#overlay.instruction-backdrop{background:radial-gradient(ellipse at center,rgba(15,12,27,.36),rgba(15,12,27,.62))!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}.instruction-popup{width:min(560px,94vw);background:#221d36ee;border:1px solid #ffd9a066;border-left:4px solid #ffd9a0;border-radius:14px;padding:18px 22px;text-align:left;color:#efe4f7;box-shadow:0 20px 60px #000a}.instruction-popup .eyebrow{color:#ffd9a0;letter-spacing:2px;font-size:10px;margin-bottom:6px}.instruction-popup h2.local-title{margin:4px 0 10px;font-size:clamp(22px,4vw,30px)}.instruction-popup .instruction-body p{margin:0 0 10px;font-size:13px;line-height:1.6;color:#d9cbdf}.instruction-popup .instruction-body b{color:#ffd9a0}.instruction-ok{margin-top:4px}.crowns-panel{margin:10px 0;padding:9px 12px;border:1px solid #d9a05f55;border-left:3px solid #ffd25e;border-radius:9px;background:#241f36cc;display:flex;flex-direction:column;gap:6px}.crowns-head{display:flex;justify-content:space-between;color:#ffd9a0;font:700 11px Georgia;letter-spacing:1px}.crowns-head span{color:#ffe6bd}.crown-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;color:#bda9c8;font:10px Arial}.crown-row b{color:#e8dcc0;min-width:150px;font-weight:600}.crown-slot{padding:2px 7px;border:1px solid #4a3b46;border-radius:20px;color:#8d7a9c;font:600 9px Arial;letter-spacing:.6px}.crown-slot.earned{border-color:#ffd25e88;color:#ffd25e;background:#ffd25e14}body.sixth-hour-theme{background:radial-gradient(ellipse at 22% 0,#2a2440,#12101f 68%)}body.sixth-hour-theme .home-hero{border-color:#d9a05f77}body.sixth-hour-theme .home-world-route{color:#ffd9a0}.sixth-hour-home .menu-kicker{color:#ffd9a0}.sixth-objective{margin:8px 0 0;padding:9px 12px;border:1px solid #d9a05f66;border-left:3px solid #ffd9a0;border-radius:8px;background:#1d1830cc;color:#ffe6bd;font-size:13px;line-height:1.35;letter-spacing:.2px}.sixth-objective.hidden{display:none}@media(max-width:720px){.sixth-objective{font-size:12px}}';
 document.head.appendChild(style);
 
 window.SixthHour={

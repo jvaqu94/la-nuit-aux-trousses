@@ -849,3 +849,34 @@ Le Moucheur volant une mèche immunise de la même façon.
   et la cadence des salves (2,1 s → **1,9 s**) sont resserrées.
 
 Aucune vie, aucun projectile nouveau, aucune barre de vie : plus dense, jamais gratuit.
+
+## 9octies. Troisième retour en jeu : l'écran respire, le halo protège vraiment
+
+Retour de test sur PC, trois remarques, trois corrections ciblées — toujours aucune
+ressource nouvelle, toujours la doctrine (pas de vie, pas de dégât pour le dégât, un
+verre à moitié plein).
+
+### Plus de « zooms » sur PC
+
+Le terrain ne se redimensionne plus silencieusement en boucle : le canevas n'est recréé
+que si sa taille réellement changée (fini la boucle de destruction/reconstruction du
+buffer à chaque `ResizeObserver`), et `fit()` n'écrit plus les variables `--field-*` que
+lorsqu'elles changent. Le jeu tient la même échelle du début à la fin du vol.
+
+### Le halo est devenu un vrai bouclier on/off
+
+Le halo du Garde-mèche (et la flamme volée du Moucheur) protège désormais **tout
+l'écran tant qu'il est allumé — porteur compris** : chaque monstre porte un cercle
+en pointillé et aucun PV ne tombe. Il s'allume **2 s** et s'éteint **2,6 s** : le creux
+durait toujours moins longtemps que la flamme. Les consignes (« OUVERT » / « IMMUNISÉ »)
+n'apparaissent que lorsqu'un halo est réellement en jeu, et la légende du Garde-mèche,
+les règles et les popups ont été réécrits pour dire exactement ça. Tant que le cercle
+luit, on ne blesse personne ; quand il s'éteint, tout le monde redevient abîmable.
+
+### Les consignes en popup, le jeu visible derrière
+
+Le popup « Nouvelle instruction » affiche désormais le jeu en pause **derrière** un voile
+translucide (`.instruction-backdrop`, halo discret légèrement plus sombre au centre) —
+fini la fenêtre pleine écran qui cache la partie. Le jeu est gelé, lisible autour du
+popup, et le bouton « C’est compris » rend la main. Les autres overlays (menus, briefings)
+restent en opacité pleine, volontairement.
