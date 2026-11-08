@@ -132,18 +132,22 @@ freshWave(1);
 for(let i=0;i<40;i++)spawnEnemy({kind:'wickWarden',x:120+(i%5)*140,group:1,index:i%2,pattern:99});
 out.foeCap={live:SH.liveFoes(),max:SH.tune().foes,budget:SH.BUDGET.foes};
 
-/* 6 · Héritage protecteur : le halo immunise quand il est allumé, rien quand il s'éteint */
+/* 6 · Héritage protecteur : le halo immunise quand il est allumé, rien quand il s'éteint.
+   Une seule horloge partagée pour toute la meute : 2,1 s de lueur, puis 2,6 s de creux.
+   On fait avancer la vraie horloge du module — pas un état simulé sur l'ennemi. */
 freshWave(1);
 spawnEnemy({kind:'wickWarden',x:400,y:300,group:1,index:0,pattern:99});
-const warden=enemies[enemies.length-1];warden.y=300;warden.homeY=300;warden.halo=150;warden.haloOn=true;warden.haloTimer=3;
+const warden=enemies[enemies.length-1];warden.y=300;warden.homeY=300;warden.halo=150;
 spawnEnemy({kind:'bronzeCrow',x:400,y:300,group:2,index:1,pattern:99});
-const inside=enemies[enemies.length-1];inside.y=300;inside.homeY=300;inside.hp=inside.max=100;
-const hpBefore=inside.hp;player.x=400;player.y=300;damageEnemy(inside,10,false);
-out.wardIn=hpBefore-inside.hp;
-warden.haloOn=false;warden.haloTimer=2.6;
+const inside=enemies[enemies.length-1];inside.y=300;inside.homeY=300;inside.hp=inside.max=10000;
+const advanceBeat=sec=>{const n=Math.round(sec*60);for(let i=0;i<n;i++)SH.tick(1/60)};
+const immuneProbe=()=>{const hp0=inside.hp;damageEnemy(inside,10,false);return inside.hp===hp0};
+player.x=400;player.y=300;
+out.wardIn=(immuneProbe()?0:10);
+advanceBeat(2.2); /* la lueur s'éteint : c'est le creux */
 const hpOpen=inside.hp;damageEnemy(inside,10,false);
 out.wardOff=hpOpen-inside.hp;
-warden.haloOn=true;warden.haloTimer=2;
+advanceBeat(2.7); /* le creux se referme : la lumière revient */
 const hpOn=inside.hp;damageEnemy(inside,10,false);
 out.wardOn=hpOn-inside.hp;
 // le Garde-mèche lui-même est immunisé tant que son cercle luit
@@ -152,13 +156,13 @@ out.wardWarden=wHp-warden.hp;
 // le halo allumé protège tout l'écran, même loin du porteur
 player.x=60;player.y=820;inside.x=700;const hp3=inside.hp;damageEnemy(inside,10,false);
 out.wardOut=hp3-inside.hp;
-warden.haloOn=false;warden.haloTimer=2.6;const hp4=inside.hp;damageEnemy(inside,10,false);
+advanceBeat(2.2); /* la lueur expire, le creux revient */
+const hp4=inside.hp;damageEnemy(inside,10,false);
 out.wardOutOff=hp4-inside.hp;
-// cycles : le creux rallume la fenêtre, et la flamme se rallume ensuite
-warden.haloOn=false;warden.haloTimer=0.01;SH.moveEnemy(warden,1/30);
-out.haloCycle={on:warden.haloOn===true};
-warden.haloTimer=0.01;SH.moveEnemy(warden,1/30);
-out.haloCycleOff={on:warden.haloOn===true};
+advanceBeat(2.6); /* au tour suivant, la lumière se rallume */
+out.haloCycle={on:immuneProbe()};
+advanceBeat(2.4); /* puis la lumière expire de nouveau */
+out.haloCycleOff={on:immuneProbe()};
 
 /* 7 · Relais annulable : tuer la source annule son télégraphe */
 freshWave(1);
@@ -240,8 +244,8 @@ out.veilleuse.blocked=v.core.hits;
 // La ronde est debout : même pendant le flash, le cœur ABSORBE le tir
 v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);
 out.veilleuse.absorbed=v.core.hits;
-// Brise la ronde (les halos protecteurs sont éteints d'abord — la ronde tombe sous les coups) : la faille s'ouvre d'elle-même
-enemies.forEach(o=>{o.haloOn=false});
+// Brise la ronde (le battement de halo partagé est forcé au creux — la ronde tombe sous les coups) : la faille s'ouvre d'elle-même
+SH.setHaloBeat(false,3);
 let guard11a=40;
 while(enemies.some(o=>o.kind==='waxChorist'&&!o.dead)&&guard11a-->0){
  const wm=enemies.find(o=>o.kind==='waxChorist'&&!o.dead);
@@ -964,7 +968,7 @@ const ashV=bossFor(0);
 ashV.windows.forEach(w=>w.lit=false);
 SH.moveBoss(ashV,1/60);
 // la ronde est brisée d'abord : les cendres ne tombent que pour un cœur vraiment frappé
-enemies.forEach(o=>{o.haloOn=false});
+SH.setHaloBeat(false,3); /* le battement partagé est au creux pour briser la ronde */
 {let guard11c=40;while(enemies.some(o=>o.kind==='waxChorist'&&!o.dead)&&guard11c-->0){
  const wm=enemies.find(o=>o.kind==='waxChorist'&&!o.dead);
  damageEnemy(wm,99,false);

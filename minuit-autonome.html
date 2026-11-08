@@ -6750,12 +6750,16 @@ function countTrial(kind){
 let marks=[],salt=[],trail=[],mission={},habits=freshHabits(),boss=null,minute=null,meche=null;
 let slams=[],letters=[];
 let flame=3,frozen=[],spawnSerial=0,haloTime=0,gesture=null;
+/* Un seul métronome pour tout le halo : avant, chaque porteur avait sa propre
+   horloge — deux Garde-mèches décalés couvraient l’écran en permanence et les
+   monstres n’étaient jamais touchables. Le creux existe toujours. */
+let haloBeat={on:true,timer:2.1};
 
 function freshHabits(){return{relays:0,halos:0,salt:0,flames:0}}
 function reset(){
  marks=[];salt=[];trail=[];mission={};habits=freshHabits();boss=null;minute=null;meche=null;
  slams=[];letters=[];
- flame=3;frozen=[];spawnSerial=0;haloTime=0;gesture=null;
+ flame=3;frozen=[];spawnSerial=0;haloTime=0;gesture=null;haloBeat={on:true,timer:2.1};
 }
 const journeyBegin=Journey.begin,journeyRestore=Journey.restore;
 Journey.begin=function(...args){const r=journeyBegin(...args);reset();return r};
@@ -6862,9 +6866,23 @@ function drawWaxMark(g,m,progress){
 /* Le halo du Garde-mèche : un bouclier qui s'allume et s'éteint.
    Allumé, il immunise TOUT l'écran — Garde-mèche compris : chaque monstre
    porte son cercle. Éteint, plus personne n'est protégé : la fenêtre de tir. */
-function haloActive(warden){return !!warden&&!warden.dead&&warden.haloOn!==false}
+function haloActive(warden){return !!warden&&!warden.dead&&haloBeat.on}
 const haloSource=e=>!e.dead&&(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0));
-function haloLit(){return enemies.some(e=>haloSource(e)&&haloActive(e))}
+function haloLit(){return haloBeat.on&&enemies.some(haloSource)}
+/* Un seul battement par univers : toute la meute s’allume et s’éteint ensemble.
+   Le joueur peut compter : 2 s de lumière, 2,6 s pour frapper. */
+function tickHalo(dt){
+ haloBeat.timer-=dt;
+ if(haloBeat.timer>0)return;
+ haloBeat.on=!haloBeat.on;
+ haloBeat.timer=haloBeat.on?2.0:2.6;
+ const lit=haloBeat.on;
+ for(const o of enemies){if(o.dead)continue;if(!o.boss)o.shieldFx=lit?.85:-.6}
+ shieldFlash=lit?.3:0;
+ const bearer=enemies.find(e=>!e.dead&&(e.kind==='wickWarden'||(e.kind==='snufferHand'&&e.stolen>0)));
+ if(bearer)particle(bearer.x,bearer.y,lit?'#ffd9a0':'#7c8a99',12);
+ tone(lit?196:392,lit?.4:.18,'sine',.08,.9);
+}
 /* Conservé pour le dessin : trouver un porteur proche (anneau pointillé). */
 function wardenNear(x,y){return enemies.find(e=>haloSource(e)&&near(x,y,e.x,e.y,e.halo||150))||null}
 function wardenAt(x,y){return haloLit()||null}
@@ -6920,7 +6938,7 @@ newWave=function(...args){
  const plisKeep=(stage===0&&wave>1&&wave<=4&&typeof mission!=='undefined'&&mission&&mission.plis)?mission.plis:null;
  const result=baseNewWave(...args);
  if(!active())return result;
- marks=[];salt=[];minute=null;meche=null;frozen=[];boss=null;gesture=null;haloTime=0;
+ marks=[];salt=[];minute=null;meche=null;frozen=[];boss=null;gesture=null;haloTime=0;haloBeat={on:true,timer:2.1};
  mission={key:stage+':'+wave,minuteTaken:false,seals:0,digit:1,digitTimer:5,tenure:0,trial:0,trialDone:false,prime:null,veilleComplete:false,plis:null};
  /* Les plis cachetés du Faubourg : un par vague (I, II, III), à ramasser dans
     l'ordre. L'ensemble est conservé d'une vague à l'autre. */
@@ -6985,17 +7003,7 @@ function moveEnemy(e,dt){
  }
  if(e.immunePing)e.immunePing=Math.max(0,e.immunePing-dt);
  if(e.shieldFx)e.shieldFx=e.shieldFx>0?Math.max(0,e.shieldFx-dt):Math.min(0,e.shieldFx+dt);
- if(e.kind==='wickWarden'){
-  e.haloTimer=(e.haloTimer==null?2.1:e.haloTimer)-dt;
-  if(e.haloTimer<=0){
-   e.haloOn=e.haloOn===false;
-   e.haloTimer=e.haloOn?2.0:2.6;
-   for(const o of enemies){if(o.dead)continue;if(!o.boss)o.shieldFx=e.haloOn?.85:-.6}
-   shieldFlash=e.haloOn?.3:0;
-   particle(e.x,e.y,e.haloOn?'#ffd9a0':'#7c8a99',12);
-   tone(e.haloOn?196:392,e.haloOn?.4:.18,'sine',.08,.9);
-  }
- }
+
  const t=tune();
  if(e.y<e.homeY)e.y=Math.min(e.homeY,e.y+58*dt);
  else e.y=e.homeY+Math.sin(e.age*.7+e.seed)*16;
@@ -7161,6 +7169,7 @@ function tickLetters(dt){
 function tick(dt){
  if(!active()||state!=='play')return;
  remember(dt);
+ tickHalo(dt);
  if(!minute&&!mission.minuteTaken&&minuteDue()){
   minute=makeMinute();
   if(wave!==2){particle(minute.x,minute.y,'#ffd9a0',24);tone(880,.3,'sine',.07,1.4);say('MINUTE LIBÉRÉE · marche sur le cadran pour la rendre',2.8)}
@@ -8195,7 +8204,10 @@ window.SixthHour={
  get boss(){return boss},get mission(){return mission},get habits(){return habits},
  get flame(){return flame},get marks(){return marks},get salt(){return salt},
  get minute(){return minute},get slams(){return slams},get meche(){return meche},minuteDue,
- tune:()=>tune(),liveFoes
+ tune:()=>tune(),liveFoes,
+ /* Test hook : l'horloge partagée des halos (les Veilleuses immunisent la meute
+    par battements communs — le test peut forcer le creux avant de casser la ronde). */
+ setHaloBeat:(on,timer=3)=>{haloBeat={on:!!on,timer:Math.max(0,timer??3)}}
 };
 })();
 </script><script>/* Direction artistique animée de La Sixième Heure (monde 3).
