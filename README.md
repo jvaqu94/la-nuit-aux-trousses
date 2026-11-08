@@ -148,7 +148,7 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteignez au moins trois mèches : la cire se fend, le cœur bat à nu sur le torse — trois impacts pendant le flash. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteignez au moins trois mèches : la cire se fend, le cœur bat à nu sur le torse — trois impacts pendant le flash ; **Le Chœur de cire** (deux veilleuses) garde le cœur et rallume les flammes tant qu'il vit — brisez-le d'abord. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
@@ -345,6 +345,25 @@ Inspiré du **Shmups Wiki** et de la doc **SHMUP Creator**, adapté à la doctri
 
 Écartés volontairement : la guirlande de médailles et le « Count » de Kaikan en doublon de la
 prime et des plis — même bruit visuel que les scellés, qui ont été retirés pour cette raison.
+
+#### Huitième passe : le Chœur de cire — la Veilleuse a du soutien
+
+*(huitième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9undecies)*
+
+Retour de playtest : vaincre la Veilleuse était devenu trop facile. La serrure ne change pas
+(**trois mèches fendent la cire**, puis trois impacts sur le cœur pendant le flash) — mais le
+gardien n'est plus seul devant elle.
+
+- **Le Chœur de cire** — deux veilleuses de cire (2 PV chacune) orbitent le buste dès l'entrée du
+  combat. Tant qu'une choriste vit, **le cœur absorbe le tir** ; les mèches, elles, sont toujours
+  tirables. Toutes les ~2,6 s, une choriste canalise vers la mèche éteinte la plus proche — un
+  anneau **« LA RONDE RALLUME »** s'affiche 1,15 s à l'avance ; la flamme reprend à échéance.
+- **Briser la ronde est la clef** — quand la dernière choriste tombe, la faille s'ouvre
+  d'elle-même (« LA CIRE DÉCHIRE · le cœur bat à nu »), sans attendre le flash.
+- **La phase renversée** — chaque impact sur le cœur rend un **bouclier de cire 6 s** et la ronde
+  se reforme, plus nombreuse et plus rapide (2 veilleuses / 2,1 s puis 3 veilleuses / 1,7 s), avec
+  une mèche éteinte qui se rallume à chaque impact. La phase 2 est une spirale explicite, jamais
+  une formalité.
 
 #### Le Faubourg remis dans son thème
 
@@ -608,7 +627,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v4 (trois mèches fendent la cire, cœur ancré sur le torse, trois impacts pendant le flash, couronne de braises après chaque coup) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées, plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v5 (Le Chœur de cire : deux veilleuses orbitent le gardien, cœur absorbant tant qu'une choriste vit, mèches rallumables par canalisation, faille ouverte d'elle-même quand la ronde tombe, bouclier de cire 6 s par impact — trois mèches fendent toujours la cire) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées, plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |

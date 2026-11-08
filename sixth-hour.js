@@ -24,7 +24,7 @@ const foeNames={
  wickWarden:'Garde-mèche',waxCourier:'Facteur de cire',
  bronzeCrow:'Corbeau de bronze',crackedBell:'Cloche fêlée',
  saltWalker:'Marcheuse de sel',printThief:'Voleuse d’empreintes',
- wickPicker:'Cueilleuse de mèches',hollowFlame:'Flamme creuse',
+ wickPicker:'Cueilleuse de mèches',hollowFlame:'Flamme creuse',waxChorist:'Veilleuse de cire',
  unnamedDigit:'Chiffre sans nom',facelessEcho:'Écho sans visage',
  shutterImp:'Volet claqueur',waxMimic:'Faux-cierge',snufferHand:'Moucheur'
 };
@@ -32,7 +32,7 @@ const foeKinds=new Set(Object.keys(foeNames));
 const bossKinds=new Set(['veilleuse','sonneur','passeur','cueilleuse','chasseur']);
 /* Une condition de victoire par gardien : aucune n'est « vider la barre ». */
 const VICTORY={
- veilleuse:'Éteins au moins 3 mèches, puis frappe le cœur quand il bat à nu',
+ veilleuse:'Brise la ronde de cire, éteins les flammes, puis frappe le cœur pendant la faille',
  sonneur:'Frappe 3 fois le battant',
  passeur:'Brise 3 fois le sable',
  cueilleuse:'Force 3 cueillettes',
@@ -49,7 +49,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'Éteins au moins 3 mèches : la cire se fend et le cœur bat à nu sur le torse. Frappe-le pendant le flash (3 impacts). Après chaque impact, il crache une couronne de braises : écarte-toi. Une mèche noire rougeoie avant de recracher une braise.',
+ veilleuse:'D’abord la ronde de cire : deux veilleuses gardent le cœur et rallument les mèches — il faut deux coups chacune, et leur disparition ouvre la cire. Éteints au moins 3 mèches, puis frappe le cœur pendant le flash (3 impacts). Chaque impact brise une phase : la ronde revient plus nombreuse, une mèche repart, mais tu gagnes un bouclier de cire (6 s). Une mèche noire rougeoie avant de recracher une braise.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
@@ -260,6 +260,15 @@ function waveBlocks(){
 /* --- Comportements : un héritage monde 1 × monde 2 par forme -------------- */
 function moveEnemy(e,dt){
  if(!active()||!foeKinds.has(e.kind)||e.boss)return false;
+ if(e.kind==='waxChorist'){
+  const bossRef=boss;
+  if(bossRef&&!bossRef.dead){
+   e.orbitAngle=(e.orbitAngle??e.seed)+dt*.62;
+   e.x=bossRef.x+Math.cos(e.orbitAngle)*165;
+   e.y=bossRef.y+30+Math.sin(e.orbitAngle)*64;
+  }else{e.y=Math.min(430,e.y+40*dt);e.x+=Math.sin(e.age*2.2)*30*dt}
+  return true;
+ }
  if(e.immunePing)e.immunePing=Math.max(0,e.immunePing-dt);
  if(e.shieldFx)e.shieldFx=e.shieldFx>0?Math.max(0,e.shieldFx-dt):Math.min(0,e.shieldFx+dt);
  if(e.kind==='wickWarden'){
@@ -620,6 +629,14 @@ function makeWicks(){
 }
 
 /* --- Gardiens : cinq jauges, cinq victoires ------------------------------ */
+let chorusSeq=0;
+function spawnChorus(n){
+ for(let i=0;i<n;i++){
+  const a=Math.random()*Math.PI*2;
+  enemies.push({id:'choir-'+(++chorusSeq),kind:'waxChorist',x:400+Math.cos(a)*165,y:190+Math.sin(a)*64,baseX:400,homeY:250,pattern:99,r:17,elite:false,tier:0,hp:2,max:2,speed:0,fire:999,age:0,hit:0,orbitAngle:a,orbitPhase:Math.random()*Math.PI*2,bossChorus:true,seed:Math.random()*Math.PI*2,timer:4,cadence:999,loot:false});
+ }
+}
+function choristsAlive(){return enemies.some(o=>!o.dead&&o.kind==='waxChorist')}
 const baseSpawnBoss=spawnBoss;
 spawnBoss=function(){
  if(!active())return baseSpawnBoss();
@@ -632,6 +649,8 @@ spawnBoss=function(){
   boss.windows=makeWicks();
   boss.tour=0;boss.label='MÈCHES';boss.core=null;
   boss.openTimer=1.2;boss.guard=1.2;boss.lastOpen=null;boss.volley=null;boss.flareTimer=6;boss.flare=null;
+  boss.absorbPing=0;boss.zapPing=0;boss.channelRate=2.6;boss.chorusTick=1.6;
+  spawnChorus(2);boss.choirWasUp=true;
  }else if(kind==='sonneur'){
   boss.bell={x:400,y:330,r:58};boss.clapper={x:400,y:236,r:24,down:false};
   boss.resonance=0;boss.strikes=0;boss.ring=0;boss.label='RÉSONANCE';
@@ -669,8 +688,27 @@ function moveBoss(e,dt,oldX,oldY){
 
 /* 1 · La Veilleuse — elle défend ses mèches. Chaque fenêtre encore allumée
    peut tirer : plus il en reste, plus la salve est dense. Éteindre une mèche
-   supprime donc une bouche à feu, ce qui rend la suivante plus accessible. */
+   supprime donc une bouche à feu, ce qui rend la suivante plus accessible.
+   La ronde de cire (les Veilleuses) garde le cœur et rallume les flammes :
+   tant qu'au moins une veilleuse est en vie, seuls les cierges peuvent être
+   atteints — le cœur lui, reste clos sous la cire. */
+function tickChorusLogic(e,dt){
+ const choir=enemies.filter(o=>!o.dead&&o.kind==='waxChorist');
+ e.chorusTick=(e.chorusTick||1.5)-dt;
+ if(e.chorusTick<=0){
+  e.chorusTick=e.channelRate||2.6;
+  const dark=(e.windows||[]).filter(w=>!w.lit&&!(w.zap>0));
+  if(dark.length&&choir.length){
+   let pick=null,best=Infinity;
+   for(const w of dark)for(const c of choir){const d=Math.hypot(w.x-c.x,w.y-c.y);if(d<best){best=d;pick={w,c}}}
+   if(pick){pick.w.zap=1.15;pick.w.zapBy=pick.c}
+  }
+ }
+}
 function tickVeilleuse(e,dt){
+ e.absorbPing=Math.max(0,(e.absorbPing||0)-dt);
+ e.zapPing=Math.max(0,(e.zapPing||0)-dt);
+ tickChorusLogic(e,dt);
  if(e.phase===2){
   const core=e.core;if(!core)return;
   core.x=e.x;core.y=e.y+26;
@@ -708,7 +746,13 @@ function tickVeilleuse(e,dt){
    }
   }
   if(core.attack<=0){core.attack=1.9;const aim=Math.atan2(player.y-core.y,player.x-core.x);shootHostile({x:core.x,y:core.y,boss:true,phase:2},'spirit',[-.18,0,.18],145,aim)}
-  e.value=.5+core.hits/6;e.label='CŒUR · '+core.hits+'/3 IMPACTS';return;
+  e.value=.5+core.hits/6;e.label='CŒUR · '+core.hits+'/3 IMPACTS';
+  const choirUp=enemies.some(o=>!o.dead&&o.kind==='waxChorist');
+  if(e.choirWasUp&&!choirUp&&e.core){
+   e.choirWasUp=false;e.core.open=1.7;e.core.openTimer=2.1;
+   say('LA CIRE DÉCHIRE · le cœur bat à nu',2.8);tone(120,.7,'sine',.1,.7);particle(e.x,e.y,'#ffd9a0',34);
+  }
+  return;
  }
  const windows=e.windows;
  for(const w of windows){
@@ -717,6 +761,16 @@ function tickVeilleuse(e,dt){
   w.age=(w.age||0)+dt;
   /* Chaque mèche éteinte porte son propre rallumage visible : la Veilleuse
      ne se contente plus d'en relancer une au hasard, chacune recompte. */
+  if(w.zap>0){
+   w.zap-=dt;
+   if(w.zapBy&&w.zapBy.dead)w.zap=0;
+   if(w.zap<=0){
+    w.zap=0;const srcC=w.zapBy;w.zapBy=null;
+    if(!w.lit){w.lit=true;w.relight=Infinity;w.open=0;w.charge=0;w.seed=rng()*Math.PI*2;w.age=0;
+     particle(w.x,w.y,'#ffb37a',14);tone(640,.2,'sine',.06,1.1);
+     if((e.zapPing||0)<=0){e.zapPing=1.6;say('LA RONDE RALLUME UNE MÈCHE · éteins-la maintenant',1.6)}}
+   }
+  }
   if(!w.lit&&isFinite(w.relight)&&w.relight>0){
    w.relight-=dt;
    if(w.relight<=0){
@@ -767,8 +821,9 @@ function tickVeilleuse(e,dt){
  /* Tout passe par les bougies : trois mèches éteintes et la cire se fend —
     le cœur s'expose en plein plat sur le torse, battant. */
  const wicksDown=5-lit;
+ const choirCount=enemies.filter(o=>!o.dead&&o.kind==='waxChorist').length;
  e.value=Math.min(.49,(Math.min(3,wicksDown)/3)*.49);
- e.label='MÈCHES ÉTEINTES '+Math.min(3,wicksDown)+'/3';
+ e.label='MÈCHES ÉTEINTES '+Math.min(3,wicksDown)+'/3 · RONDE '+choirCount;
  if(!e.core&&wicksDown>=3){e.phase=2;e.core={x:e.x,y:e.y+26,r:26,open:0,openTimer:1.1,attack:1.9,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LA CIRE SE FEND · le cœur bat à nu — frappe-le pendant le flash',4);particle(e.x,e.y,'#ffd9a0',34);tone(120,.7,'sine',.1,.7)}
  if(lit===5&&e.age>6){
   mission.veilleComplete=true;
@@ -900,12 +955,36 @@ function hitTargets(){
   /* La minute suspendue : tout tir sur la lettre brise le sceau. */
   for(const L of letters)if(!L.dead&&near(shot.x,shot.y,L.x,L.y,24)){resolveLetter(L,true);consume(shot)}
   if(e.kind==='veilleuse'&&e.phase===2&&e.core){
-   const core=e.core;if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);particle(core.x,core.y,'#e8d3ab',26);tone(920,.24,'triangle',.09,1.45);say('CŒUR FRAPPÉ · '+core.hits+'/3',2)}
+   const core=e.core;
+   if(choristsAlive()){
+    /* La ronde couvre le cœur : le tir y échoue tant qu'une veilleuse veille. */
+    if(near(shot.x,shot.y,core.x,core.y,core.r+8)){
+     consume(shot);particle(core.x,core.y,'#dcecf5',6);
+     if((e.absorbPing||0)<=0){e.absorbPing=1.3;say('LA RONDE ABSORBE LE TIR · brise d’abord une veilleuse',1.8);tone(280,.09,'square',.045,.5)}
+    }
+   }else if(core.open>0&&near(shot.x,shot.y,core.x,core.y,core.r+8)){
+    core.hits++;core.open=0;core.openTimer=1.35;core.flash=.3;core.ember=.5;consume(shot);particle(core.x,core.y,'#e8d3ab',26);tone(920,.24,'triangle',.09,1.45);
+    /* Chaque impact brise une phase : la ronde revient, plus nombreuse, une
+       mèche repart — mais la sorcière gagne un bouclier de cire. */
+    player.shield=Math.max(player.shield||0,100);player.shieldTime=Math.max(player.shieldTime||0,6);
+    const refill=core.hits===1?2:core.hits===2?3:0;
+    if(refill){spawnChorus(refill);e.choirWasUp=true}
+    const dark=(e.windows||[]).filter(w=>!w.lit);
+    if(dark.length){const w=dark[Math.floor(rng()*dark.length)];w.lit=true;w.relight=Infinity;w.open=0;w.charge=0;w.zap=0;w.seed=rng()*Math.PI*2;particle(w.x,w.y,'#ffb37a',10)}
+    if(core.hits===1)e.channelRate=2.1;else if(core.hits===2)e.channelRate=1.7;
+    say('CŒUR FRAPPÉ · '+core.hits+'/3 · PHASE BRISÉE — bouclier de cire 6 s'+(refill?' — la ronde revient ('+refill+')':''),2.6);
+   }
   }else if(e.kind==='veilleuse'){
-   /* Tirer sur une mèche ouverte : elle s'éteint, avec son propre compte à rebours. */
-   for(const w of e.windows)if(w.lit&&w.open>0&&near(shot.x,shot.y,w.x,w.y,26)){
-    extinguishWick(w);consume(shot);particle(w.x,w.y,'#ffd9a0',16);tone(560,.2,'sine',.07,1.2);
-    say('MÈCHE ÉTEINTE · '+e.windows.filter(v=>!v.lit).length+'/5',1.6);break;
+   /* La ronde couvre tout le corps du gardien ; seules les mèches restent
+      shootables — les cierges sont la voie ouverte du combat. */
+   if(choristsAlive()&&near(shot.x,shot.y,e.x,e.y,e.r+8)){
+    consume(shot);particle(e.x,e.y,'#dcecf5',6);
+    if((e.absorbPing||0)<=0){e.absorbPing=1.3;say('LA RONDE ABSORBE LE TIR · brise d’abord une veilleuse',1.8);tone(280,.09,'square',.045,.5)}
+   }else{
+    for(const w of e.windows)if(w.lit&&w.open>0&&near(shot.x,shot.y,w.x,w.y,26)){
+     extinguishWick(w);consume(shot);particle(w.x,w.y,'#ffd9a0',16);tone(560,.2,'sine',.07,1.2);
+     say('MÈCHE ÉTEINTE · '+e.windows.filter(v=>!v.lit).length+'/5',1.6);break;
+    }
    }
   }else if(e.kind==='sonneur'){
    if(e.clapper.down&&near(shot.x,shot.y,e.clapper.x,e.clapper.y,e.clapper.r+6)){
@@ -1053,6 +1132,41 @@ function drawMinute(g,m){
  g.restore();
 }
 
+/* Le Chœur de cire : des veilleuses de cire gardent le cœur et rallument les
+   flammes. Corps de cire, flamme centrale, et l'amorce de rallumage posée sur
+   la mèche visée AVANT qu'elle ne reparte — la voir grandir, c'est la course. */
+function drawChorus(g,e){
+ const choir=enemies.filter(o=>!o.dead&&o.kind==='waxChorist');
+ if(!choir.length)return;
+ g.save();
+ g.globalAlpha=.22;g.setLineDash([6,12]);g.strokeStyle='#ffd9a0';g.lineWidth=1.4;
+ g.beginPath();g.ellipse(e.x,e.y+30,165,64,0,0,Math.PI*2);g.stroke();g.setLineDash([]);g.globalAlpha=1;
+ for(const c of choir){
+  const bob=Math.sin((gameTime+c.orbitPhase||0)*2.2)*2;
+  g.save();g.translate(c.x,c.y+bob);
+  const flick=.92+Math.sin(((gameTime||0)+c.orbitPhase||0)*7)*.08;
+  const halo=g.createRadialGradient(0,0,1,0,0,26);
+  halo.addColorStop(0,'#ffd9a055');halo.addColorStop(1,'#ffd9a000');g.fillStyle=halo;g.beginPath();g.arc(0,0,26,0,Math.PI*2);g.fill();
+  g.fillStyle='#e8d3ab';g.strokeStyle='#5a4636';g.lineWidth=1.8;
+  g.beginPath();g.moveTo(-7,9);g.quadraticCurveTo(-9,-6,0,-10);g.quadraticCurveTo(9,-6,7,9);g.closePath();g.fill();g.stroke();
+  g.fillStyle='#1a1428';g.beginPath();g.arc(0,-1,3.6*flick,0,Math.PI*2);g.fill();
+  g.fillStyle='#ffd25e';g.beginPath();g.ellipse(0,-7,1.6*flick,3*flick,0,0,Math.PI*2);g.fill();
+  g.restore();
+ }
+ for(const w of e.windows||[]){
+  if(w.zap>0&&w.zapBy&&!w.zapBy.dead){
+   const p=1-Math.max(0,w.zap)/1.15;
+   g.save();
+   g.globalAlpha=.28+.6*p;g.strokeStyle='#ffb37a';g.lineWidth=2.2;g.setLineDash([5,7]);g.lineDashOffset=-((gameTime||0)*30)%12;
+   g.beginPath();g.moveTo(w.zapBy.x,w.zapBy.y);g.lineTo(w.x,w.y);g.stroke();g.setLineDash([]);
+   g.globalAlpha=.9;g.strokeStyle='#ff9d7a';g.lineWidth=2.5;
+   g.beginPath();g.arc(w.x,w.y,31-p*12,-Math.PI/2,-Math.PI/2+p*Math.PI*2);g.stroke();
+   g.fillStyle='#ffd9a0';g.font='bold 8px Arial';g.textAlign='center';g.fillText('LA RONDE RALLUME',w.x,w.y+26);
+   g.restore();
+  }
+ }
+ g.restore();
+}
 function draw(g){
  if(!active()||!['play','pause'].includes(state))return;
  for(const e of enemies){
@@ -1136,6 +1250,7 @@ function draw(g){
  const e=boss;
  if(!e||e.dead)return;
  if(e.kind==='veilleuse'){
+  drawChorus(g,e);
   drawWicks(g,e);
   /* Le cœur, visible dès le premier battement : un charbon retenu tenu par la
      cire (phase 1), puis à nu et battant sur le torse (phase 2) — on sait

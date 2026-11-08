@@ -221,9 +221,10 @@ for(let i=0;i<5;i++){
   out.bosses.push({kind:e.kind,hp,max:e.max,unchanged:e.hp===hp,label:e.label,value:e.value,victory:SH.VICTORY[e.kind]});
 }
 
-/* 11a · La Veilleuse v4 : tout tient aux bougies — trois mèches fendent la cire ; le cœur bat à nu sur le torse. Plus aucun scellé. */
+/* 11a · La Veilleuse v5 : LE CHŒUR DE CIRE — la ronde de cire garde le cœur et rallume les flammes ; on ne frappe le cœur qu'une fois la ronde brisée. Trois mèches fendent la cire ; le cœur bat à nu sur le torse. Plus aucun scellé. */
 let v=bossFor(0);
 out.veilleuse={noVials:!('vials' in v)};
+out.veilleuse.chorusAtStart=enemies.filter(e=>e.kind==='waxChorist').length;
 // une mèche éteinte : la cire tient bon, le cœur reste fermé
 v.windows.forEach((w,i)=>{w.lit=i!==0});
 SH.moveBoss(v,1/60);
@@ -236,8 +237,21 @@ out.veilleuse.corePinned=Math.abs(v.core.y-(v.y+26))<.001&&v.core.x===v.x;
 // hors flash, le cœur est scellé : le tir encaisse et n'entame rien
 v.core.open=0;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);
 out.veilleuse.blocked=v.core.hits;
-// pendant le flash : un impact, et la couronne de braises
+// La ronde est debout : même pendant le flash, le cœur ABSORBE le tir
+v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];SH.tick(1/60);
+out.veilleuse.absorbed=v.core.hits;
+// Brise la ronde (les halos protecteurs sont éteints d'abord — la ronde tombe sous les coups) : la faille s'ouvre d'elle-même
+enemies.forEach(o=>{o.haloOn=false});
+let guard11a=40;
+while(enemies.some(o=>o.kind==='waxChorist'&&!o.dead)&&guard11a-->0){
+ const wm=enemies.find(o=>o.kind==='waxChorist'&&!o.dead);
+ damageEnemy(wm,99,false);
+}
+SH.moveBoss(v,1/60);
+out.veilleuse.unwrapOpen=v.core.open>0;
+// pendant le flash, la ronde morte : un impact, la ronde se reforme, un bouclier tombe
 v.core.open=2;shots=[{x:v.core.x,y:v.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];hostile=[];SH.tick(1/60);SH.moveBoss(v,1/60);out.veilleuse.coreHits=v.core.hits;out.veilleuse.coreValue=v.value;out.veilleuse.corePinned2=Math.abs(v.core.x-v.x)<.001;
+out.veilleuse.chorusRefill=enemies.filter(o=>o.kind==='waxChorist'&&!o.dead).length;out.veilleuse.shieldGranted=(player.shield||0)>=100;
 
 /* 11a bis · Couronnes de l'heure : maîtrise, vitesse, veille calme */
 Camp.progress.crowns={veilleuse:[],sonneur:[],passeur:[],cueilleuse:[],chasseur:[]};
@@ -343,6 +357,7 @@ out.shootBug.flameEnd=SH.flame;
 /* 11f-ter · Toutes les formes tirent vraiment des projectiles. */
 const shooters={};
 for(const kind of Object.keys(SH.foeNames)){
+  if(kind==='waxChorist')continue; // soutien de la Veilleuse : elle ne tire jamais — elle garde le cœur et rallume les mèches
   freshWave(1);
   spawnEnemy({kind,x:400,y:300,group:1,index:0,pattern:99});
   const foe=enemies[enemies.length-1];
@@ -948,6 +963,13 @@ out.wicks.cancelledVolley=hostile.length;
 const ashV=bossFor(0);
 ashV.windows.forEach(w=>w.lit=false);
 SH.moveBoss(ashV,1/60);
+// la ronde est brisée d'abord : les cendres ne tombent que pour un cœur vraiment frappé
+enemies.forEach(o=>{o.haloOn=false});
+{let guard11c=40;while(enemies.some(o=>o.kind==='waxChorist'&&!o.dead)&&guard11c-->0){
+ const wm=enemies.find(o=>o.kind==='waxChorist'&&!o.dead);
+ damageEnemy(wm,99,false);
+}}
+SH.moveBoss(ashV,1/60);
 ashV.core.open=2;
 shots=[{x:ashV.core.x,y:ashV.core.y,vx:0,vy:-100,life:1,damage:5,pierce:0,seen:new Set()}];
 hostile=[];
@@ -1197,6 +1219,9 @@ assert.equal(new Set(r.bosses.map(b => b.victory)).size, 5, 'cinq conditions de 
 assert.equal(r.veilleuse.noVials, true, 'plus aucun scellé : la Veilleuse v4 vit et meurt par les bougies');
 assert.equal(r.veilleuse.oneWick, 1, 'une seule mèche éteinte ne fend pas la cire');
 assert.equal(r.veilleuse.blocked, 0, 'hors flash, le cœur n’encaisse aucun tir');
+assert.equal(r.veilleuse.chorusAtStart, 2, 'la ronde apparaît dès l’entrée du combat');
+assert.equal(r.veilleuse.absorbed, 0, 'tant que la ronde vit, le cœur absorbe même pendant le flash');
+assert.ok(r.veilleuse.unwrapOpen, 'la ronde brisée ouvre elle-même la faille');
 assert.equal(r.veilleuse.phase, 2, 'trois mèches éteintes suffisent : la cire se fend, le cœur bat');
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
 assert.equal(r.veilleuse.value, .5, 'trois mèches révèlent la seconde phase sans tuer le boss');
@@ -1204,6 +1229,8 @@ assert.equal(r.veilleuse.corePinned, true, 'le cœur bat ancré sur le torse —
 assert.equal(r.veilleuse.corePinned2, true, 'le cœur reste épinglé au torse après chaque impact');
 assert.equal(r.veilleuse.coreHits, 1, 'le cœur doit être frappé pendant son ouverture');
 assert.ok(r.veilleuse.coreValue > .5, 'les impacts du cœur font progresser la seconde phase');
+assert.equal(r.veilleuse.chorusRefill, 2, 'la ronde se reforme après un impact, plus nombreuse');
+assert.equal(r.veilleuse.shieldGranted, true, 'chaque impact brise une phase et rend un bouclier de cire (6 s)');
 assert.ok(r.sonneur.resonance > 0, 'tirer sur la cloche doit faire monter la résonance');
 assert.equal(r.sonneur.strikes, 0, 'la cloche n’est pas le battant');
 assert.equal(r.sonneur.strikesAfter, 1, 'le battant se frappe hors de l’ombre de la cloche');

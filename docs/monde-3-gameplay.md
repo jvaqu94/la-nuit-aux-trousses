@@ -286,7 +286,7 @@ Chacun a sa **jauge**, sa **condition de victoire**, son **échec doux** et sa *
 
 | Boss | Jauge | Victoire | Source du danger | Interaction clé | Adds |
 |---|---|---|---|---|---|
-| La Veilleuse | 5 fenêtres | Tout éteindre | **Les mèches allumées tirent sur vous** | Placement + fenêtre de 1,7 s, charge annulable | 2 |
+| La Veilleuse | 5 fenêtres | Tout éteindre | **Les mèches allumées tirent sur vous** | Placement + fenêtre de 1,7 s, charge annulable | **2 → 3 veilleuses, Le Chœur de cire** |
 | Le Sonneur | Résonance | 3 frappes | **Votre propre tir** | Ligne de tir | 0 |
 | Le Passeur | Sable intact | 3 brisures | **Votre propre trajet** | Mémoire spatiale | 0 |
 | La Cueilleuse | 3 charges | 3 cueillettes | Votre appauvrissement | Dépense volontaire | 0 |
@@ -977,3 +977,53 @@ Si elle traverse sans qu’un tir ne la touche — ou si le joueur la reçoit en
 la minute est rendue sans un coup : **+400** et, au premier gardien tombé ensuite, la
 couronne **MAIN LÉGÈRE** (famille « Les Minutes », 12 couronnes au total).
 Un tir la brise : +50, aucun crédit. Toujours une seule lettre par univers.
+
+## 9undecies. Septième retour en jeu : LE CHŒUR DE CIRE — la Veilleuse a du soutien
+
+Retour de playtest : « pour vaincre le boss c'est trop facile ». La doctrine est tenue — l'extinction
+des flammes reste la serrure — mais le gardien n'est plus seul devant ses propres pompes.
+Aucune barre de vie ajoutée, aucune nouvelle commande, aucune nouvelle ressource.
+
+### La ronde
+
+À l'entrée du combat, **deux veilleuses de cire** (`waxChorist`, 2 PV chacune) se mettent à orbiter
+le buste — braises d'une silhouette enfin parlante, jauge de deux coups lisible sur chaque corps.
+Deux protections ennemies, un seul rôle : aucun des deux n'est un tireur, aucun ne porte de barre
+de vie globale.
+
+- **L'auréole de cire** — tant qu'une choriste vit, **tout tir sur le cœur est absorbé** (la mêche
+  elle ne l'est jamais : éteindre, c'est toujours possible). Un éclat sourd, « LA RONDE ABSORBE LE
+  TIR · brise d'abord une veilleuse » affiché au plus une fois toutes les 1,3 s.
+- **Le ralliement** — toutes les ~2,6 s, une choriste canalise sur la mèche **éteinte** la plus
+  proche de la ronde. La mèche visée affiche un anneau « LA RONDE RALLUME » 1,15 s à l'avance ;
+  à échéance, la flamme reprend (mèche rouverte : `relight = ∞`, plus aucun compte à rebours).
+- **Briser la ronde n'est pas un choix, c'est la clef.** Quand la dernière choriste tombe, la faille
+  s'ouvre d'elle-même (« LA CIRE DÉCHIRE · le cœur bat à nu », 1,7 s) — sans attendre l'ouverture
+  naturelle du flash. Trois coups par mèche, deux coups par choriste : le combat reste une course
+  de lecture, pas de DPS.
+
+### La phase renversée
+
+Chaque impact sur le cœur (flash respecté, ronde morte) paie un **bouclier de cire 6 s**
+(100 PV, inhabituel hors plis) et rend la ronde plus nombreuse, plus rapide et plus vengeresse :
+
+| Impact | Ronde reformée | Cadence du ralliement |
+|---|---|---|
+| 1 | 2 veilleuses | 2,1 s |
+| 2 | 3 veilleuses | 1,7 s |
+| 3 | — (la cire se rend) | — |
+
+Une mèche éteinte au hasard **se rallume aussi** à chaque impact : chaque coup rendu coûte une
+mèche. La « phase 2 » du gardien est donc une spirale explicite — l'ouverture du cœur se paie
+mèche par mèche, jamais gratuitement. Les trois couronnes de la Veilleuse (« Sans Brisure »,
+« Veille calme », « Sous 90 secondes ») font désormais le tri entre celles qu'on laisse pleurer
+la cire et celles qu'on étouffe proprement.
+
+### Ce qui est jugé par le test
+
+`tests/test_sixth_hour.cjs` ne vise le cœur qu'après **avoir brisé la ronde** (halo éteint d'abord —
+les halos immunisent tout, porteur compris). Nouveaux asserts : deux choristes à l'entrée ; le cœur
+absorbe même pendant le flash tant que la ronde vit ; la faille s'ouvre d'elle-même après la chute
+de la ronde ; chaque impact rend le bouclier de cire ; la ronde se reforme (2) après le premier
+impact. Les mèches restent tirables dans tous les cas ; aucune horloge nouvelle, aucun scellé,
+aucun chiffre à retenir.
