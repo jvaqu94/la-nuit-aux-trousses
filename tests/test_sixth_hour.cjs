@@ -225,7 +225,7 @@ for(let i=0;i<5;i++){
   out.bosses.push({kind:e.kind,hp,max:e.max,unchanged:e.hp===hp,label:e.label,value:e.value,victory:SH.VICTORY[e.kind]});
 }
 
-/* 11a · La Veilleuse v5 : LE CHŒUR DE CIRE — la ronde de cire garde le cœur et rallume les flammes ; on ne frappe le cœur qu'une fois la ronde brisée. Trois mèches fendent la cire ; le cœur bat à nu sur le torse. Plus aucun scellé. */
+/* 11a · La Veilleuse v5 : LE CHŒUR DE CIRE — la ronde de cire garde le cœur et rallume les flammes ; on ne frappe le cœur qu'une fois la ronde brisée. Les cinq mèches fendent la cire ; le cœur bat à nu sur le torse. Plus aucun scellé. */
 let v=bossFor(0);
 out.veilleuse={noVials:!('vials' in v)};
 out.veilleuse.chorusAtStart=enemies.filter(e=>e.kind==='waxChorist').length;
@@ -233,8 +233,8 @@ out.veilleuse.chorusAtStart=enemies.filter(e=>e.kind==='waxChorist').length;
 v.windows.forEach((w,i)=>{w.lit=i!==0});
 SH.moveBoss(v,1/60);
 out.veilleuse.oneWick=v.phase;
-// trois mèches éteintes : la cire se fend, le cœur s'expose, ancré sur le torse
-v.windows.forEach((w,i)=>{w.lit=i>=3});
+// les cinq mèches éteintes : la cire se fend, le cœur s'expose, ancré sur le torse
+v.windows.forEach(w=>{w.lit=false});
 SH.moveBoss(v,1/60);
 out.veilleuse.phase=v.phase;out.veilleuse.value=v.value;out.veilleuse.lit=0;out.veilleuse.label=v.label;
 out.veilleuse.corePinned=Math.abs(v.core.y-(v.y+26))<.001&&v.core.x===v.x;
@@ -948,8 +948,8 @@ SH.moveBoss(gun,0.85);
 out.wicks.fullVolley=hostile.length;
 out.wicks.volleySpeed=hostile.length?Math.max.apply(null,hostile.map(h=>h.speed||Math.hypot(h.vx,h.vy))):0;
 out.wicks.cap=SH.BUDGET.volley;
-/* La phase 2 commence à trois mèches éteintes : le minimum en phase 1 est
-   trois mèches allumées. La salve suit le nombre de mèches allumées. */
+/* La phase 2 ne commence que lorsque les cinq mèches sont éteintes : le minimum
+   en phase 1 est cinq mèches allumées. La salve suit le nombre de mèches allumées. */
 const lone=wickScene();
 lone.windows.forEach((w,i)=>w.lit=i<3);
 lone.guard=0;hostile=[];
@@ -1230,7 +1230,7 @@ assert.equal(r.veilleuse.blocked, 0, 'hors flash, le cœur n’encaisse aucun ti
 assert.equal(r.veilleuse.chorusAtStart, 2, 'la ronde apparaît dès l’entrée du combat');
 assert.equal(r.veilleuse.absorbed, 0, 'tant que la ronde vit, le cœur absorbe même pendant le flash');
 assert.ok(r.veilleuse.unwrapOpen, 'la ronde brisée ouvre elle-même la faille');
-assert.equal(r.veilleuse.phase, 2, 'trois mèches éteintes suffisent : la cire se fend, le cœur bat');
+assert.equal(r.veilleuse.phase, 2, 'les cinq mèches doivent être éteintes : la cire se fend, le cœur bat');
 assert.equal(r.veilleuse.lit, 0, 'les mèches s’éteignent par la fenêtre de tir');
 assert.equal(r.veilleuse.value, .5, 'trois mèches révèlent la seconde phase sans tuer le boss');
 assert.equal(r.veilleuse.corePinned, true, 'le cœur bat ancré sur le torse — aucune dérive aléatoire');

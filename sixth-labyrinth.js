@@ -180,7 +180,7 @@ function detonateGates(row,opts){
  flashT=.85;
  if(opts.reward){
   score+=250;
-  drops.push({x:clamp(cx,60,W-60),y:clamp(gates[0].y,170,H-140),kind:'shield',age:0});
+  drops.push({x:clamp(cx,60,W-60),y:clamp(gates[0].y,170,H-140),kind:opts.rewardKind||'shield',age:0});
  }
  say(toast,opts.reward?3.2:2.6);
 }
@@ -201,7 +201,13 @@ function breakBlock(w){
    const next=walls.find(v=>!v.dead&&v.switch&&v.row===w.row&&v.sequenceIndex===progress+1);
    if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · +'+rewardPts+' · vise la rune '+next.runeLabel,2.2);tone(660,.16,'sine',.05,1.2)}
    else{
-    detonateGates(w.row,{reward:true,toast:'LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +250 · UN DON DE CIRE TOMBE'});
+    /* Le sceau complet ne rend plus toujours le même don : la récompense est
+       tirée au sort parmi les quatre cadeaux utiles — bouclier, triple tir,
+       perce-cire, vie — avec le même tirage amorcé que le reste du labyrinthe. */
+    const gifts=['shield','candy','pierceShot','heal'];
+    const picked=gifts[Math.floor(rng()*gifts.length)];
+    const label=(BONUS.find(b=>b.kind===picked)||BONUS[0]).label;
+    detonateGates(w.row,{reward:true,rewardKind:picked,toast:'LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +250 · UN DON DE CIRE TOMBE · '+label});
    }
   }
  }else if(w.switch){

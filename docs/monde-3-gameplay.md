@@ -1081,3 +1081,14 @@ Après la Brume de bile (touhou), la feuille de route continue — deux reliques
   devient un harvest, pas un sursis. Les toiles ne sont pas absorbables (elles ne blessent pas).
 - Aucun test existant ne casse ; `eligibleUpgrades` gate l'accès ; HUD/badges automatiques.
 - Prochaine livraison potentielle : un par monde — ce serait « par-monde » honoré du monde 2 au monde 4.
+
+## 9quindecies. Troisième livraison « par monde » : PERCE-CIRE · le don aléatoire · la serrure à cinq
+
+Un seul axe : le tir gagne une seconde saveur, et le premier gardien devient une vraie serrure. Aucune refonte.
+
+- **PERCE-CIRE** (`pierceShot`, `MINUIT_BALANCE.pierceShot.duration:12`) — un second bonus de tir en miroir du TRIPLE TIR : pendant 12 s, les tirs traversent **un ennemi de plus** (+1 `pierce` sur le tir principal et les Tirs en écho). Même mécanique de goutte que la cendre rose (pool pondéré du labyrinthe, 20 % de chance par bloc, glyphe dédié dans `drawSeal`, couleur `#9fd9e7`, art `bonus-pierce`), même pickup dans `game.js`, même entrée dans la galerie d'onboarding.
+- **Le don des trois runes est aléatoire.** La récompense A → B → C ne rend plus toujours le bouclier : tirage amorcé parmi bouclier / TRIPLE TIR / PERCE-CIRE / vie (¼ chacun), annoncé dans le toast (« UN DON DE CIRE TOMBE · PERCE-CIRE »). Conséquence assumée : PERCE-CIRE apparaît dès le Faubourg, là où le joueur cherchait le bouclier.
+- **La serrure de la Veilleuse est à cinq mèches.** La phase 2 ne commence que lorsque **les cinq** mèches sont éteintes (avant : trois) — tirage de la ronde et rallumages individuels en font un vrai verrou, jugé par le test (`veilleuse.phase === 2` avec les cinq éteintes). Plus aucune « victoire en trois mèches ».
+- **La Veilleuse patrouille.** Phase 1 : arc lent qui balaye l'axe (amplitude ~198 px) avec attraction modérée du cierge ouvert ; phase 2 : même respiration au-dessus de la brèche. Fini l'attente statique en ligne droite — le cœur garde son ancrage (`core.x=e.x`, `core.y=e.y+26`) et le test `corePinned` tient toujours.
+- La Ronde reste la seule défense du cœur (deux coups chacune ; revenir plus nombreuse après chaque impact). L'absorption du tir pendant le flash est inchangée.
+- Tests : la fixture 11a passe à cinq mèches ; le reste de la suite est inchangé (le salve-minimale en phase 1 reste fondée sur le nombre de mèches **allumées**).

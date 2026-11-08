@@ -6719,7 +6719,7 @@ const RULES=[
 ];
 /* Comment battre chaque gardien, en une consigne concrète. */
 const HOWTO={
- veilleuse:'D’abord la ronde de cire : deux veilleuses gardent le cœur et rallument les mèches — il faut deux coups chacune, et leur disparition ouvre la cire. Éteints au moins 3 mèches, puis frappe le cœur pendant le flash (3 impacts). Chaque impact brise une phase : la ronde revient plus nombreuse, une mèche repart, mais tu gagnes un bouclier de cire (6 s). Une mèche noire rougeoie avant de recracher une braise.',
+ veilleuse:'D’abord la ronde de cire : deux veilleuses gardent le cœur et rallument les mèches — il faut deux coups chacune, et leur disparition ouvre la cire. Éteins les cinq mèches, puis frappe le cœur pendant le flash (3 impacts). Chaque impact brise une phase : la ronde revient plus nombreuse, une mèche repart, mais tu gagnes un bouclier de cire (6 s). Une mèche noire rougeoie avant de recracher une braise.',
  sonneur:'Tire sur le battant quand il descend. Ne touche pas la cloche.',
  passeur:'Marche sur du sable intact, puis tire sur le passeur quand il s’ouvre.',
  cueilleuse:'Allume les 3 lanternes en les touchant, puis tire sur la cueilleuse.',
@@ -7438,6 +7438,9 @@ function tickVeilleuse(e,dt){
  tickChorusLogic(e,dt);
  if(e.phase===2){
   const core=e.core;if(!core)return;
+  const sway=400+Math.sin(e.age*.7)*150+Math.sin(e.age*1.9)*18;
+  e.x+=(sway-e.x)*Math.min(1,dt*1.7);
+  e.y+=((246+Math.sin(e.age*1.25)*15)-e.y)*Math.min(1,dt*1.9);
   core.x=e.x;core.y=e.y+26;
   core.open=Math.max(0,core.open-dt);core.flash=Math.max(0,core.flash-dt);
   core.openTimer-=dt;core.attack-=dt;
@@ -7518,8 +7521,14 @@ function tickVeilleuse(e,dt){
   const pick=from[Math.floor(rng()*from.length)];
   pick.open=1.7;e.lastOpen=pick;
  }
+ /* Elle ne plane plus : une vraie patrouille qui balaie l'écran — un grand
+    arc lent, une houle verticale, et l'attraction du cierge ouvert reste
+    en appoint. Plus le combat dure, plus l'arc s'ouvre. */
  const target=e.lastOpen||windows[0];
- e.x+=(target.x-e.x)*Math.min(1,dt*2.4);e.y+=(250-e.y)*Math.min(1,dt*2);
+ const patrol=400+Math.sin(e.age*.55)*172+Math.sin(e.age*1.6)*26;
+ const sweep=target?target.x*.4+patrol*.6:patrol;
+ e.x+=(sweep-e.x)*Math.min(1,dt*2.05);
+ e.y+=((238+Math.sin(e.age*1.35)*16)-e.y)*Math.min(1,dt*2.2);
  // Salve de cire : la Veille garde tout son feu tant que la veille est complète.
  // Cinq mèches allumées tirent toutes les ~2,2 s ; chaque extinction lui
  // reprend une bouche à feu et étire le délai jusqu'à ~4,5 s pour la dernière.
@@ -7545,13 +7554,13 @@ function tickVeilleuse(e,dt){
   e.volley=null;
  }
  const lit=windows.filter(w=>w.lit).length;
- /* Tout passe par les bougies : trois mèches éteintes et la cire se fend —
+ /* Tout passe par les bougies : les cinq mèches éteintes et la cire se fend —
     le cœur s'expose en plein plat sur le torse, battant. */
  const wicksDown=5-lit;
  const choirCount=enemies.filter(o=>!o.dead&&o.kind==='waxChorist').length;
- e.value=Math.min(.49,(Math.min(3,wicksDown)/3)*.49);
- e.label='MÈCHES ÉTEINTES '+Math.min(3,wicksDown)+'/3 · RONDE '+choirCount;
- if(!e.core&&wicksDown>=3){e.phase=2;e.core={x:e.x,y:e.y+26,r:26,open:0,openTimer:1.1,attack:1.9,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LA CIRE SE FEND · le cœur bat à nu — frappe-le pendant le flash',4);particle(e.x,e.y,'#ffd9a0',34);tone(120,.7,'sine',.1,.7)}
+ e.value=Math.min(.49,(Math.min(5,wicksDown)/5)*.49);
+ e.label='MÈCHES ÉTEINTES '+Math.min(5,wicksDown)+'/5 · RONDE '+choirCount;
+ if(!e.core&&wicksDown>=5){e.phase=2;e.core={x:e.x,y:e.y+26,r:26,open:0,openTimer:1.1,attack:1.9,hits:0,flash:0,ember:null};e.flareTimer=5;for(const w of windows)w.relight=Infinity;e.value=.5;e.label='CŒUR · 0/3 IMPACTS';say('LA CIRE SE FEND · le cœur bat à nu — frappe-le pendant le flash',4);particle(e.x,e.y,'#ffd9a0',34);tone(120,.7,'sine',.1,.7)}
  if(lit===5&&e.age>6){
   mission.veilleComplete=true;
   hurt(25,'la veille complète');
@@ -9126,7 +9135,7 @@ function detonateGates(row,opts){
  flashT=.85;
  if(opts.reward){
   score+=250;
-  drops.push({x:clamp(cx,60,W-60),y:clamp(gates[0].y,170,H-140),kind:'shield',age:0});
+  drops.push({x:clamp(cx,60,W-60),y:clamp(gates[0].y,170,H-140),kind:opts.rewardKind||'shield',age:0});
  }
  say(toast,opts.reward?3.2:2.6);
 }
@@ -9147,7 +9156,13 @@ function breakBlock(w){
    const next=walls.find(v=>!v.dead&&v.switch&&v.row===w.row&&v.sequenceIndex===progress+1);
    if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · +'+rewardPts+' · vise la rune '+next.runeLabel,2.2);tone(660,.16,'sine',.05,1.2)}
    else{
-    detonateGates(w.row,{reward:true,toast:'LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +250 · UN DON DE CIRE TOMBE'});
+    /* Le sceau complet ne rend plus toujours le même don : la récompense est
+       tirée au sort parmi les quatre cadeaux utiles — bouclier, triple tir,
+       perce-cire, vie — avec le même tirage amorcé que le reste du labyrinthe. */
+    const gifts=['shield','candy','pierceShot','heal'];
+    const picked=gifts[Math.floor(rng()*gifts.length)];
+    const label=(BONUS.find(b=>b.kind===picked)||BONUS[0]).label;
+    detonateGates(w.row,{reward:true,rewardKind:picked,toast:'LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +250 · UN DON DE CIRE TOMBE · '+label});
    }
   }
  }else if(w.switch){

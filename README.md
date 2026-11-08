@@ -148,7 +148,7 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteignez au moins trois mèches : la cire se fend, le cœur bat à nu sur le torse — trois impacts pendant le flash ; **Le Chœur de cire** (deux veilleuses) garde le cœur et rallume les flammes tant qu'il vit — brisez-le d'abord. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteignez les cinq mèches : la cire se fend, le cœur bat à nu sur le torse — trois impacts pendant le flash ; **Le Chœur de cire** (deux veilleuses) garde le cœur et rallume les flammes tant qu'il vit — brisez-le d'abord. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
@@ -645,7 +645,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v5 (Le Chœur de cire : deux veilleuses orbitent le gardien, cœur absorbant tant qu'une choriste vit, mèches rallumables par canalisation, faille ouverte d'elle-même quand la ronde tombe, bouclier de cire 6 s par impact — trois mèches fendent toujours la cire) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées, plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v5 (Le Chœur de cire : deux veilleuses orbitent le gardien, cœur absorbant tant qu'une choriste vit, mèches rallumables par canalisation, faille ouverte d'elle-même quand la ronde tombe, bouclier de cire 6 s par impact — les cinq mèches fendent toujours la cire) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées (don aléatoire : bouclier / triple tir / perce-cire / vie), plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |
