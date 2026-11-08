@@ -1066,3 +1066,18 @@ quel que soit l'ordre ou le destin de la chaîne.
   tout comme la bannière de la Suspendue.
 - Pas de refonte : aucun plafond baissé, aucune mécanique neuve — les lettres payent simplement
   quelque chose qu'on sent passer.
+
+## 9quaterdecies. Deuxième livraison « par monde » : Échos de cendres · Absorbeur d'ombre
+
+Après la Brume de bile (touhou), la feuille de route continue — deux reliques, aucune refonte :
+
+- **Échos de cendres** (`echoes`, branche spectres, rang 1-2, univers ≥ 2) — des options **invulnérables**,
+  des cendres du tir, qui copient **exactement** le sillage du sort (visée, cadence, dégâts, perçage) :
+  un écho à gauche au rang 1, deux options symétriques au rang 2. À la Gradius — un compagnon n'est
+  pas un double : le Familier lunaire tire là où il veut, l'Écho tire là où tu tires.
+- **Absorbeur d'ombre** (`absorber`, branche spectres, rang 1, univers ≥ 3) — sous protection
+  (bouclier ou esquive active), les projectiles reçus sont **absorbés** au lieu d'être repoussés :
+  +30 points au combo courant **et un pas de chaîne** par projectile. À l'Ikaruga — la protection
+  devient un harvest, pas un sursis. Les toiles ne sont pas absorbables (elles ne blessent pas).
+- Aucun test existant ne casse ; `eligibleUpgrades` gate l'accès ; HUD/badges automatiques.
+- Prochaine livraison potentielle : un par monde — ce serait « par-monde » honoré du monde 2 au monde 4.

@@ -379,8 +379,9 @@ gardien n'est plus seul devant elle.
 - **Les lettres sont des artéfacts** — chaque lettre ramassée rend **une vie**, quel que soit
   l'ordre ou la chaîne : les plis I/II/III (même à contretemps) **et** la lettre suspendue saisie
   en vol. Au plafond, le surplus devient +250 points. Une lettre brisée ne paie plus que +50.
-- Feuille de route : **« Échos de cendres »** (options copieurs, Gradius) puis **« Absorbeur
-  d'ombre »** (frôlement absorbant, Ikaruga) — un ajout par monde, pas de refonte.
+- **Échos de cendres** — deux options invulnérables qui copient ton tir, visée comprise (à la Gradius).
+- **Absorbeur d'ombre** — sous bouclier ou esquive, les projectiles reçus deviennent +30×combo et un pas de chaîne (à l'Ikaruga).
+
 
 #### Le Faubourg remis dans son thème
 
