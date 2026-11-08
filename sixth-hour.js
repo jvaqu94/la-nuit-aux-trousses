@@ -1284,10 +1284,17 @@ function draw(g){
   }
  }
  if(e.kind==='sonneur'){
-  ring(g,e.bell.x,e.bell.y,e.bell.r,'#cfe6d8');
-  g.save();g.globalAlpha=.12+e.resonance/260;g.fillStyle='#cfe6d8';g.beginPath();g.arc(e.bell.x,e.bell.y,e.bell.r,0,Math.PI*2);g.fill();g.restore();
-  ring(g,e.clapper.x,e.clapper.y,e.clapper.r,e.clapper.down?telegraphTheme().glow:'#5c6f78',!e.clapper.down);
-  if(e.ring>0)ring(g,e.bell.x,e.bell.y,e.ring*260,telegraphTheme().glow);
+  /* Le clocher : cloche gravée, jamais un cercle à l'équerre — bronze au
+     dégradé, entaille lumineuse, 12 graduations sur l'onde de choc. */
+  const bronze=g.createLinearGradient(e.bell.x,e.bell.y-e.bell.r,e.bell.x,e.bell.y+e.bell.r);
+  bronze.addColorStop(0,'#f4dc9e');bronze.addColorStop(.42,'#c98f3e');bronze.addColorStop(.78,'#7a4c22');bronze.addColorStop(1,'#3e2712');
+  const steel=g.createLinearGradient(e.clapper.x,e.clapper.y-e.clapper.r,e.clapper.x,e.clapper.y+e.clapper.r);
+  steel.addColorStop(0,'#dfe8ee');steel.addColorStop(.5,'#6a7684');steel.addColorStop(1,'#2c333c');
+  ring(g,e.bell.x,e.bell.y,e.bell.r,bronze);
+  g.save();g.globalAlpha=.12+e.resonance/260;g.fillStyle=bronze;g.beginPath();g.arc(e.bell.x,e.bell.y,e.bell.r,0,Math.PI*2);g.fill();g.restore();
+  for(const off of [-.5,0,.5]){g.save();g.globalAlpha=.5;g.strokeStyle='#f7e3a8';g.lineWidth=1.2;g.beginPath();g.arc(e.bell.x,e.bell.y,e.bell.r-4,Math.PI/2+off-.16,Math.PI/2+off+.16);g.stroke();g.restore()}
+  ring(g,e.clapper.x,e.clapper.y,e.clapper.r,e.clapper.down?telegraphTheme().glow:steel,!e.clapper.down);
+  if(e.ring>0){const R=e.ring*260;ring(g,e.bell.x,e.bell.y,R,bronze);for(let i=0;i<12;i++){const a=i*Math.PI/6+ambient*.12;line(g,e.bell.x+Math.cos(a)*(R-7),e.bell.y+Math.sin(a)*(R-7),e.bell.x+Math.cos(a)*(R+3),e.bell.y+Math.sin(a)*(R+3),'#f4dc9e88',2)}}
  }
  if(e.kind==='passeur'){
   for(const z of e.sand){const tt=telegraphTheme();g.save();g.globalAlpha=z.fresh?.22:.06;g.fillStyle=tt.base;g.beginPath();g.arc(z.x,z.y,z.r,0,Math.PI*2);g.fill();g.restore();ring(g,z.x,z.y,z.r,z.fresh?tt.glow:'#5b6a72',!z.fresh)}
