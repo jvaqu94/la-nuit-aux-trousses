@@ -1027,3 +1027,23 @@ absorbe même pendant le flash tant que la ronde vit ; la faille s'ouvre d'elle-
 de la ronde ; chaque impact rend le bouclier de cire ; la ronde se reforme (2) après le premier
 impact. Les mèches restent tirables dans tous les cas ; aucune horloge nouvelle, aucun scellé,
 aucun chiffre à retenir.
+
+## 9duodecies. Huitième retour en jeu : un télégraphe à quinze visages · la Brume de bile
+
+- **Un seul signe, quinze dialectes.** Les cercles qui annonçait les malédictions, les toiles,
+  les halos et les gardiens portaient partout les mêmes couleurs. Désormais une table unique
+  (`telegraphTheme`) renvoie base + accent + cœur du signe par univers, et un petit motif local
+  (`telegraphGarnish`) se pose sous chaque anneau : **vaguelettes et sable pâle** sur l'Estran
+  (avec un accent eau), **nervures** au Bois, **graduations de cadran** au Cadran noir,
+  **gouttes de cire** au Faubourg, **bronze** au Clocher, cierges et marais ailleurs.
+  Mondes 1/2/3 passent par la même table ; les zones au sol, les anneaux des gardiens,
+  l'orbite du **Chœur de cire** et le télégraphe « LA RONDE RALLUME » l'adoptent. Lisibilité
+  inchangée (la couleur + la forme + l'annonce écrite restent redondantes) — seule l'accentuation
+  change de dialecte selon la terre survolée.
+- **« Brume de bile » (arsenal).** Quatrième sort de l'arsenal — la bombe à poisons, à la manière
+  des bombes de touhou : un nuage (rayon **230**) persiste **4,5 s** — 3 dégâts d'impact,
+  **empoisonne tout ce qui le traverse (5 s)**, dissipe les tirs proches **et les mange au passage**.
+  Déblocage : vaincre **3 gardiens**. Recharge **20 s**. Seule l'armure de phase des gardiens résiste.
+- **Feuille de route « par monde ».** La Brume de bile ouvre le catalogue. À suivre, un par monde :
+  **« Échos de cendres »** (options qui copient ton tir à la place d'un simple compagnon — Gradius),
+  puis **« Absorbeur d'ombre »** (les projectiles absorbés sous protection deviennent du combo — Ikaruga).

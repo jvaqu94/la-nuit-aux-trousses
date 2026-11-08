@@ -365,6 +365,20 @@ gardien n'est plus seul devant elle.
   une mèche éteinte qui se rallume à chaque impact. La phase 2 est une spirale explicite, jamais
   une formalité.
 
+#### Neuvième passe : des télégraphes par univers · la Brume de bile
+
+*(neuvième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9duodecies)*
+
+- **Un télégraphe à quinze dialectes** — les cercles au sol, les halos des gardiens et l'orbite du
+  Chœur de cire portent enfin le matériau du lieu : sable pâle + vaguelettes d'eau sur **l'Estran**,
+  cire au **Faubourg**, bronze au **Clocher**, lierre au **Bois**, graduations au **Cadran noir**.
+  Mondes 1 et 2 adoptent la même table — rien n'est réinventé, tout est localisé.
+- **La Brume de bile (arsenal)** — le quatrième sort, la bombe à poisons à la touhou : un nuage
+  (rayon 230, 4,5 s) empoisonne tout ce qui le traverse, dissipe les tirs proches **et les mange au
+  passage**. Déblocage : 3 gardiens vaincus. Recharge : 20 s.
+- Feuille de route : **« Échos de cendres »** (options copieurs, Gradius) puis **« Absorbeur
+  d'ombre »** (frôlement absorbant, Ikaruga) — un ajout par monde, pas de refonte.
+
 #### Le Faubourg remis dans son thème
 
 Le premier univers du monde 3 est un faubourg de nuit — toits, ruelle, fenêtres
@@ -609,8 +623,8 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `journey.js` | Grimoire, XP, contrats, collection, bilans, avis et export/import. |
 | `daily-rewards.js` | Coffre de connexion, série sur sept paliers, tirage persistant et révélation des gains cosmétiques. |
 | `online.js` | Défis et cumul locaux, sans compte dans l’interface actuelle. |
-| `arsenal.js` | Sorts, balais, compagnons et équipement. |
-| `arsenal-art.js` | Illustrations vectorielles locales et pastilles courtes des neuf choix d’équipement. |
+| `arsenal.js` | Sorts, balais, compagnons et équipement (dont la Brume de bile). |
+| `arsenal-art.js` | Illustrations vectorielles locales et pastilles courtes des dix choix d’équipement. |
 | `adventure.js` | Exploits, variantes, Laboratoire et coffres scellés. |
 | `encounters.js` | Formations, séquences de terrain, statistiques de vol et confort. |
 | `night-hazards.js` | Obstacles, charges des gardiens et bonbons. |
