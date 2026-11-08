@@ -1394,7 +1394,7 @@ assert.equal(r.labyrinth.loop.crashes, 0, 'la boucle complète doit tenir avec l
 assert.ok(r.labyrinth.loop.maxWalls > 8, 'le labyrinthe doit vraiment se remplir en partie');
 
 /* Butin caché dans les murs : sceau visible, tirage réel, bons objets. */
-assert.deepEqual(r.loot.kinds, ['points', 'shield', 'candy', 'heal', 'upgrade'], 'le mur doit donner les bonus du jeu principal');
+assert.deepEqual(r.loot.kinds, ['points', 'shield', 'candy', 'pierceShot', 'heal', 'upgrade'], 'le mur doit donner les bonus du jeu principal');
 assert.ok(r.loot.chance >= .15 && r.loot.chance <= .22, 'le sceau doit rester une occasion, pas la norme : ' + r.loot.chance);
 assert.ok(r.loot.rolls.none > 3000 && r.loot.rolls.none < 3400, 'environ quatre blocs sur cinq doivent rester vides : ' + r.loot.rolls.none);
 for (const kind of r.loot.kinds) assert.ok(r.loot.rolls[kind] > 30, 'le sort ' + kind + ' ne sort jamais');

@@ -30,7 +30,8 @@ const CELL=100,COLS=8,ROW_H=46,PLAYER_R=15;
 const BONUS=[
  {kind:'points',weight:34,label:'TRÉSOR',color:'#f4ce83'},
  {kind:'shield',weight:20,label:'BOUCLIER',color:'#8ee9e2'},
- {kind:'candy',weight:18,label:'TRIPLE TIR',color:'#ffb0d8'},
+ {kind:'candy',weight:16,label:'TRIPLE TIR',color:'#ffb0d8'},
+ {kind:'pierceShot',weight:9,label:'PERCE-CIRE',color:'#9fd9e7'},
  {kind:'heal',weight:14,label:'VIE',color:'#ff8e7b'},
  {kind:'upgrade',weight:8,label:'ARSENAL',color:'#c291e7'}
 ];
@@ -41,6 +42,7 @@ function drawSeal(g,kind){
  if(kind==='points'){g.moveTo(0,-6);g.lineTo(4.5,0);g.lineTo(0,6);g.lineTo(-4.5,0);g.closePath();g.fill()}
  else if(kind==='shield'){g.moveTo(-4.5,-5);g.lineTo(4.5,-5);g.lineTo(4.5,1);g.lineTo(0,6);g.lineTo(-4.5,1);g.closePath();g.fill()}
  else if(kind==='candy'){g.rect(-5,-5,2.4,10);g.rect(-1.2,-5,2.4,10);g.rect(2.6,-5,2.4,10);g.fill()}
+ else if(kind==='pierceShot'){g.rect(-1.6,-6.5,3.2,7);g.moveTo(0,8);g.lineTo(4.6,-.5);g.lineTo(-4.6,-.5);g.closePath();g.rect(-5.5,-8,2.6,2.6);g.rect(2.9,-8,2.6,2.6);g.fill()}
  else if(kind==='heal'){g.rect(-1.7,-5.5,3.4,11);g.rect(-5.5,-1.7,11,3.4);g.fill()}
  else{g.moveTo(0,-6);g.lineTo(5,2);g.lineTo(1.8,2);g.lineTo(1.8,6);g.lineTo(-1.8,6);g.lineTo(-1.8,2);g.lineTo(-5,2);g.closePath();g.fill()}
 }
