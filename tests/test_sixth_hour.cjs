@@ -1140,10 +1140,12 @@ enemies=[];hostile=[];shots=[];drops=[];obstacles=[];
 SH.marks.length=0;SH.salt.length=0;newWave();wave=1;newWave();
 spawnEnemy({kind:SH.mission.prime,x:400,y:300,group:1,index:0,pattern:99});
 const primeTok=enemies[enemies.length-1];primeTok.elite=false;primeTok.tier=1;
+/* Le Faux-cierge « percé » paie 250 en plus (stage 0) : le calcul dépend de la prime tirée au sort ce jour-là. */
+const primeBonus=SH.mission.prime==='waxMimic'?250:0;
 hostile=[{x:120,y:120,vx:0,vy:0,type:'spirit',r:7,damage:25,life:1,grazed:false,age:0,speed:100},{x:200,y:160,vx:0,vy:0,type:'spirit',r:7,damage:25,life:1,grazed:false,age:0,speed:140}];
 const scoreD=score,comboD=combo;
 reward(primeTok);
-out.retour.primeCancel={hostileLeft:hostile.length,score:score-scoreD,expected:100*comboD+400+2*50};
+out.retour.primeCancel={hostileLeft:hostile.length,score:score-scoreD,expected:100*comboD+400+2*50+primeBonus};
 
 globalThis.__RESULT__=out;
 })();
