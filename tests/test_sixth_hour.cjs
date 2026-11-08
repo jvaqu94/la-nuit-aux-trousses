@@ -1066,6 +1066,7 @@ enemies.forEach(e=>e.dead=true);
 out.triage.clear=!SH.objectiveText().includes('PRIORITÉ');
 
 /* Les plis cachetés : I → II → III dans l'ordre, le désordre casse la chaîne. */
+lives=0; /* l'artéfact : une vie par lettre, l'ordre ou non (plafond non testé ici) */
 freshWave(1);
 out.plis={wave:1,drops:drops.filter(d=>d.kind==='pli').map(d=>d.pli)};
 combo=1;chain=0;
@@ -1081,6 +1082,7 @@ freshWave(3);
 out.plis.wave3Drops=drops.filter(d=>d.kind==='pli').map(d=>d.pli);
 SH.collectPli({pli:3});
 out.plis.after3={got:SH.mission.plis.got,combo,objective:SH.objectiveText().includes('PLIS ✓')};
+out.plis.livesEnd=lives;
 combo=1;chain=0;
 
 /* Épreuves propres aux cinq univers : une action distinctive par monde. */
@@ -1440,6 +1442,7 @@ assert.equal(r.plis.wave2.got, 0, 'la chaîne des plis survit au passage de vagu
 assert.deepEqual(r.plis.after1, { got:1, next:2, combo:2 }, 'le pli I se ramasse');
 assert.equal(r.plis.after2.got, 2, 'le pli II se ramasse ensuite');
 assert.deepEqual(r.plis.after3, { got:3, combo:4, objective:true }, 'les trois plis complètent le sceau');
+assert.equal(r.plis.livesEnd, 4, 'chaque pli ramassé rend une vie, quel que soit l’ordre');
 assert.deepEqual(r.plis.wave3Drops, [3], 'la vague 3 laisse tomber le pli III');
 
 /* L’ordre des runes paie : score croissant et chaîne de combo. */

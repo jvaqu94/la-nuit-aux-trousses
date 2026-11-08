@@ -376,6 +376,9 @@ gardien n'est plus seul devant elle.
 - **La Brume de bile (arsenal)** — le quatrième sort, la bombe à poisons à la touhou : un nuage
   (rayon 230, 4,5 s) empoisonne tout ce qui le traverse, dissipe les tirs proches **et les mange au
   passage**. Déblocage : 3 gardiens vaincus. Recharge : 20 s.
+- **Les lettres sont des artéfacts** — chaque lettre ramassée rend **une vie**, quel que soit
+  l'ordre ou la chaîne : les plis I/II/III (même à contretemps) **et** la lettre suspendue saisie
+  en vol. Au plafond, le surplus devient +250 points. Une lettre brisée ne paie plus que +50.
 - Feuille de route : **« Échos de cendres »** (options copieurs, Gradius) puis **« Absorbeur
   d'ombre »** (frôlement absorbant, Ikaruga) — un ajout par monde, pas de refonte.
 

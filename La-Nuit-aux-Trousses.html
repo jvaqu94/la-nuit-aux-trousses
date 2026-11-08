@@ -676,6 +676,9 @@ function spawnEnemy(d){const index=(d.group||0)*5+(d.index||0)+wave+stage,reinfo
 function dailyAward(points,label){if(window.League?.active)return;if(mode!=='daily')return;points=Math.round(points);dailyBonus+=points;score+=points;say('DÉFI · '+label+' +'+points,2.7);updateDailyInfo()}
 function dailyWaveReward(){window.League?.event?.('waves',1);if(clean)window.League?.event?.('cleanWaves',1);if(mode!=='daily')return;dailyAward(150*(stage+1)*wave+(clean?100*(stage+1):0),'Vague '+wave+(clean?' sans dégâts':''))}
 function updateDailyInfo(){if(!$('dailyinfo'))return;$('dailyinfo').textContent=mode==='daily'?'Défi du '+(dailyDate||dateKey())+' · BONUS +'+dailyBonus+' points. Vagues : 150 × univers × vague, +100 × univers sans dégâts. Gardiens : 750 × univers. Élites : 100 × univers. 8 frôlements : +150.':'Défi du '+dateKey()+' : gagne des points supplémentaires en terminant les vagues, en vainquant les élites et en frôlant leurs tirs. Même graine et difficulté pour tous.'}
+/* Les lettres sont des artéfacts : chaque lettre ramassée rend une vie pour le vol (ordre respecté ou non).
+   Même règle que les cœurs : au-delà du plafond, le surplus devient des points. */
+function gainLetterLife(){const cap=window.LevelRewards?.maxLives?.()||5;if(lives<cap){lives++;return'· +1 ♥'}score+=250;return'· vies au max · +250 points'}
 const upgradeDefs=[['rocket','explosions','Roquettes spectrales',`Missiles guidés pendant ${MINUIT_BALANCE.missiles.duration} secondes. Une roquette, puis deux dès le 3e univers.`,2],['fragment','explosions','Fragmentation','Les roquettes libèrent des éclats après leur explosion.',2],['chain','explosions','Réaction en chaîne','Une explosion peut déclencher une seconde déflagration.',2],['flame','explosions','Flamme maudite','Les roquettes embrasent les toiles et les ennemis proches.',2],['poison','malédictions','Venin de minuit','Les tirs empoisonnent ; les dégâts persistent.',3],['spread','malédictions','Contagion','Les ennemis vaincus transmettent leur poison.',2],['fire','malédictions','Grimoire de puissance','Cadence accrue, puis dégâts et double tir.',3],['familiar','spectres','Familier lunaire','Un, puis deux compagnons tirent à tes côtés.',2],['pierce','spectres','Aiguilles fantômes','Les sorts traversent un ennemi supplémentaire.',2],['laser','spectres','Rayon spectral','Un rayon périodique traverse toute la colonne de tir.',3]];
 function upgradeCap(key){if(key==='rocket')return stage>=2?2:1;if(key==='fire')return stage===0?1:stage===1?2:3;if(['poison','pierce'].includes(key))return stage===0?1:stage===1?2:3;if(['familiar','laser'].includes(key))return stage<3?1:2;return stage<3?1:2}
 function eligibleUpgrades(){const permanent=Object.entries(upgrades).reduce((n,[k,v])=>n+(k==='rocket'?0:v),0),budget=stage===0?Math.min(3,wave-1):5+stage*3+Math.floor(wave/2);return upgradeDefs.filter(d=>{const k=d[0];if(upgrades[k]>=Math.min(d[4],upgradeCap(k))&&k!=='rocket')return false;if(k==='rocket')return (stage>0||wave>=3)&&(player.missileTime||0)<3;if(permanent>=budget)return false;if(k==='fire')return stage>0||wave>=2;if(k==='poison')return stage>0||wave>=4;if(k==='pierce')return stage>=1;if(k==='familiar')return stage>=2||(stage===1&&wave>=3);if(k==='laser')return stage>=2;if(k==='spread')return stage>=1&&upgrades.poison>0;return stage>=2&&player.rocketUnlocked})}
@@ -7083,7 +7086,7 @@ function tickMimics(dt){
 /* La minute suspendue : la lettre traverse l'écran sans rien tirer. La ramasser
    (ou la laisser traverser intacte) scelle la minute : +400 et une couronne.
    Un tir sur elle brise le sceau : +50, aucun crédit. */
-function resolveLetter(L,byShot){
+function resolveLetter(L,byShot,how){
  if(L.dead)return;
  L.dead=true;
  if(byShot){
@@ -7092,15 +7095,17 @@ function resolveLetter(L,byShot){
   say('LE SCEAU SE BRISE · +50 points',1.8);tone(214,.25,'sawtooth',.06,.7);
  }else{
   mission.legere=true;score+=400;
-  particle(L.x,L.y,'#ffd9a0',40);say('SCEAU SCELLÉ · +400 points · une minute rendue sans un coup',3);
+  /* ramassée en vol (ou appel historique) : l'artéfact paie une vie ; traversée tranquille : déjà payée */
+  const letterTag=how==='gone'?'':gainLetterLife();
+  particle(L.x,L.y,'#ffd9a0',40);say('SCEAU SCELLÉ · +400 points · une minute rendue sans un coup'+(letterTag?' '+letterTag:''),3);
   tone(392,.4,'sine',.1,1.3);tone(523,.5,'sine',.09,1.2);tone(659,.6,'sine',.08,1.1);
  }
 }
 function tickLetters(dt){
  for(const L of letters){
   L.age+=dt;L.x+=L.vx*dt;
-  if(Math.hypot(L.x-player.x,L.y-player.y)<26)resolveLetter(L,false);
-  else if(L.x<-70)resolveLetter(L,false);
+  if(Math.hypot(L.x-player.x,L.y-player.y)<26)resolveLetter(L,false,'caught');
+  else if(L.x<-70)resolveLetter(L,false,'gone');
  }
  letters=letters.filter(L=>!L.dead);
 }
@@ -7200,6 +7205,7 @@ damageEnemy=function(e,n,...rest){
    Un pli touché trop tôt se brise et coûte la chaîne. */
 function collectPli(d){
  if(!mission.plis)return true;
+ const letterTag=gainLetterLife(); /* l'artéfact : une vie, l'ordre ou non */
  if(d&&d.pli===mission.plis.next){
   mission.plis.next++;mission.plis.got++;
   score+=250;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
@@ -7209,14 +7215,14 @@ function collectPli(d){
    /* Le sceau complet paie enfin quelque chose que le vol ressent : un bouclier de cire. */
    player.shield=Math.max(player.shield||0,100);player.shieldTime=Math.max(player.shieldTime||0,6);
    particle(player.x,player.y,'#e8d3ab',28);
-   say('SCELLÉ COMPLET · les trois plis cachetés · +1000 · BOUCLIER DE CIRE 6 s',3.2);
+   say('SCELLÉ COMPLET · les trois plis cachetés · +1000 · BOUCLIER DE CIRE 6 s'+letterTag,3.2);
   }
-  else say('PLI '+VIAL_ROMAN[d.pli-1]+' CACHETÉ · +250 · l’ordre paie',2.2);
+  else say('PLI '+VIAL_ROMAN[d.pli-1]+' CACHETÉ · +250 · l’ordre paie'+letterTag,2.2);
   return true;
  }
  combo=1;chain=0;comboTime=0;
  tone(170,.18,'square',.06,.6);
- say('PLI SCELLÉ POUR PLUS TARD · brise le pli '+VIAL_ROMAN[(mission.plis.next||1)-1]+' d’abord',2.2);
+ say('PLI SCELLÉ POUR PLUS TARD · brise le pli '+VIAL_ROMAN[(mission.plis.next||1)-1]+' d’abord'+letterTag,2.2);
  return false;
 }
 

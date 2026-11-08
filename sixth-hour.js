@@ -421,7 +421,7 @@ function tickMimics(dt){
 /* La minute suspendue : la lettre traverse l'écran sans rien tirer. La ramasser
    (ou la laisser traverser intacte) scelle la minute : +400 et une couronne.
    Un tir sur elle brise le sceau : +50, aucun crédit. */
-function resolveLetter(L,byShot){
+function resolveLetter(L,byShot,how){
  if(L.dead)return;
  L.dead=true;
  if(byShot){
@@ -430,15 +430,17 @@ function resolveLetter(L,byShot){
   say('LE SCEAU SE BRISE · +50 points',1.8);tone(214,.25,'sawtooth',.06,.7);
  }else{
   mission.legere=true;score+=400;
-  particle(L.x,L.y,'#ffd9a0',40);say('SCEAU SCELLÉ · +400 points · une minute rendue sans un coup',3);
+  /* ramassée en vol (ou appel historique) : l'artéfact paie une vie ; traversée tranquille : déjà payée */
+  const letterTag=how==='gone'?'':gainLetterLife();
+  particle(L.x,L.y,'#ffd9a0',40);say('SCEAU SCELLÉ · +400 points · une minute rendue sans un coup'+(letterTag?' '+letterTag:''),3);
   tone(392,.4,'sine',.1,1.3);tone(523,.5,'sine',.09,1.2);tone(659,.6,'sine',.08,1.1);
  }
 }
 function tickLetters(dt){
  for(const L of letters){
   L.age+=dt;L.x+=L.vx*dt;
-  if(Math.hypot(L.x-player.x,L.y-player.y)<26)resolveLetter(L,false);
-  else if(L.x<-70)resolveLetter(L,false);
+  if(Math.hypot(L.x-player.x,L.y-player.y)<26)resolveLetter(L,false,'caught');
+  else if(L.x<-70)resolveLetter(L,false,'gone');
  }
  letters=letters.filter(L=>!L.dead);
 }
@@ -538,6 +540,7 @@ damageEnemy=function(e,n,...rest){
    Un pli touché trop tôt se brise et coûte la chaîne. */
 function collectPli(d){
  if(!mission.plis)return true;
+ const letterTag=gainLetterLife(); /* l'artéfact : une vie, l'ordre ou non */
  if(d&&d.pli===mission.plis.next){
   mission.plis.next++;mission.plis.got++;
   score+=250;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
@@ -547,14 +550,14 @@ function collectPli(d){
    /* Le sceau complet paie enfin quelque chose que le vol ressent : un bouclier de cire. */
    player.shield=Math.max(player.shield||0,100);player.shieldTime=Math.max(player.shieldTime||0,6);
    particle(player.x,player.y,'#e8d3ab',28);
-   say('SCELLÉ COMPLET · les trois plis cachetés · +1000 · BOUCLIER DE CIRE 6 s',3.2);
+   say('SCELLÉ COMPLET · les trois plis cachetés · +1000 · BOUCLIER DE CIRE 6 s'+letterTag,3.2);
   }
-  else say('PLI '+VIAL_ROMAN[d.pli-1]+' CACHETÉ · +250 · l’ordre paie',2.2);
+  else say('PLI '+VIAL_ROMAN[d.pli-1]+' CACHETÉ · +250 · l’ordre paie'+letterTag,2.2);
   return true;
  }
  combo=1;chain=0;comboTime=0;
  tone(170,.18,'square',.06,.6);
- say('PLI SCELLÉ POUR PLUS TARD · brise le pli '+VIAL_ROMAN[(mission.plis.next||1)-1]+' d’abord',2.2);
+ say('PLI SCELLÉ POUR PLUS TARD · brise le pli '+VIAL_ROMAN[(mission.plis.next||1)-1]+' d’abord'+letterTag,2.2);
  return false;
 }
 

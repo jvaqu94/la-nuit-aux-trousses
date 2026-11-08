@@ -1047,3 +1047,22 @@ aucun chiffre à retenir.
 - **Feuille de route « par monde ».** La Brume de bile ouvre le catalogue. À suivre, un par monde :
   **« Échos de cendres »** (options qui copient ton tir à la place d'un simple compagnon — Gradius),
   puis **« Absorbeur d'ombre »** (les projectiles absorbés sous protection deviennent du combo — Ikaruga).
+
+## 9terdecies. Les lettres sont des artéfacts
+
+Retour en jeu : « les lettres n'ont pas de but, on ne sait pas ce qui se passe quand on les prend ».
+Désormais **chaque lettre ramassée rend une vie** — dans tous les mondes où des lettres existent,
+quel que soit l'ordre ou le destin de la chaîne.
+
+- **Plis cachetés (I → II → III)** — ramassés dans l'ordre : +250, la chaîne, le sceau complet
+  (+1000 + bouclier de cire). **Ramassés à contretemps ou non finis : la vie est quand même rendue.**
+  Un pli est une lettre après tout.
+- **La Minute Suspendue (vague 3)** — saisie en vol : +400, MAIN LÉGÈRE… **et une vie**.
+  Traversée sans un tir : +400, MAIN LÉGÈRE (le passage paie déjà la discipline).
+  Brisée par un tir : +50, rien d'autre — une lettre brisée n'est jamais un artéfact.
+- Même règle que les cœurs : au plafond (5 vies d'ordinaire, extensible), le surplus devient
+  **+250 points**. La vie arrive avec un éclair rose sur la sorcière.
+- Le jeu le dit au ramassage : le toast du pli reprend le tag (« · +1 ♥ » / « · vies au max · +250 points »),
+  tout comme la bannière de la Suspendue.
+- Pas de refonte : aucun plafond baissé, aucune mécanique neuve — les lettres payent simplement
+  quelque chose qu'on sent passer.
