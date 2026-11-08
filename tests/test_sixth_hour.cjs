@@ -1452,7 +1452,7 @@ assert.equal(r.labyrinth.runePayoff.aCombo, 2, 'rune A validée : +1 combo');
 assert.equal(r.labyrinth.runePayoff.aScore, 180, 'rune A validée : +150 (+30 génériques)');
 assert.equal(r.labyrinth.runePayoff.bCombo, 3, 'rune B validée : encore +1 combo');
 assert.equal(r.labyrinth.runePayoff.endCombo, 5, 'les trois runes : +4 de combo au total');
-assert.equal(r.labyrinth.runePayoff.total, 790, 'l’ordre paie : 150 + 150 + 400 (+30 par bloc)');
+assert.equal(r.labyrinth.runePayoff.total, 1040, 'l’ordre paie : 150 + 150 + 400 (+30 par bloc) + 250 SCEAU LIBÉRÉ');
 assert.equal(r.labyrinth.cachePayoff.combo, 2, 'la cache du Faubourg paie un pas de combo');
 assert.equal(r.labyrinth.cachePayoff.points, 130, 'la cache du Faubourg paie 100×(étape+1) en plus des 30 du mur');
 
