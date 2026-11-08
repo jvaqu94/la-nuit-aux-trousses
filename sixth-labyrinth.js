@@ -344,9 +344,17 @@ function draw(g){
   g.fillStyle='rgba(12,10,24,.62)';g.fillRect(0,route.y-ROW_H/2-12,W,(compactView()?26:22));
   g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'11px')+' Arial';
   if(route.stage===0){
-   g.fillStyle='#ffd9a0';g.fillText('RUNES A → B → C',route.narrowX,route.y-ROW_H/2-5);
-   g.fillStyle='#cfe6d8';g.fillText('TIRE SUR LA RUNE ALLUMÉE',route.wideX,route.y-ROW_H/2-5);
-   g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5);
+   const prog=puzzleProgress[route.row]||0;
+   if(prog>=3){
+    g.fillStyle='#8ee9e2';g.fillText('LES DEUX ROUTES SONT LIBRES',route.narrowX,route.y-ROW_H/2-5);
+    g.fillStyle='#8ee9e2';g.fillText('SEUL L’ABÎME DE CIRE RESTE',route.wideX,route.y-ROW_H/2-5);
+    if(route.cacheX!=null){g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5)}
+   }else{
+    const runeNext=['A','B','C'][prog];
+    g.fillStyle='#ffd9a0';g.fillText('RUNES A → B → C',route.narrowX,route.y-ROW_H/2-5);
+    g.fillStyle='#cfe6d8';g.fillText('RUNE '+runeNext+' ALLUMÉE',route.wideX,route.y-ROW_H/2-5);
+    if(route.cacheX!=null){g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5)}
+   }
   }else if(route.stage===1){
    g.fillStyle='#cfe6d8';g.fillText('CLOCHE A · OUVRIR',route.narrowX,route.y-ROW_H/2-5);
    g.fillText('CLOCHE B · OUVRIR',route.wideX,route.y-ROW_H/2-5);

@@ -104,9 +104,9 @@ function extinguishWick(w){w.lit=false;w.open=0;w.charge=0;w.relight=11+rng()*2;
 const INTRO_SEEN='minuit-sixth-intros';
 function seenIntros(){try{return new Set(JSON.parse(localStorage.getItem(INTRO_SEEN)||'[]'))}catch{return new Set()}}
 function world3Intro(s,w){
- if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Tant qu’il est allumé, <b>tout le pack est IMMUNISÉ</b> — lui compris : un cercle entoure chaque monstre. Il luit 2 s puis s’éteint 2,6 s. <b>Frappe pendant le creux</b>, ou tue d’abord le porteur — le halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une famille payante : <b>chaque</b> cible PRIME abattue rapporte +400 et un pas de combo, toute la vague.</p>'};
+ if(s===0&&w===1)return{key:'w3-faubourg',title:'Le Faubourg des veilles',body:'<p><b>Les plis cachetés.</b> Une lettre scellée tombe sur les vagues 1 à 3. Ramassées dans l’ordre <b>I → II → III</b> : +250 par pli, et <b>+1000</b> et un <b>bouclier de cire (6 s)</b> pour le sceau complet. Un pli trop tôt se brise et casse ta chaîne.</p><p><b>Le halo du Garde-mèche.</b> Tant qu’il est allumé, <b>tout le pack est IMMUNISÉ</b> — lui compris : un cercle entoure chaque monstre. Il luit 2 s puis s’éteint 2,6 s. <b>Frappe pendant le creux</b>, ou tue d’abord le porteur — le halo tombe avec lui.</p><p><b>PRIME.</b> Chaque vague désigne une famille payante : <b>chaque</b> cible PRIME abattue rapporte +400 et un pas de combo, toute la vague.</p>'};
  if(s===0&&w===2)return{key:'w3-minute1',title:'Minute 1 · Le Garde-mèche',body:'<p>Le Garde-mèche <b>garde la minute</b>. Son halo luit 2 s et s’éteint 2,6 s : au creux, tout le monde redevient vulnérable — lui compris.</p><p><b>Frappe pendant le creux</b>, ou tue-le d’abord. Puis marche sur le cadran pour rendre la minute au monde.</p>'};
- if(s===0&&w===3)return{key:'w3-minute2',title:'Minute 2 · Tenue',body:'<p>Survis <b>22 secondes</b>. La minute se libère ensuite — marche sur le cadran.</p>'};
+ if(s===0&&w===3)return{key:'w3-minute2',title:'Minute 2 · Tenue',body:'<p>Survis <b>22 secondes</b>. La minute se libère ensuite — marche sur le cadran.</p><p><b>La lettre scellée.</b> Une lettre traverse l’univers en vague 3. <b>Saisis-la en vol</b> (ou laisse-la sortir) : <b>MINUTE RENDUE sans un coup, +400</b>. Un tir la brise : +50 seulement. Sans tirer, c’est aussi le chemin de la couronne <b>MAIN LÉGÈRE</b>.</p>'};
  if(s===0&&w===4)return{key:'w3-minute3',title:'Minute 3 · Les sceaux',body:'<p>Deux flammes creuses portent le sceau. <b>Tire dessus</b> pour libérer la minute.</p>'};
  if(w>=1&&w<=4&&s>=1)return{key:'w3-stage-'+s,title:'Nouvelle loi',body:'<p>'+RULES[s]+'</p>'};
  return null;
@@ -533,7 +533,13 @@ function collectPli(d){
   mission.plis.next++;mission.plis.got++;
   score+=250;combo=Math.min(8,combo+1);comboTime=Math.max(comboTime,2);
   particle(player.x,player.y,'#ffd9a0',16);tone(700,.2,'triangle',.08,1.3);
-  if(mission.plis.got>=3){score+=1000;say('SCELLÉ COMPLET · les trois plis cachetés · +1000 points',3)}
+  if(mission.plis.got>=3){
+   score+=1000;
+   /* Le sceau complet paie enfin quelque chose que le vol ressent : un bouclier de cire. */
+   player.shield=Math.max(player.shield||0,100);player.shieldTime=Math.max(player.shieldTime||0,6);
+   particle(player.x,player.y,'#e8d3ab',28);
+   say('SCELLÉ COMPLET · les trois plis cachetés · +1000 · BOUCLIER DE CIRE 6 s',3.2);
+  }
   else say('PLI '+VIAL_ROMAN[d.pli-1]+' CACHETÉ · +250 · l’ordre paie',2.2);
   return true;
  }
@@ -1331,6 +1337,7 @@ function objectiveText(){
  const kept=window.Campaign?.progress?.minutesKept||0;
  const tally=' · '+kept+'/15 rendues';
  let suffix='';
+ if(wave===3&&letters.some(L=>!L.dead))suffix+=' · LETTRE EN VOL : saisis-la sans tirer, c’est la minute';
  if(stage===0){
   if(mission.prime)suffix+=' · PRIME : '+(foeNames[mission.prime]||mission.prime)+' (+400/cible)';
   if(mission.plis)suffix+=mission.plis.got>=3?' · PLIS ✓':' · PLIS '+(mission.plis.got||0)+'/3';

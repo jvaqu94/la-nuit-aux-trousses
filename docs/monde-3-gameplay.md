@@ -758,7 +758,7 @@ Une lettre scellée tombe du ciel à chaque vague. Ramassées **dans l’ordre I
 les trois plis forment le sceau complet :
 
 - bon pli : +250, un pas de combo, compteur « PLIS n/3 » dans le bandeau objectif ;
-- les trois : **+1000 points** et le murmure « SCELLÉ COMPLET » ;
+- les trois : **+1000 points**, un **bouclier de cire (6 s)** et le murmure « SCELLÉ COMPLET » ;
 - mauvais pli : la lettre se brise, +0, la chaîne de combo est cassée (« PLI SCELLÉ POUR
   PLUS TARD »). Les plis manqués ne bloquent pas durablement : la chaîne survit aux vagues.
 
