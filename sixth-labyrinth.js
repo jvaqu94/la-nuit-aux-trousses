@@ -30,7 +30,8 @@ const CELL=100,COLS=8,ROW_H=46,PLAYER_R=15;
 const BONUS=[
  {kind:'points',weight:34,label:'TRÉSOR',color:'#f4ce83'},
  {kind:'shield',weight:20,label:'BOUCLIER',color:'#8ee9e2'},
- {kind:'candy',weight:18,label:'TRIPLE TIR',color:'#ffb0d8'},
+ {kind:'candy',weight:16,label:'TRIPLE TIR',color:'#ffb0d8'},
+ {kind:'pierceShot',weight:9,label:'PERCE-CIRE',color:'#9fd9e7'},
  {kind:'heal',weight:14,label:'VIE',color:'#ff8e7b'},
  {kind:'upgrade',weight:8,label:'ARSENAL',color:'#c291e7'}
 ];
@@ -41,6 +42,7 @@ function drawSeal(g,kind){
  if(kind==='points'){g.moveTo(0,-6);g.lineTo(4.5,0);g.lineTo(0,6);g.lineTo(-4.5,0);g.closePath();g.fill()}
  else if(kind==='shield'){g.moveTo(-4.5,-5);g.lineTo(4.5,-5);g.lineTo(4.5,1);g.lineTo(0,6);g.lineTo(-4.5,1);g.closePath();g.fill()}
  else if(kind==='candy'){g.rect(-5,-5,2.4,10);g.rect(-1.2,-5,2.4,10);g.rect(2.6,-5,2.4,10);g.fill()}
+ else if(kind==='pierceShot'){g.rect(-1.6,-6.5,3.2,7);g.moveTo(0,8);g.lineTo(4.6,-.5);g.lineTo(-4.6,-.5);g.closePath();g.rect(-5.5,-8,2.6,2.6);g.rect(2.9,-8,2.6,2.6);g.fill()}
  else if(kind==='heal'){g.rect(-1.7,-5.5,3.4,11);g.rect(-5.5,-1.7,11,3.4);g.fill()}
  else{g.moveTo(0,-6);g.lineTo(5,2);g.lineTo(1.8,2);g.lineTo(1.8,6);g.lineTo(-1.8,6);g.lineTo(-1.8,2);g.lineTo(-5,2);g.closePath();g.fill()}
 }
@@ -75,8 +77,10 @@ const FORK_EVERY=3;
 const ROUTE_CACHE=[BONUS[1],BONUS[2],BONUS[0],BONUS[4],BONUS[3]];
 
 let walls=[],routeRows=[],timer=2.4,rowIndex=0,key='',pinTime=0,pinHurt=0,broken=0,warned=false,puzzleProgress={};
+/* Le moment fort des runes : éclats de cire qui volent + éclair d'or. */
+let debris=[],flashT=0;
 
-function reset(){walls=[];routeRows=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false;puzzleProgress={}}
+function reset(){walls=[];routeRows=[];timer=2.4;rowIndex=0;pinTime=0;pinHurt=0;broken=0;warned=false;puzzleProgress={};debris=[];flashT=0}
 
 function material(){return MATERIALS[clamp(stage,0,4)]}
 
@@ -133,6 +137,7 @@ function spawnRow(){
   wideX:wideStart*CELL+CELL,wideStart,cacheX:cacheCell*CELL+CELL/2,
   switches:stage===0?[narrow*CELL+CELL/2,wideStart*CELL+CELL/2,(wideStart+1)*CELL+CELL/2]:
    stage===1?[narrow*CELL+CELL/2,wideStart*CELL+CELL]:null,stage});
+  if(fork&&typeof tone==='function'){if(stage===1)tone(1175,.34,'sine',.08,1.5);else if(stage===0)tone(196,.55,'triangle',.08,1.3)}
  rowIndex++;
 }
 
@@ -144,6 +149,40 @@ function addPanel(x,y){
  const panel={x:clamp(x,CELL/2,W-CELL/2),y:clamp(y,120,H-160),w:CELL-6,h:ROW_H,
   hp,max:hp,hit:0,dead:false,row:-1,bonus:null,panel:true};
  walls.push(panel);return panel;
+}
+
+/* Le moment fort : les portes de cire éclatent au lieu de disparaître.
+   Une cloche de bronze n'ouvre que sa route ; les trois runes ouvrent tout. */
+function detonateGates(row,opts){
+ opts=opts||{};
+ const toast=opts.toast||'LE PASSAGE SE LIBÈRE';
+ const routeId=('routeId' in opts)?opts.routeId:null;
+ const gates=walls.filter(w=>!w.dead&&w.locked&&w.row===row&&(routeId===null||w.routeId===routeId));
+ if(typeof noiseBurst==='function')noiseBurst(.22,.03,820);
+ tone(523,.45,'triangle',.08,1.25);
+ tone(784,.5,'sine',.06,1.15);
+ tone(1175,.6,'sine',.05,1.1);
+ if(!gates.length){say(toast,2.4);return}
+ let cx=0;for(const g of gates)cx+=g.x;cx/=gates.length;
+ const waxColors=['#e8d3ab','#cbb493','#ffd9a0','#b39a8c'];
+ for(const g of gates){
+  g.dead=true;broken++;
+  particle(g.x,g.y,'#ffd9a0',26);
+  particle(g.x,g.y,'#e8d3ab',18);
+  particle(g.x,g.y,'#8a6f57',12);
+  for(let i=0;i<11;i++){
+   const a=rng()*TAU,sp=90+rng()*175;
+   debris.push({x:g.x+(rng()-.5)*34,y:g.y+(rng()-.5)*18,
+    vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-70,rot:rng()*TAU,vr:(rng()-.5)*11,
+    size:4+rng()*7.5,life:.8+rng()*.4,max:1.2,color:waxColors[i%waxColors.length]});
+  }
+ }
+ flashT=.85;
+ if(opts.reward){
+  score+=250;
+  drops.push({x:clamp(cx,60,W-60),y:clamp(gates[0].y,170,H-140),kind:opts.rewardKind||'shield',age:0});
+ }
+ say(toast,opts.reward?3.2:2.6);
 }
 
 function breakBlock(w){
@@ -160,17 +199,19 @@ function breakBlock(w){
    const rewardPts=w.sequenceIndex===2?400*(stage+1):150*(stage+1);
    score+=rewardPts;combo=Math.min(8,combo+(w.sequenceIndex===2?2:1));
    const next=walls.find(v=>!v.dead&&v.switch&&v.row===w.row&&v.sequenceIndex===progress+1);
-   if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · +'+rewardPts+' · vise la rune '+next.runeLabel,2.2)}
+   if(next){next.hp=2;next.max=2;say('RUNE '+w.runeLabel+' VALIDÉE · +'+rewardPts+' · vise la rune '+next.runeLabel,2.2);tone(660,.16,'sine',.05,1.2)}
    else{
-    for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row){gate.dead=true;broken++}
-    say('LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +'+rewardPts,3);
-    tone(760,.3,'triangle',.08,1.35);
+    /* Le sceau complet ne rend plus toujours le même don : la récompense est
+       tirée au sort parmi les quatre cadeaux utiles — bouclier, triple tir,
+       perce-cire, vie — avec le même tirage amorcé que le reste du labyrinthe. */
+    const gifts=['shield','candy','pierceShot','heal'];
+    const picked=gifts[Math.floor(rng()*gifts.length)];
+    const label=(BONUS.find(b=>b.kind===picked)||BONUS[0]).label;
+    detonateGates(w.row,{reward:true,rewardKind:picked,toast:'LES TROIS RUNES RÉSONNENT · LES DEUX PASSAGES S’OUVRENT · +250 · UN DON DE CIRE TOMBE · '+label});
    }
   }
  }else if(w.switch){
-  for(const gate of walls)if(!gate.dead&&gate.locked&&gate.row===w.row&&gate.routeId===w.routeId){gate.dead=true;broken++}
-  say('RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT',2.8);
-  tone(760,.3,'triangle',.08,1.35);
+  detonateGates(w.row,{routeId:w.routeId,toast:'RÉSONANCE · '+(w.routeId==='narrow'?'PASSAGE ÉTROIT':'PASSAGE LARGE')+' OUVERT'});
  }
  if(w.routeCache){const cachePts=100*(stage+1);score+=cachePts;combo=Math.min(8,combo+1);say('CACHE DU FAUBOURG · butin découvert · +'+cachePts+' · combo +1',2.4)}
  if(w.bonus){particle(w.x,w.y,w.bonus.color,20);tone(660,.22,'sine',.06,1.3)}
@@ -237,6 +278,8 @@ function tick(dt){
  }
  if(!pinned){pinTime=0;warned=false}
  walls=walls.filter(w=>!w.dead&&w.y<H+ROW_H);
+ for(let i=debris.length-1;i>=0;i--){const d=debris[i];d.vy+=620*dt;d.x+=d.vx*dt;d.y+=d.vy*dt;d.rot+=d.vr*dt;d.life-=dt;if(d.life<=0)debris.splice(i,1)}
+ flashT=Math.max(0,flashT-dt);
 }
 
 function drawBlock(g,w){
@@ -275,15 +318,67 @@ function drawBlock(g,w){
  g.fillStyle='#0f0c1acc';g.fillRect(x+8,y+w.h-9,w.w-16,4);
  g.fillStyle=m.glow;g.fillRect(x+8,y+w.h-9,(w.w-16)*clamp(w.hp/w.max,0,1),4);
  if(w.switch){
-  g.save();const activeRune=stage!==0||w.sequenceIndex===(puzzleProgress[w.row]||0);
-  g.globalAlpha=activeRune?1:.42;g.strokeStyle=stage===0?'#f2c77e':'#d7f0e4';g.lineWidth=3;
-  g.beginPath();g.arc(0,-2,10,0,TAU);g.stroke();
-  g.beginPath();g.moveTo(-6,-2);g.lineTo(6,-2);g.moveTo(0,-8);g.lineTo(0,7);g.stroke();
-  g.fillStyle='#f4e0a5';g.font='bold 10px Arial';g.textAlign='center';
-  g.fillText(stage===0?(w.runeLabel||'A'):'✦',0,20);g.restore();
+  g.save();const isRune=stage===0;
+  const prog=isRune?(puzzleProgress[w.row]||0):0;
+  const runeState=!isRune?'bell':w.sequenceIndex<prog?'done':w.sequenceIndex===prog?'active':'locked';
+  g.globalAlpha=1;
+  if(isRune){
+   g.textAlign='center';
+   if(runeState==='done'){
+    /* Validée : cachet d'or plein et coche gravée — la rangée se souvient. */
+    const stamp=g.createRadialGradient(-2,-9,1,0,-2,15);
+    stamp.addColorStop(0,'#ffe9a8');stamp.addColorStop(.6,'#e8b85c');stamp.addColorStop(1,'#9a6b25');
+    g.beginPath();g.arc(0,-2,12.5,0,TAU);g.fillStyle=stamp;g.fill();
+    g.strokeStyle='#241d13';g.lineWidth=2.4;g.stroke();
+    g.strokeStyle='#241d13';g.lineWidth=2.7;g.lineCap='round';g.lineJoin='round';
+    g.beginPath();g.moveTo(-6.2,-2.2);g.lineTo(-1.6,3);g.lineTo(7.2,-7.4);g.stroke();
+    g.fillStyle='#ffe9a8';g.globalAlpha=.92;g.font='bold 7px Arial';g.fillText('VALIDÉE',0,22);
+   }else if(runeState==='active'){
+    /* Allumée : halo pointillé tournant, cœur de cire chaude, lettre noire. */
+    const pulse=1+Math.sin((gameTime||0)*6)*.08;
+    g.scale(pulse,pulse);
+    const hot=g.createRadialGradient(-2,-9,1,0,-2,16);
+    hot.addColorStop(0,'#fff3c8');hot.addColorStop(.55,'#f2c77e');hot.addColorStop(1,'#8a5a1d');
+    g.beginPath();g.arc(0,-2,12.5,0,TAU);g.fillStyle=hot;g.fill();
+    g.strokeStyle='#241d13';g.lineWidth=2.4;g.stroke();
+    g.fillStyle='#241d13';g.font='bold 12px Arial';g.fillText(w.runeLabel||'A',0,2);
+    g.setLineDash([4,5]);g.lineDashOffset=-((gameTime||0)*30)%9;
+    g.strokeStyle='#fff0b3';g.lineWidth=1.7;g.globalAlpha=.95;
+    g.beginPath();g.arc(0,-2,17.5,0,TAU);g.stroke();g.setLineDash([]);
+    g.fillStyle='#ffd977';g.font='bold 7px Arial';g.fillText('VISE-LA',0,22);
+   }else{
+    /* Scellée : ombre et lettre sourde — son tour viendra. */
+    g.beginPath();g.arc(0,-2,12,0,TAU);g.fillStyle='#3a3048';g.fill();
+    g.strokeStyle='#1f1830';g.lineWidth=2;g.stroke();
+    g.fillStyle='#8d7fa8';g.font='bold 11px Arial';g.fillText(w.runeLabel||'?',0,2);
+    g.fillStyle='#6d6088';g.font='bold 7px Arial';g.fillText('SCELLÉE',0,22);
+   }
+  }else{
+   /* Clocher : une vraie cloche de bronze vus de face avec son battant — elle pulse et se nomme. */
+   const pulse=1+Math.sin((gameTime||0)*5)*.06;
+   g.translate(0,-1);g.scale(pulse,pulse);
+   const bell=g.createLinearGradient(-14,-16,14,16);
+   bell.addColorStop(0,'#f2e6b8');bell.addColorStop(.32,'#cfe6d8');bell.addColorStop(.68,'#4d8079');bell.addColorStop(1,'#26403f');
+   g.beginPath();
+   g.moveTo(-11.5,8);g.quadraticCurveTo(-12.5,-9,0,-13);g.quadraticCurveTo(12.5,-9,11.5,8);
+   g.lineTo(15,12.5);g.lineTo(-15,12.5);g.closePath();
+   g.fillStyle=bell;g.fill();g.strokeStyle='#0f2426';g.lineWidth=2.4;g.stroke();
+   g.strokeStyle='#0f2426';g.lineWidth=1.5;
+   g.beginPath();g.moveTo(-12,2);g.lineTo(12,2);g.moveTo(-12.7,7.2);g.lineTo(12.7,7.2);g.stroke();
+   g.beginPath();g.arc(0,-15,2.6,0,TAU);g.fillStyle='#eafff3';g.fill();g.strokeStyle='#0f2426';g.stroke();
+   g.beginPath();g.arc(0,17,3.2,0,TAU);g.fillStyle='#eafff3';g.fill();g.strokeStyle='#0f2426';g.stroke();
+   g.globalAlpha=.9*g.globalAlpha;g.setLineDash([4,5]);g.strokeStyle='#eafff3';g.lineWidth=1.7;
+   g.beginPath();g.arc(0,1,20+Math.sin((gameTime||0)*5)*1.8,0,TAU);g.stroke();g.setLineDash([]);
+   /* Le libellé est placé dans un cadre distinct pour ne pas hériter du scale du battant. */
+   g.restore();g.save();
+   g.fillStyle='#eafff3';g.font='bold 8px Arial';g.textAlign='center';
+   g.fillText(w.routeId==='wide'?'CLOCHE B · OUVRIR':'CLOCHE A · OUVRIR',0,29);
+  }
+  g.restore();
  }
- if(w.locked){g.fillStyle='#d7f0e4';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCELLÉ',0,4)}
- if(w.gate==='wax'){g.fillStyle='#8e253e';g.font='bold 10px Arial';g.textAlign='center';g.fillText('SCEAU',0,4)}
+ if(w.locked){g.fillStyle='#cfe6d8';g.font='bold 9px Arial';g.textAlign='center';g.fillText('SCELLÉ',0,-6)}
+ if(w.gate==='wax'){g.fillStyle='#ff9aa4';g.font='bold 12px Arial';g.textAlign='center';g.fillText('SCEAU',0,12)}
+ if(w.gate==='bronze'){g.strokeStyle='#cfe6d8';g.lineWidth=1.6;g.beginPath();g.arc(0,7,4.5,0,TAU);g.stroke();g.fillStyle='#cfe6d8';g.beginPath();g.arc(0,7,1.4,0,TAU);g.fill()}
  if(w.bonus){
   // Cire à cacheter et glyphe : on voit quel bloc vaut la peine d'être ouvert.
   g.fillStyle=w.bonus.color;g.globalAlpha=.9;
@@ -308,15 +403,53 @@ function draw(g){
   }
   drawBlock(g,w);
  }
+ if(flashT>0){
+  const k=flashT/.85;
+  g.save();g.globalCompositeOperation='lighter';
+  const blast=g.createRadialGradient(W/2,H*.38,30,W/2,H*.38,Math.max(W,H)*.68);
+  blast.addColorStop(0,'rgba(255,240,190,'+(.55*k).toFixed(3)+')');
+  blast.addColorStop(.5,'rgba(255,220,150,'+(.16*k).toFixed(3)+')');
+  blast.addColorStop(1,'rgba(255,220,150,0)');
+  g.fillStyle=blast;g.fillRect(0,0,W,H);g.restore();
+ }
+ for(const d of debris){
+  const a=clamp(d.life/d.max,0,1);
+  g.save();g.translate(d.x,d.y);g.rotate(d.rot);g.globalAlpha=a;
+  g.fillStyle=d.color;g.strokeStyle='#241d13';g.lineWidth=1.3;
+  g.beginPath();g.moveTo(-d.size,d.size*.45);g.lineTo(-d.size*.28,-d.size);g.lineTo(d.size,-d.size*.3);g.lineTo(d.size*.42,d.size);g.closePath();g.fill();g.stroke();g.restore();
+ }
  /* Les deux issues d'une bifurcation restent identifiées jusqu'à la sortie
     de la rangée : le choix est visuel, pas caché dans le code. */
  for(const route of routeRows){
   if(route.y<34||route.y>H-28)continue;
-  g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'10px')+' Arial';
+  g.fillStyle='rgba(12,10,24,.62)';g.fillRect(0,route.y-ROW_H/2-12,W,(compactView()?26:22));
+  g.save();g.textAlign='center';g.font='bold '+(compactView()?'12px':'11px')+' Arial';
   if(route.stage===0){
-   g.fillStyle='#ffd9a0';g.fillText('RUNES A → B → C',route.narrowX,route.y-ROW_H/2-5);
-   g.fillStyle='#cfe6d8';g.fillText('TIRE SUR LA RUNE ALLUMÉE',route.wideX,route.y-ROW_H/2-5);
-   g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5);
+   const prog=puzzleProgress[route.row]||0;
+   /* Progression lisible : trois pastilles — ✓ validée, lettre allumée à son tour, sombre en attente. */
+   const chipY=route.y-ROW_H/2-8,chipX=Math.round(W/2)-28;
+   g.save();g.lineWidth=1.6;g.textAlign='center';
+   for(let i=0;i<3;i++){
+    const cxp=chipX+i*28,done=i<prog,live=i===prog;
+    g.beginPath();g.arc(cxp,chipY,8.5,0,TAU);
+    g.fillStyle=done?'#e8b85c':live?'#f2c77e':'#3a3048';g.fill();
+    g.strokeStyle=done?'#241d13':live?'#fff0b3':'#241d33';g.stroke();
+    g.fillStyle=done||live?'#241d13':'#8d7fa8';
+    g.font='bold 9px Arial';
+    g.fillText(done?'✓':String.fromCharCode(65+i),cxp,chipY+3);
+    if(i<2){g.strokeStyle=i<prog?'#e8b85c':'#4a3b46';g.beginPath();g.moveTo(cxp+9,chipY);g.lineTo(cxp+19,chipY);g.stroke()}
+   }
+   g.restore();
+   if(prog>=3){
+    g.fillStyle='#8ee9e2';g.fillText('LES DEUX ROUTES SONT LIBRES',route.narrowX,route.y-ROW_H/2-5);
+    g.fillStyle='#8ee9e2';g.fillText('SEUL L’ABÎME DE CIRE RESTE',route.wideX,route.y-ROW_H/2-5);
+    if(route.cacheX!=null){g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5)}
+   }else{
+    const runeNext=['A','B','C'][prog];
+    g.fillStyle='#ffd9a0';g.fillText('RUNES A → B → C',route.narrowX,route.y-ROW_H/2-5);
+    g.fillStyle='#cfe6d8';g.fillText('RUNE '+runeNext+' ALLUMÉE',route.wideX,route.y-ROW_H/2-5);
+    if(route.cacheX!=null){g.fillStyle='#f4ce83';g.fillText('CACHE FACULTATIVE',route.cacheX,route.y-ROW_H/2-5)}
+   }
   }else if(route.stage===1){
    g.fillStyle='#cfe6d8';g.fillText('CLOCHE A · OUVRIR',route.narrowX,route.y-ROW_H/2-5);
    g.fillText('CLOCHE B · OUVRIR',route.wideX,route.y-ROW_H/2-5);

@@ -148,11 +148,13 @@ Le cycle est réparé, mais une heure sans chiffre se réveille : l’heure où 
 
 | Univers | Formes exclusives | Gardien et condition de victoire |
 |---|---|---|
-| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteindre les cinq mèches, puis frapper trois fois son cœur lorsqu'il s'ouvre. |
+| Le Faubourg des veilles | Garde-mèche, Facteur de cire | **La Veilleuse** — éteignez les cinq mèches : la cire se fend, le cœur bat à nu sur le torse — trois impacts pendant le flash ; **Le Chœur de cire** (deux veilleuses) garde le cœur et rallume les flammes tant qu'il vit — brisez-le d'abord. |
 | Le Clocher muet | Corbeau de bronze, Cloche fêlée | **Le Sonneur sans battant** — frapper trois fois le battant sans faire sonner la cloche. |
 | L’Estran des pas perdus | Marcheuse de sel, Voleuse d’empreintes | **Le Passeur sans ombre** — briser trois fois la boucle en foulant du sable intact. |
 | Le Bois des lanternes rendues | Cueilleuse de mèches, Flamme creuse | **La Cueilleuse de flammes** — forcer trois cueillettes en dépensant sa propre flamme. |
 | Le Cadran noir | Chiffre sans nom, Écho sans visage | **Le Chasseur sans visage** — accomplir le geste qu’il n’a pas pu copier. |
+
+**La tranche Faubourg + Veilleuse a été refondue en mode verticale** : des conditions imbriquées plutôt que parallèles. Les **plis cachetés** du Faubourg tombent un par vague (I, II, III) et ne rapportent leur **+1000** que ramassés dans l'ordre ; **les trois mèches** sont toute la serrure du cœur de la Veilleuse (scellés retirés depuis — §9novies). La victoire propre se couronne désormais : les **Couronnes de l'heure** (12 au total, 3 pour la Veilleuse + MAIN LÉGÈRE pour les Minutes) récompensent la manière de gagner — jamais la puissance. La Veilleuse réclame « Sans Brisure », « Veille calme » et « Sous 90 secondes ». Deuxième passe (retour en jeu) : vagues 1 et 2 plus longues, indications majeures annoncées en **popup qui met le vol en pause** (une fois par appareil), **le halo du Garde-mèche immunise tout l’écran, porteur compris, par cycles** (allumé 2 s / éteint 2,6 s — cercle sur chaque monstre, frappe pendant le creux), **un popup translucide laisse le jeu en pause et visible en arrière-plan au lieu de le cacher**, **l’objectif persistant est une puce absolue** qui ne fait plus bouger la fenêtre (fini les sauts quand le texte passe à 3 lignes), et **le terrain PC ne pulse plus en zoom/dézoom** ; Quatrième passe (retour en jeu) : **PRIME réellement visible** (+400 par cible PRIME abattue, pluie d’étincelles, bannière distincte et rappel « +400/cible » dans l’objectif), le **halo du Garde-mèche devient un vrai télégraphe** (flash doré plein écran + anneau d’ondes sur chaque monstre + anneau pointillé or animé tant que le bouclier tient) ; **la Veilleuse densifiée** (couronne de braises à chaque impact, cœur ancré sur le torse). Inspirations revendiquées : les *spell cards* et les médailles de **Touhou Project** (maîtrise de la manière de gagner), et les conditions de **Into the Breach** (chaque action sous condition, la victoire comme échecs). Les autres gardiens attribuent déjà les deux couronnes génériques ; le reste suit le même schéma. Détail dans `docs/monde-3-gameplay.md` §9novies.
 
 #### Lisibilité : des consignes, plus des énigmes
 
@@ -269,11 +271,10 @@ sont ramassés par le code de butin existant, sans nouvelle mécanique à appren
 
 #### Cinquième passe : une Veilleuse vraiment ardente, un Faubourg qui se joue
 
-*(cinquième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9septies)*
+*(sixième retour en jeu — voir `docs/monde-3-gameplay.md`, sections 9septies–9octies)*
 
-**La Veilleuse (1er gardien).** La condition de victoire est inchangée (cinq mèches
-éteintes, puis trois impacts sur le cœur), mais le gardien ne pardonne plus
-l’immobilité :
+**La Veilleuse (1er gardien).** La condition de victoire est inchangée (au moins trois mèches éteintes, puis trois impacts sur le cœur), mais le gardien ne pardonne plus
+l’immobilité (les scellés ont été retirés depuis — voir la sixième passe ci-dessous).
 
 - après chaque impact sur le cœur, celui-ci souffle une **couronne de huit braises**
   une demi-seconde plus tard (« LE CŒUR CRACHE DES CENDRES · écarte-toi ») ;
@@ -303,6 +304,84 @@ projectile de plus :
   un pas de combo chacune, C rapporte 400 × (étape+1) et deux pas de combo ; la
   cache facultative paie 100 × (étape+1) et un pas de combo. Tirer au hasard ne
   rapporte rien.
+
+#### Sixième passe : prime visible, halo explicite, la Veilleuse v4
+
+*(sixième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9novies)*
+
+- **PRIME** — abattre une cible désignée rapportait déjà +400, mais rien ne se
+  voyait. Chaque cible PRIME abattue déclenche maintenant une **pluie
+  d’étincelles** et une bannière distincte (« ★ PRIME ABATTUE · … ★ +400 »),
+  et l’objectif annonce « PRIME : … (+400/cible) » : chaque cible PRIME de la
+  vague paie, toute la vague.
+- **Le halo du Garde-mèche devient un bouclier qui se voit** : quand il se
+  déclenche, un **flash doré plein écran**, un **anneau d’ondes** sur chaque
+  monstre immunisé (or au déploiement, gris au repli), et l’anneau pointillé
+  devient **or et animé** tant que le bouclier tient. Déploiement et repli se
+  lisent d’un coup d’œil — doublés d’un **gong** grave.
+- **La Veilleuse v4** — les scellés disparaissent (le test les jugeait
+  illisibles). Toute la longueur du combat tient aux bougies : **trois mèches
+  éteintes** fendent la cire ; le cœur s’expose **ancré sur le torse** — plus
+  aucune dérive, plus de jeu de devinettes. Phase 1 : un charbon respirant à
+  peine visible sous la cire. Phase 2 : un **cœur géant qui bat** (rouge quand
+  il frappe, terne fermé), avec « FRAPPE LE CŒUR » / « CŒUR FERMÉ » et
+  « IMPACTS n/3 » à l’écran. Trois impacts pendant le flash tuent le gardien.
+
+#### Septième passe : les shmups modernes adaptés
+
+*(septième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9decies)*
+
+Inspiré du **Shmups Wiki** et de la doc **SHMUP Creator**, adapté à la doctrine du monde 3 :
+
+- **La chaîne visible** — un arc or qui se vide en bas à droite avec « ×N » au centre :
+  le combo ne dort plus entre deux kills.
+- **Le Maillon PRIME** — abattre une cible PRIME annule d’un coup tous les esprits
+  ennemis à l’écran : chacun devient un cachet (+50). La prime paie enfin +400 + cachets —
+  le moment bombe du pack.
+- **Le cachet du cadran** — +1000 à chaque gardien tombé, sans condition.
+- **La Minute Suspendue** — une lettre scellée traverse la vague 3 : si ton écran reste
+  sans tirer (ou si tu la ramasses en vol), **+400** et la 12e couronne, **MAIN LÉGÈRE**
+  (Les Minutes). Si un tir la touche : +50 et cendres.
+
+Écartés volontairement : la guirlande de médailles et le « Count » de Kaikan en doublon de la
+prime et des plis — même bruit visuel que les scellés, qui ont été retirés pour cette raison.
+
+#### Huitième passe : le Chœur de cire — la Veilleuse a du soutien
+
+*(huitième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9undecies)*
+
+Retour de playtest : vaincre la Veilleuse était devenu trop facile. La serrure ne change pas
+(**trois mèches fendent la cire**, puis trois impacts sur le cœur pendant le flash) — mais le
+gardien n'est plus seul devant elle.
+
+- **Le Chœur de cire** — deux veilleuses de cire (2 PV chacune) orbitent le buste dès l'entrée du
+  combat. Tant qu'une choriste vit, **le cœur absorbe le tir** ; les mèches, elles, sont toujours
+  tirables. Toutes les ~2,6 s, une choriste canalise vers la mèche éteinte la plus proche — un
+  anneau **« LA RONDE RALLUME »** s'affiche 1,15 s à l'avance ; la flamme reprend à échéance.
+- **Briser la ronde est la clef** — quand la dernière choriste tombe, la faille s'ouvre
+  d'elle-même (« LA CIRE DÉCHIRE · le cœur bat à nu »), sans attendre le flash.
+- **La phase renversée** — chaque impact sur le cœur rend un **bouclier de cire 6 s** et la ronde
+  se reforme, plus nombreuse et plus rapide (2 veilleuses / 2,1 s puis 3 veilleuses / 1,7 s), avec
+  une mèche éteinte qui se rallume à chaque impact. La phase 2 est une spirale explicite, jamais
+  une formalité.
+
+#### Neuvième passe : des télégraphes par univers · la Brume de bile
+
+*(neuvième retour en jeu — voir `docs/monde-3-gameplay.md`, section 9duodecies)*
+
+- **Un télégraphe à quinze dialectes** — les cercles au sol, les halos des gardiens et l'orbite du
+  Chœur de cire portent enfin le matériau du lieu : sable pâle + vaguelettes d'eau sur **l'Estran**,
+  cire au **Faubourg**, bronze au **Clocher**, lierre au **Bois**, graduations au **Cadran noir**.
+  Mondes 1 et 2 adoptent la même table — rien n'est réinventé, tout est localisé.
+- **La Brume de bile (arsenal)** — le quatrième sort, la bombe à poisons à la touhou : un nuage
+  (rayon 230, 4,5 s) empoisonne tout ce qui le traverse, dissipe les tirs proches **et les mange au
+  passage**. Déblocage : 3 gardiens vaincus. Recharge : 20 s.
+- **Les lettres sont des artéfacts** — chaque lettre ramassée rend **une vie**, quel que soit
+  l'ordre ou la chaîne : les plis I/II/III (même à contretemps) **et** la lettre suspendue saisie
+  en vol. Au plafond, le surplus devient +250 points. Une lettre brisée ne paie plus que +50.
+- **Échos de cendres** — deux options invulnérables qui copient ton tir, visée comprise (à la Gradius).
+- **Absorbeur d'ombre** — sous bouclier ou esquive, les projectiles reçus deviennent +30×combo et un pas de chaîne (à l'Ikaruga).
+
 
 #### Le Faubourg remis dans son thème
 
@@ -502,7 +581,8 @@ Le menu **Compte & team** permet, après connexion, de créer une team ou de rej
 - L’espace **Test du créateur**, visible uniquement par l’administrateur de la team, contient un champ **Code** :
   - **`Monde2`** ouvre la rencontre de fin et **Les Cinq Heures Perdues** ;
   - **`Monde3`** débloque toute la chaîne 1 → 2 → 3, la carte **La Sixième Heure**, puis propose **Tester le monde 3** qui mène au briefing et au choix du personnage (sorcière ou Veilleur).
-  La casse et les espaces sont ignorés. Ces parcours n’enregistrent **aucun faux score**, aucun résultat de vol et ne consomment aucun quota ; seuls les drapeaux de progression sont écrits. Un code inconnu, un champ vide ou un compte non administrateur ne change rien.
+  - **`Monde3_1` … `Monde3_5`** sautent directement dans l'univers 1 à 5 du monde 3 (vague 1, note « · test créateur »), sans passer par le briefing.
+  La casse, les tirets et les espaces sont ignorés. Ces parcours n’enregistrent **aucun faux score**, aucun résultat de vol et ne consomment aucun quota ; seuls les drapeaux de progression sont écrits. Un code inconnu, un champ vide ou un compte non administrateur ne change rien.
 - Sur tous les appareils, **Inviter par e-mail** ouvre la messagerie avec le destinataire, l’objet, le code et le lien préremplis ; l’envoi est confirmé dans la messagerie et l’adresse n’est pas enregistrée par le jeu. Sur smartphone, le code peut aussi être partagé par **WhatsApp** ou **Messenger**. Le lien `?team=CODE` ouvre directement une **carte d’invitation** dans **Compte & team**, sans jeton de session. Le code est prérempli et conservé après rechargement ; le visiteur peut créer son accès ou se connecter avec son pseudo et son mot de passe pour rejoindre immédiatement la team. Après une jointure réussie, le jeu revient automatiquement à l’accueil avec une confirmation ; en cas d’échec, l’erreur et l’invitation restent affichées. Le visiteur peut aussi ignorer l’invitation.
 - Après chaque vol classé, le score est transmis automatiquement. Chaque vol classé comptabilisé consomme une partie du jour, même s’il n’améliore pas le record. Une partie classique transmet uniquement son activité au suivi privé du créateur : elle ne change ni le highscore, ni le total, ni le quota de la team. Un identifiant unique évite le double comptage en cas de renvoi.
 - **Envoi fiable même si le réseau lâche :** si l’envoi échoue à la fin du vol (réseau indisponible, délai dépassé), le score n’est pas perdu — il est conservé sur l’appareil puis **renvoyé automatiquement** dès que possible (au retour du réseau, à la connexion suivante ou via **Renvoyer maintenant** dans la team). Un échec de chargement de la team ne saute plus silencieusement l’envoi. Seuls les refus « règles » (période terminée, quota atteint, règles non configurées) ne sont pas réessayés, car ils ne changeraient pas. Le bilan et la carte de team indiquent clairement les vols en attente.
@@ -547,8 +627,8 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `journey.js` | Grimoire, XP, contrats, collection, bilans, avis et export/import. |
 | `daily-rewards.js` | Coffre de connexion, série sur sept paliers, tirage persistant et révélation des gains cosmétiques. |
 | `online.js` | Défis et cumul locaux, sans compte dans l’interface actuelle. |
-| `arsenal.js` | Sorts, balais, compagnons et équipement. |
-| `arsenal-art.js` | Illustrations vectorielles locales et pastilles courtes des neuf choix d’équipement. |
+| `arsenal.js` | Sorts, balais, compagnons et équipement (dont la Brume de bile). |
+| `arsenal-art.js` | Illustrations vectorielles locales et pastilles courtes des dix choix d’équipement. |
 | `adventure.js` | Exploits, variantes, Laboratoire et coffres scellés. |
 | `encounters.js` | Formations, séquences de terrain, statistiques de vol et confort. |
 | `night-hazards.js` | Obstacles, charges des gardiens et bonbons. |
@@ -565,7 +645,7 @@ Hors choix explicite du niveau de difficulté, les réglages ne modifient pas le
 | `sequel.js` | Rencontre du Veilleur, déblocage persistant, deuxième campagne, fragments, personnages et carte de campagne. |
 | `sequel-bestiary.js` | Faune exclusive, objectifs de vagues, télégraphes et cinq gardiens inédits du monde 2. |
 | `sequel-art.js` | Illustrations SVG locales, animation Canvas, matériaux, dégâts et auras de phases du monde 2. |
-| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse durcie (cendres, braise de mèche noire, rallumage individuel visible) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées). |
+| `sixth-hour.js` | Monde 3 · La Sixième Heure : bestiaire héritier, cinq gardiens à conditions dédiées, minutes rendues ; la Veilleuse v5 (Le Chœur de cire : deux veilleuses orbitent le gardien, cœur absorbant tant qu'une choriste vit, mèches rallumables par canalisation, faille ouverte d'elle-même quand la ronde tombe, bouclier de cire 6 s par impact — les cinq mèches fendent toujours la cire) et le Faubourg stratégique (PRIME, PRIORITÉ, runes rémunérées (don aléatoire : bouclier / triple tir / perce-cire / vie), plis cachetés) ; Couronnes de l'heure et saut par univers (`Monde3_1` à `Monde3_5`). |
 | `home.js` | Accueil avec sorcière de profil, musique, accès direct Compte & team et pleine hauteur sur smartphone. |
 | `settings-page.js` | Réglages pleine hauteur sur téléphone, commandes tactiles, audio et sauvegarde locale. |
 | `collision-replay.js` | Reconstitution locale du coup fatal. |

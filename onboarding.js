@@ -265,6 +265,7 @@ function showBonusGallery(){
   {icon:'bonus-heal',name:'Cœur de soin',text:'Rend une vie, ou accorde 250 points si toutes les vies sont déjà présentes.'},
   {icon:'bonus-points',name:'Trésor',text:'Ajoute immédiatement les points indiqués au score du vol.'},
   {icon:'bonus-candy',name:'Triple tir',text:'Trois projectiles à chaque tir pendant '+MINUIT_BALANCE.tripleShot.duration+' s.'},
+  {icon:'bonus-pierce',name:'Perce-cire',text:'Les tirs traversent un ennemi de plus pendant '+MINUIT_BALANCE.pierceShot.duration+' s.'},
   {icon:'xp',name:'Bonbon violet',text:'Ajoute de l’expérience de collection persistante, sans augmenter la puissance.'},
   {icon:'points',name:'Bonbon doré',text:'Ajoute les points indiqués au score du vol.'},
   {icon:'shield',name:'Bonbon turquoise',text:'Recharge le bouclier à 50 points pendant '+MINUIT_BALANCE.shield.candyDuration+' s.'}
